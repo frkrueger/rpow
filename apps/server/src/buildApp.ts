@@ -5,6 +5,7 @@ import type { Pool } from 'pg';
 import type { Mailer } from './mailer.js';
 import { authRoutes } from './routes/auth.js';
 import { meRoutes } from './routes/me.js';
+import { challengeRoutes } from './routes/challenge.js';
 
 export interface AppConfig {
   sessionSecret: string;
@@ -50,6 +51,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   app.get('/health', async () => ({ ok: true }));
   await app.register(authRoutes);
   await app.register(meRoutes);
+  await app.register(challengeRoutes);
 
   return app;
 }
