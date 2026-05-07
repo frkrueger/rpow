@@ -32,11 +32,14 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(429).send({ error: 'RATE_LIMITED', message: 'too many attempts on this email; try again later', retry_after: 60 * 30 });
     }
 
+    // Per-IP cap is generous so corporate/home NATs aren't penalized when many
+    // genuine users sign up from the same egress IP. Per-email cap is the real
+    // anti-spam lever; per-IP only catches scripted attacks.
     const perIp = await app.pool.query<{ n: number }>(
       `SELECT count(*)::int AS n FROM magic_links WHERE ip_addr=$1 AND created_at > now() - interval '1 hour'`,
       [ip],
     );
-    if ((perIp.rows[0]?.n ?? 0) >= 60) {
+    if ((perIp.rows[0]?.n ?? 0) >= 1000) {
       return reply.code(429).send({ error: 'RATE_LIMITED', message: 'too many attempts from this network', retry_after: 60 * 30 });
     }
 
