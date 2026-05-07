@@ -6,6 +6,7 @@ import type { Mailer } from './mailer.js';
 import { authRoutes } from './routes/auth.js';
 import { meRoutes } from './routes/me.js';
 import { challengeRoutes } from './routes/challenge.js';
+import { mintRoutes } from './routes/mint.js';
 
 export interface AppConfig {
   sessionSecret: string;
@@ -52,6 +53,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   await app.register(authRoutes);
   await app.register(meRoutes);
   await app.register(challengeRoutes);
+  await app.register(mintRoutes);
 
   return app;
 }
