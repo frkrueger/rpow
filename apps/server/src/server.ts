@@ -1,13 +1,26 @@
 import { parseEnv } from './env.js';
 import { createPool, runMigrations } from './db.js';
 import { buildApp } from './buildApp.js';
-import { ResendMailer } from './mailer.js';
+import { ResendMailer, FakeMailer, type Mailer } from './mailer.js';
 
 const env = parseEnv();
 const pool = createPool(env.DATABASE_URL);
 await runMigrations(pool);
 
-const mailer = new ResendMailer(env.RESEND_API_KEY, env.EMAIL_FROM);
+let mailer: Mailer;
+if (process.env.RPOW_TEST_INBOX === 'true') {
+  const fake = new FakeMailer();
+  const orig = fake.send.bind(fake);
+  fake.send = async (a) => {
+    await orig(a);
+    const m = a.text.match(/https?:\/\/[^\s]+token=[\w-]+/);
+    console.log(`\n[magic link for ${a.to}]\n  ${m?.[0] ?? '(no link parsed)'}\n`);
+  };
+  mailer = fake;
+  console.log('using FakeMailer (RPOW_TEST_INBOX=true) — magic links print to this console');
+} else {
+  mailer = new ResendMailer(env.RESEND_API_KEY, env.EMAIL_FROM);
+}
 
 const app = await buildApp({
   pool,
