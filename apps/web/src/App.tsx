@@ -8,6 +8,12 @@ import { SendPage } from './pages/Send.js';
 import { ActivityPage } from './pages/Activity.js';
 import { LedgerPage } from './pages/Ledger.js';
 
+const HEADER = [
+  '+======================================================================+',
+  '|                   RPOW2 - Reusable Proofs of Work                    |',
+  '+======================================================================+',
+].join('\n');
+
 export default function App() {
   const [theme, setTheme] = useState<Theme>(loadTheme());
   useEffect(() => { applyTheme(theme); }, [theme]);
@@ -16,9 +22,7 @@ export default function App() {
     <HashRouter>
       <div className="app-shell">
         <header>
-          <pre>+======================================================================+
-|  RPOW2 - Reusable Proofs of Work                            v0.1.0  |
-+======================================================================+</pre>
+          <pre style={{ margin: 0 }}>{HEADER}</pre>
           <div className="tagline">a tribute to the original rpow by hal finney</div>
           <nav style={{ marginTop: 8 }}>
             <NavLink to="/">[ wallet ]</NavLink>{' '}
