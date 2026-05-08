@@ -2,6 +2,7 @@ import type {
   AuthRequestBody, AuthRequestResponse, MeResponse,
   ChallengeResponse, MintRequestBody, MintResponse,
   SendRequestBody, SendResponse, ActivityResponse, LedgerResponse, ApiError,
+  PhantomChallengeResponse, PhantomBindResponse, WrapResponse, WrapEvent,
 } from '@rpow/shared';
 
 const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080';
@@ -30,4 +31,10 @@ export const api = {
   send: (b: SendRequestBody) => call<SendResponse>('POST', '/send', b),
   activity: () => call<ActivityResponse>('GET', '/activity'),
   ledger: () => call<LedgerResponse>('GET', '/ledger'),
+  phantomChallenge: () => call<PhantomChallengeResponse>('POST', '/phantom/challenge'),
+  phantomBind: (b: { nonce: string; wallet_address: string; signature_base58: string }) =>
+    call<PhantomBindResponse>('POST', '/phantom/bind', b),
+  srpowWrap: (b: { amount_base_units: string; idempotency_key: string }) =>
+    call<WrapResponse>('POST', '/srpow/wrap', b),
+  srpowEvents: () => call<WrapEvent[]>('GET', '/srpow/events'),
 };

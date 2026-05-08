@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { readSession } from './auth.js';
-import { difficultyForSupply } from '../schedule.js';
+import { difficultyBitsForSupply, BASE_UNITS_PER_RPOW } from '../schedule.js';
 
 // Supply count is checked twice per mining round: here at /challenge
 // (advisory only — used to pick difficulty and fail-fast at cap) and again
@@ -12,18 +12,18 @@ import { difficultyForSupply } from '../schedule.js';
 const SUPPLY_CACHE_MS = 5_000;
 
 export async function challengeRoutes(app: FastifyInstance) {
-  let supplyCache: { ts: number; value: number } | null = null;
-  let supplyInflight: Promise<number> | null = null;
+  let supplyCache: { ts: number; value: bigint } | null = null;
+  let supplyInflight: Promise<bigint> | null = null;
 
-  async function mintedSupply(): Promise<number> {
+  async function mintedSupplyBaseUnits(): Promise<bigint> {
     if (supplyCache && Date.now() - supplyCache.ts < SUPPLY_CACHE_MS) return supplyCache.value;
     if (supplyInflight) return supplyInflight;
     supplyInflight = (async () => {
       try {
-        const { rows } = await app.pool.query<{ n: number }>(
-          `SELECT count(*)::int AS n FROM tokens WHERE parent_token_id IS NULL`,
+        const { rows } = await app.pool.query<{ value: string }>(
+          `SELECT value::text FROM app_counters WHERE name='minted_supply'`,
         );
-        const value = rows[0]!.n;
+        const value = rows[0] ? BigInt(rows[0].value) : 0n;
         supplyCache = { ts: Date.now(), value };
         return value;
       } finally {
@@ -37,15 +37,15 @@ export async function challengeRoutes(app: FastifyInstance) {
     const s = readSession(req as any, app.config.sessionSecret);
     if (!s) return reply.code(401).send({ error: 'UNAUTHORIZED', message: 'login required' });
 
-    const minted = await mintedSupply();
-    if (minted >= app.config.mintMaxSupply) {
+    const minted = await mintedSupplyBaseUnits();
+    const capBaseUnits = BigInt(app.config.mintMaxSupply) * BASE_UNITS_PER_RPOW;
+    if (minted >= capBaseUnits) {
       return reply.code(410).send({ error: 'SUPPLY_EXHAUSTED', message: '21M cap reached' });
     }
 
-    const scheduledBits = difficultyForSupply(minted, {
-      baseBits: app.config.difficultyBits,
-      epochSize: app.config.mintEpochSize,
-      maxSupply: app.config.mintMaxSupply,
+    const scheduledBits = difficultyBitsForSupply(minted, {
+      difficultyBits: app.config.difficultyBits,
+      maxSupplyRpow: app.config.mintMaxSupply,
     });
     const difficulty = Math.max(app.config.difficultyFloor, scheduledBits);
 

@@ -3,6 +3,8 @@ import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import type { Pool } from 'pg';
 import type { Mailer } from './mailer.js';
+import type { BridgeClient } from '@rpow/solana-bridge';
+import { parseAllowlist } from './wrap-allowlist.js';
 import { authRoutes } from './routes/auth.js';
 import { meRoutes } from './routes/me.js';
 import { challengeRoutes } from './routes/challenge.js';
@@ -12,13 +14,14 @@ import { claimRoutes } from './routes/claim.js';
 import { activityRoutes } from './routes/activity.js';
 import { ledgerRoutes } from './routes/ledger.js';
 import { unsubscribeRoutes } from './routes/unsubscribe.js';
+import { phantomRoutes } from './routes/phantom.js';
+import { srpowRoutes } from './routes/srpow.js';
 
 export interface AppConfig {
   sessionSecret: string;
   magicLinkBaseUrl: string;
   difficultyBits: number;
   difficultyFloor: number;
-  mintEpochSize: number;
   mintMaxSupply: number;
   signingPrivateKeyHex: string;
   signingPublicKeyHex: string;
@@ -31,6 +34,8 @@ export interface BuildAppOptions {
   pool: Pool;
   mailer: Mailer;
   config: AppConfig;
+  bridgeClient: BridgeClient;
+  wrapAllowlistCsv: string;          // raw CSV; parsed once on decoration
 }
 
 declare module 'fastify' {
@@ -38,6 +43,8 @@ declare module 'fastify' {
     pool: Pool;
     mailer: Mailer;
     config: AppConfig;
+    bridgeClient: BridgeClient;
+    wrapAllowlist: Set<string>;
   }
 }
 
@@ -55,6 +62,8 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   app.decorate('pool', opts.pool);
   app.decorate('mailer', opts.mailer);
   app.decorate('config', opts.config);
+  app.decorate('bridgeClient', opts.bridgeClient);
+  app.decorate('wrapAllowlist', parseAllowlist(opts.wrapAllowlistCsv));
 
   await app.register(cookie, { secret: opts.config.sessionSecret });
   await app.register(cors, {
@@ -72,6 +81,8 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   await app.register(activityRoutes);
   await app.register(ledgerRoutes);
   await app.register(unsubscribeRoutes);
+  await app.register(phantomRoutes);
+  await app.register(srpowRoutes);
 
   app.get('/.well-known/rpow-pubkey.pem', async (_req, reply) => {
     const pubDer = Buffer.concat([

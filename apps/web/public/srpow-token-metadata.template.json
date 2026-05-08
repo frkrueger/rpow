@@ -1,0 +1,12 @@
+{
+  "name": "rpow2 SRPOW",
+  "symbol": "SRPOW",
+  "description": "Solana-wrapped RPOW (Reusable Proofs of Work). Modern tribute to Hal Finney's 2004 RPOW. SRPOW is minted 1:1 against rpow tokens locked on the rpow2.com server. Hard 21M supply cap; freeze authority renounced at creation.",
+  "image": "REPLACE_WITH_ARWEAVE_IMAGE_URL",
+  "external_url": "https://rpow2.com",
+  "attributes": [
+    { "trait_type": "Cap", "value": "21,000,000" },
+    { "trait_type": "Decimals", "value": "9" },
+    { "trait_type": "Freeze authority", "value": "renounced (null)" }
+  ]
+}

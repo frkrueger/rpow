@@ -35,28 +35,26 @@ export async function claimRoutes(app: FastifyInstance) {
         [pt.recipient_email],
       );
 
-      // Mint amount fresh tokens to recipient. These have parent_token_id=NULL
-      // so they count as "minted" supply for /ledger purposes and must
-      // increment app_counters.minted_supply (migration 005). No cap check
-      // here: the sender's tokens were already burned; refusing to claim
-      // would strand them.
+      // Mint a single fresh token to recipient with value = pt.amount in base
+      // units. parent_token_id=NULL so it counts as "minted" supply for
+      // /ledger purposes and must increment app_counters.minted_supply by the
+      // base-unit total. No cap check here: the sender's tokens were already
+      // burned; refusing to claim would strand them.
       const issuedAt = new Date();
       const ownerHash = createHash('sha256').update(pt.recipient_email).digest('hex');
-      for (let i = 0; i < pt.amount; i++) {
-        const newId = randomUUID();
-        const sig = signTokenPayload(
-          { id: newId, owner_email_hash: ownerHash, value: 1, issued_at: issuedAt.toISOString() },
-          app.config.signingPrivateKeyHex,
-        );
-        await c.query(
-          `INSERT INTO tokens(id, owner_email, value, state, issued_at, server_sig)
-           VALUES($1, $2, 1, 'VALID', $3, $4)`,
-          [newId, pt.recipient_email, issuedAt, sig],
-        );
-      }
+      const newId = randomUUID();
+      const sig = signTokenPayload(
+        { id: newId, owner_email_hash: ownerHash, value: BigInt(pt.amount), issued_at: issuedAt.toISOString() },
+        app.config.signingPrivateKeyHex,
+      );
       await c.query(
-        `UPDATE app_counters SET value = value + $1 WHERE name='minted_supply'`,
-        [pt.amount],
+        `INSERT INTO tokens(id, owner_email, value, state, issued_at, server_sig)
+         VALUES($1, $2, $3, 'VALID', $4, $5)`,
+        [newId, pt.recipient_email, BigInt(pt.amount).toString(), issuedAt, sig],
+      );
+      await c.query(
+        `UPDATE app_counters SET value = value + $1::bigint WHERE name='minted_supply'`,
+        [BigInt(pt.amount).toString()],
       );
 
       // Record the completed transfer in the ledger (separate idempotency-key namespace).

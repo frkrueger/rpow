@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { Panel } from '../components/Panel.js';
 import { useMe } from '../hooks/useMe.js';
 import { api } from '../api.js';
+import { formatRpow } from '../lib/format.js';
 
 export function WalletPage() {
   const { me, loading, refresh } = useMe();
@@ -24,10 +25,10 @@ export function WalletPage() {
     <Panel title="WALLET">
       <pre style={{ margin: 0 }}>
 {`  > LOGGED IN AS: ${me.email}
-  > BALANCE     : ${String(me.balance).padStart(4, '0')} RPOW
-  > MINTED      : ${String(me.minted).padStart(4, '0')}
-  > SENT        : ${String(me.sent).padStart(4, '0')}
-  > RECEIVED    : ${String(me.received).padStart(4, '0')}
+  > BALANCE     : ${formatRpow(me.balance_base_units)} RPOW
+  > MINTED      : ${formatRpow(me.minted_base_units)}
+  > SENT        : ${formatRpow(me.sent_base_units)}
+  > RECEIVED    : ${formatRpow(me.received_base_units)}
 `}
       </pre>
       <div style={{ marginTop: 8 }}>

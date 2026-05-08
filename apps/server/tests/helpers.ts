@@ -3,12 +3,17 @@ import type { Pool } from 'pg';
 import { randomBytes } from 'node:crypto';
 import { FakeMailer } from '../src/mailer.js';
 import { buildApp } from '../src/buildApp.js';
+import { FakeBridgeClient } from '@rpow/solana-bridge';
 import pg from 'pg';
 
-export async function makeTestApp(): Promise<{
+export async function makeTestApp(opts: {
+  bridgeClient?: FakeBridgeClient;
+  wrapAllowlistCsv?: string;
+} = {}): Promise<{
   app: Awaited<ReturnType<typeof buildApp>>;
   pool: Pool;
   mailer: FakeMailer;
+  bridgeClient: FakeBridgeClient;
   cleanup: () => Promise<void>;
 }> {
   const url = process.env.TEST_DATABASE_URL;
@@ -30,16 +35,18 @@ export async function makeTestApp(): Promise<{
 
   await runMigrations(pool);
   const mailer = new FakeMailer();
+  const bridgeClient = opts.bridgeClient ?? new FakeBridgeClient();
   const app = await buildApp({
     pool,
     mailer,
+    bridgeClient,
+    wrapAllowlistCsv: opts.wrapAllowlistCsv ?? '',
     test: true,
     config: {
       sessionSecret: 'x'.repeat(32),
       magicLinkBaseUrl: 'http://test',
       difficultyBits: 8,
       difficultyFloor: 4,
-      mintEpochSize: 10,
       mintMaxSupply: 21,
       signingPrivateKeyHex: '11'.repeat(32),
       signingPublicKeyHex: '22'.repeat(32),
@@ -48,7 +55,7 @@ export async function makeTestApp(): Promise<{
     },
   });
   return {
-    app, pool, mailer,
+    app, pool, mailer, bridgeClient,
     cleanup: async () => {
       await app.close();
       // Use a fresh pool to drop the schema since main pool may be closed

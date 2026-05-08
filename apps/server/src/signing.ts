@@ -3,7 +3,7 @@ import { generateKeyPairSync, sign, verify, createPrivateKey, createPublicKey } 
 export interface TokenPayload {
   id: string;
   owner_email_hash: string;
-  value: number;
+  value: bigint;
   issued_at: string;
 }
 
@@ -26,9 +26,12 @@ function pubKeyFromHex(hex: string) {
 }
 
 function canonical(payload: TokenPayload): Buffer {
-  const ordered = JSON.stringify({
-    id: payload.id, owner_email_hash: payload.owner_email_hash, value: payload.value, issued_at: payload.issued_at,
-  });
+  const ordered = JSON.stringify(
+    {
+      id: payload.id, owner_email_hash: payload.owner_email_hash, value: payload.value, issued_at: payload.issued_at,
+    },
+    (_, v) => (typeof v === 'bigint' ? v.toString() : v),
+  );
   return Buffer.from(ordered, 'utf8');
 }
 

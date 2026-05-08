@@ -9,6 +9,7 @@ import { MinePage } from './pages/Mine.js';
 import { SendPage } from './pages/Send.js';
 import { ActivityPage } from './pages/Activity.js';
 import { LedgerPage } from './pages/Ledger.js';
+import { WrapPage } from './pages/WrapPage.js';
 
 const HEADER = [
   '+======================================================================+',
@@ -38,6 +39,7 @@ export default function App() {
             <NavLink to="/send">[ send ]</NavLink>{' '}
             <NavLink to="/activity">[ activity ]</NavLink>{' '}
             <NavLink to="/ledger">[ ledger ]</NavLink>{' '}
+            {me?.wrap_allowed && (<><NavLink to="/wrap">[ wrap ]</NavLink>{' '}</>)}
             {me ? (
               <button onClick={logout} title="end session">[ logout ]</button>
             ) : (
@@ -55,6 +57,7 @@ export default function App() {
             <Route path="/send" element={<SendPage />} />
             <Route path="/activity" element={<ActivityPage />} />
             <Route path="/ledger" element={<LedgerPage />} />
+            <Route path="/wrap" element={<WrapPage />} />
           </Routes>
         </main>
       </div>

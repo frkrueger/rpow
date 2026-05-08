@@ -14,13 +14,14 @@ Let an allowlisted rpow user move N rpow from the centralized server-side ledger
 - Multi-wallet binding per user (one wallet per email, period).
 - Background retry workers — auto-refund on failure is the recovery path.
 - Public/general rollout — pilot is allowlist-only.
-- Anyone collecting fees, founder allocation, or pre-mine. The operator profits zero from this system.
+- Transfer fees on rpow `/send`. Fees on rpow stay zero; the satoshi allocation (below) is the only operator-side allocation.
 
 ## Values baked in
 
-- **No profit motive.** No pre-mine, no founder allocation, no transfer fees, no bridge fees. Bridge keypair has mint authority *only* for the wrap protocol; it is never used for discretionary minting. Stated explicitly on the About page and the WrapPage.
+- **Disclosed satoshi allocation, no further claims.** A one-time pre-allocation of 1,100,000 SRPOW (5.24% of the 21M cap) is minted at launch to a founder-held wallet, vested linearly over 1 year via the Streamflow protocol on Solana. After that allocation, **no further mint authority is exercised by the operator outside the wrap protocol**: the bridge keypair's mint authority is used only by `/srpow/wrap` Phase 2 minting. No transfer fees on rpow, no bridge fees on SRPOW. Stated explicitly on the About page.
 - **No warranty.** This is a centralized system; if the server is breached, lost, or seized, tokens may be lost. Stated explicitly on the About page and the WrapPage.
-- **Hard 21M cap, never exceeded.** Wrap is a state change, not a mint — see proof in the data-model section.
+- **Hard 21M cap, never exceeded.** Mineable budget on rpow drops to 19,900,000 to absorb the 1.1M satoshi allocation; total user-visible RPOW (rpow + SRPOW) remains ≤ 21M. See proof in the data-model section.
+- **Bitcoin-style halving issuance.** Mining produces fractional rewards in base units (9 decimals, matching SRPOW). Difficulty is fixed at **24 trailing-zero bits** forever. The reward starts at **1/128 RPOW per successful PoW** (= 7,812,500 base units). The reward halves every time `app_counters.minted_supply` crosses a 1,000,000-RPOW boundary: 1/128 → 1/256 → 1/512 → … . Issuance is asymptotic toward the 21M cap; the schedule terminates either at the cap or when the reward-in-base-units drops below 1 (~22 halvings). All amount-bearing endpoints (`/me`, `/send`, `/srpow/wrap`, `/ledger`) operate in base units; the UI formats with 9 decimals. Stated on the About page as "halving issuance, never inflated."
 
 ## Architecture
 
@@ -165,13 +166,14 @@ Define:
 - `R_locked` = count of state=LOCKED_FOR_BRIDGE rpow rows
 - `R_wrapped` = count of state=WRAPPED rpow rows
 - `S` = SRPOW supply on Solana (sum of all token-account balances for the SRPOW mint, divided by 10⁹)
+- `K = 1,100,000` = the one-time satoshi allocation, minted at launch (vested over 1 year via Streamflow on Solana)
 
 Invariants enforced by construction:
 1. Wrap is a state change only: `R_total` is unchanged by `/srpow/wrap`.
-2. SRPOW is minted only inside Phase 2 of `/srpow/wrap`, in 1:1 ratio with `LOCKED_FOR_BRIDGE → WRAPPED` transitions: **`S = R_wrapped`**.
-3. The cap counter (`app_counters.minted_supply`) is bumped only by `/mint` and `/claim`, both with hard checks against `MINT_MAX_SUPPLY = 21_000_000`. Wrap doesn't touch it.
+2. SRPOW is minted in exactly two ways: (a) the one-time satoshi allocation of `K` at launch, and (b) inside Phase 2 of `/srpow/wrap`, in 1:1 ratio with `LOCKED_FOR_BRIDGE → WRAPPED` transitions. Therefore: **`S = K + R_wrapped`**.
+3. The cap counter (`app_counters.minted_supply`) is bumped only by `/mint` and `/claim`, both with hard checks against `MINT_MAX_SUPPLY = 19,900,000` (= 21M − K). Wrap doesn't touch it.
 
-Therefore: user-visible RPOW supply (rpow `VALID` + SRPOW on Solana) = `R_valid + S = R_valid + R_wrapped ≤ R_total ≤ minted_supply ≤ 21,000,000`. ∎
+Therefore: user-visible RPOW supply (rpow `VALID` + SRPOW on Solana) = `R_valid + S = R_valid + K + R_wrapped ≤ R_total + K ≤ minted_supply + K ≤ 19,900,000 + 1,100,000 = 21,000,000`. ∎
 
 (`R_locked` rpow rows transiently exist during a wrap but are not user-visible — they're "in flight" and resolve to either `VALID` or `WRAPPED` within 60s.)
 
@@ -326,7 +328,19 @@ event = {
   SRPOW_MINT_ADDRESS=<base58>
   ```
 
-**No founder pre-mint.** Initial supply is 0; every SRPOW that ever exists comes from a wrap.
+After the mint exists, the satoshi allocation script (`mint-satoshi-allocation.ts`) is run **once** to mint the 1.1M tribute to the founder-held wallet.
+
+## Satoshi allocation script
+
+`apps/server/scripts/mint-satoshi-allocation.ts`. Hardcoded amount: 1,100,000 SRPOW (= 1.1M × 10⁹ base units). Recipient pubkey via env: `SATOSHI_RECIPIENT_PUBKEY`.
+
+Behavior:
+- Pre-flight: queries `getTokenSupply(mint)`. Refuses to run if supply > 0 (i.e., something was already minted — prevents accidental double-allocation).
+- Derives the recipient ATA via `getOrCreateAssociatedTokenAccount` (paid by bridge keypair).
+- Calls `mintTo(connection, payer=bridge, mint, recipientAta, mintAuthority=bridge, baseUnits=1_100_000n × 10⁹n, ..., {commitment: 'confirmed'})`.
+- Prints the tx signature and a Solscan link.
+
+Operator action **after** running this script: open `https://streamflow.finance`, connect the recipient wallet, create a 1-year linear-vesting stream depositing the 1.1M SRPOW. Streamflow handles all vesting math; nothing in our codebase imports the Streamflow SDK.
 
 ## Rollout sequence
 
@@ -334,15 +348,23 @@ event = {
 2. Run `create-srpow-mint.ts --init-keys` locally → record `BRIDGE_PUBKEY` and `BRIDGE_KEYPAIR_BASE58`.
 3. Send 0.05 SOL from a personal Phantom to `BRIDGE_PUBKEY`.
 4. Run `create-srpow-mint.ts` (default mode) with `BRIDGE_KEYPAIR_BASE58` and `SOLANA_RPC_URL` in env → record `SRPOW_MINT_ADDRESS`. Verify on Solscan: decimals 9, freeze authority null, mint authority = bridge pubkey, supply 0.
-5. Set VPS env (`/etc/rpow/server.env`):
+5. Run `mint-satoshi-allocation.ts` with `SATOSHI_RECIPIENT_PUBKEY=DG2S4KC3GFFVYGipSZeHDYoWyU8dhkeUqW2bvZcy8DZo` (and `BRIDGE_KEYPAIR_BASE58`, `SOLANA_RPC_URL`, `SRPOW_MINT_ADDRESS` in env). Verify on Solscan: SRPOW supply = 1,100,000.000000000.
+6. Open `https://streamflow.finance`, connect the recipient wallet, create a 1-year linear-vesting stream for the 1.1M SRPOW. (Operator action — not scripted.)
+7. **Token metadata:**
+   1. Upload `apps/web/public/srpow-logo.png` to Arweave (via `irys` CLI paid by bridge keypair, or via app.ardrive.io). Record the Arweave image URL.
+   2. Edit `apps/web/public/srpow-token-metadata.template.json`, replace `REPLACE_WITH_ARWEAVE_IMAGE_URL` with the URL from the previous step.
+   3. Upload that JSON file to Arweave the same way. Record the Arweave metadata URL.
+   4. Run `set-srpow-metadata.ts` with `SRPOW_METADATA_URI=<Arweave metadata URL>` (plus the existing env). Verify on Solscan that `https://solscan.io/token/<SRPOW_MINT_ADDRESS>` now shows the SRPOW name, symbol, and logo.
+8. **Update VPS env: change `MINT_MAX_SUPPLY=19900000`** in `/etc/rpow/server.env` (= 21M − 1.1M satoshi allocation).
+9. Set the rest of the VPS env (`/etc/rpow/server.env`):
    - `SOLANA_RPC_URL=https://...`
    - `SRPOW_MINT_ADDRESS=<from step 4>`
    - `BRIDGE_KEYPAIR_BASE58=<from step 2>`
    - `WRAP_ALLOWED_EMAILS=frk314@gmail.com`
    - `SRPOW_COMMITMENT=confirmed`
-6. Push to `main`, run RUNBOOK deploy command, restart `rpow-server`. Migration `007` runs on startup; reconcile worker runs once.
-7. Pilot test as `frk314@gmail.com`: bind Phantom, wrap 1 RPOW, verify mint tx on Solscan, verify SRPOW shows up in Phantom.
-8. Soak time before broadening the allowlist. No deadline.
+10. Push `srpow-wrap` branch to `main`, run RUNBOOK deploy command, restart `rpow-server`. Migration `007` runs on startup; reconcile worker runs once.
+11. Pilot test as `frk314@gmail.com`: bind Phantom, wrap 1 RPOW, verify mint tx on Solscan, verify SRPOW shows up in Phantom **with the correct name, symbol, and logo**.
+12. Soak time before broadening the allowlist. No deadline.
 
 ## Operational notes
 

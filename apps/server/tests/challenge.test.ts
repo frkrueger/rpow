@@ -8,6 +8,22 @@ async function login(ctx: Awaited<ReturnType<typeof makeTestApp>>, email = 'a@b.
   return r.headers['set-cookie'] as string;
 }
 
+// In test config, mintMaxSupply = 21 RPOW => cap in base units = 21 * 10^9.
+const ONE_RPOW = 1_000_000_000n;
+const CAP_BASE_UNITS = 21n * ONE_RPOW;
+
+// Set app_counters.minted_supply directly. /challenge reads supply from there
+// (cached for 5s) to fail-fast at the cap.
+async function setMintedSupplyBaseUnits(
+  ctx: Awaited<ReturnType<typeof makeTestApp>>,
+  baseUnits: bigint,
+) {
+  await ctx.pool.query(
+    `UPDATE app_counters SET value = $1::bigint WHERE name='minted_supply'`,
+    [baseUnits.toString()],
+  );
+}
+
 describe('POST /challenge', () => {
   let cleanup: (() => Promise<void>) | null = null;
   afterEach(async () => { if (cleanup) await cleanup(); cleanup = null; });
@@ -29,37 +45,23 @@ describe('POST /challenge', () => {
     expect(res.statusCode).toBe(401);
   });
 
-  async function seedRootTokens(ctx: Awaited<ReturnType<typeof makeTestApp>>, n: number) {
-    const { randomUUID } = await import('node:crypto');
-    for (let i = 0; i < n; i++) {
-      await ctx.pool.query(
-        `INSERT INTO tokens(id, owner_email, value, state, server_sig)
-         VALUES ($1, $2, 1, 'VALID', '\\x00')`,
-        [randomUUID(), `seed-${i}@x.com`],
-      );
-    }
-  }
-
-  it('stamps base difficulty (8) below first milestone', async () => {
+  it('stamps the configured difficulty regardless of supply (halving model has fixed difficulty)', async () => {
     const ctx = await makeTestApp(); cleanup = ctx.cleanup;
     const cookie = await login(ctx);
-    await seedRootTokens(ctx, 5); // supply = 5, epoch 0
-    const body = (await ctx.app.inject({ method: 'POST', url: '/challenge', headers: { cookie } })).json();
-    expect(body.difficulty_bits).toBe(8);
-  });
-
-  it('stamps +1 bit (9) past first milestone', async () => {
-    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
-    const cookie = await login(ctx);
-    await seedRootTokens(ctx, 10); // supply = 10, epoch 1
-    const body = (await ctx.app.inject({ method: 'POST', url: '/challenge', headers: { cookie } })).json();
-    expect(body.difficulty_bits).toBe(9);
+    // Try at supply=0, then at supply=10 RPOW. Difficulty is constant in the
+    // halving schedule.
+    const a = (await ctx.app.inject({ method: 'POST', url: '/challenge', headers: { cookie } })).json();
+    expect(a.difficulty_bits).toBe(8);
+    await setMintedSupplyBaseUnits(ctx, 10n * ONE_RPOW);
+    const b = (await ctx.app.inject({ method: 'POST', url: '/challenge', headers: { cookie } })).json();
+    expect(b.difficulty_bits).toBe(8);
   });
 
   it('refuses with 410 SUPPLY_EXHAUSTED at cap', async () => {
     const ctx = await makeTestApp(); cleanup = ctx.cleanup;
     const cookie = await login(ctx);
-    await seedRootTokens(ctx, 21); // supply = 21, at cap
+    // Set minted_supply to the test cap (21 RPOW = 21 * 10^9 base units).
+    await setMintedSupplyBaseUnits(ctx, CAP_BASE_UNITS);
     const res = await ctx.app.inject({ method: 'POST', url: '/challenge', headers: { cookie } });
     expect(res.statusCode).toBe(410);
     expect(res.json().error).toBe('SUPPLY_EXHAUSTED');

@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Panel } from '../components/Panel.js';
 import { useMe } from '../hooks/useMe.js';
 import { api } from '../api.js';
+import { formatRpow } from '../lib/format.js';
+import type { LedgerResponse } from '@rpow/shared';
 
 type Status = 'idle' | 'mining' | 'submitting' | 'error';
 
@@ -16,6 +18,7 @@ export function MinePage() {
   const [error, setError] = useState('');
   const [lastTokenId, setLastTokenId] = useState('');
   const [sessionMinted, setSessionMinted] = useState(0);
+  const [ledger, setLedger] = useState<LedgerResponse | null>(null);
   const workerRef = useRef<Worker | null>(null);
   // Use a ref (not state) so the async worker callback always sees the latest value
   // without restarting the loop closure.
@@ -25,6 +28,11 @@ export function MinePage() {
     stopRequestedRef.current = true;
     workerRef.current?.terminate();
   }, []);
+
+  // Pull halving info on mount and after each successful mint so the
+  // "next halving at" countdown stays roughly current.
+  const refreshLedger = () => { api.ledger().then(setLedger).catch(() => {}); };
+  useEffect(() => { refreshLedger(); }, []);
 
   async function startOne() {
     if (stopRequestedRef.current) { setStatus('idle'); return; }
@@ -61,6 +69,7 @@ export function MinePage() {
           setLastTokenId(r.token.id);
           setSessionMinted(n => n + 1);
           await refresh();
+          refreshLedger();
           // Loop: kick off the next challenge unless the user asked to stop.
           if (!stopRequestedRef.current) {
             startOne();
@@ -107,10 +116,31 @@ export function MinePage() {
 
   const running = status === 'mining' || status === 'submitting';
 
+  // Halving / reward block (when ledger has loaded). Shown above the per-run
+  // mining stats so users see what they're actually mining for.
+  let rewardBlock = '';
+  if (ledger) {
+    const currentReward = formatRpow(ledger.current_reward_base_units);
+    const nextReward = formatRpow(ledger.next_reward_base_units);
+    const nextHalvingAt = formatRpow(ledger.next_halving_at_base_units);
+    const toGo = formatRpow(ledger.base_units_to_next_halving);
+    // Reward fraction expressed as 1/N. Base reward at halving_index 0 is
+    // 1/128 RPOW (= 7,812,500 base units), and halves each tier.
+    const baseDenom = 128;
+    const rewardFrac = `1/${baseDenom * 2 ** ledger.halving_index}`;
+    const nextRewardFrac = ledger.is_capped ? '—' : `1/${baseDenom * 2 ** (ledger.halving_index + 1)}`;
+    rewardBlock = `  CURRENT REWARD   : ${currentReward} RPOW (${rewardFrac}) per solution
+  CURRENT DIFFICULTY: ${ledger.current_difficulty_bits} trailing zero bits
+  NEXT HALVING AT  : ${nextHalvingAt} RPOW total minted (${toGo} RPOW to go)
+  NEXT REWARD      : ${ledger.is_capped ? 'CAPPED' : `${nextReward} RPOW (${nextRewardFrac})`}
+
+`;
+  }
+
   return (
     <Panel title="MINE">
       <pre style={{ margin: 0 }}>
-{`  TARGET           : ${target ?? '--'} trailing zero bits
+{`${rewardBlock}  TARGET           : ${target ?? '--'} trailing zero bits
   HASHES (current) : ${Number(hashes).toLocaleString()}
   RATE             : ${fmtRate()}
   ELAPSED          : ${fmtElapsed()}

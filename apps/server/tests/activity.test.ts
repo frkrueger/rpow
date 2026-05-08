@@ -25,7 +25,9 @@ describe('GET /activity', () => {
     const a = await loginAs(ctx, 'a@x.com');
     const b = await loginAs(ctx, 'b@x.com');
     await mineN(ctx, a, 2);
-    await ctx.app.inject({ method: 'POST', url: '/send', headers: { cookie: a, 'content-type': 'application/json' }, payload: { recipient_email: 'b@x.com', amount: 1, idempotency_key: randomUUID() } });
+    // Each mint credits MINT_BASE_REWARD_BASE_UNITS = 7,812,500 base units; send
+    // one full token's worth so the exact-sum lock can pick a single token.
+    await ctx.app.inject({ method: 'POST', url: '/send', headers: { cookie: a, 'content-type': 'application/json' }, payload: { recipient_email: 'b@x.com', amount_base_units: '7812500', idempotency_key: randomUUID() } });
 
     const aAct = (await ctx.app.inject({ method: 'GET', url: '/activity', headers: { cookie: a } })).json();
     const bAct = (await ctx.app.inject({ method: 'GET', url: '/activity', headers: { cookie: b } })).json();
