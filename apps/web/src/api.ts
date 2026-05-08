@@ -30,4 +30,8 @@ export const api = {
   send: (b: SendRequestBody) => call<SendResponse>('POST', '/send', b),
   activity: () => call<ActivityResponse>('GET', '/activity'),
   ledger: () => call<LedgerResponse>('GET', '/ledger'),
+    marketListings: () => call<{ listings: any[] }>('GET', '/market'),
+  marketList: (b: { token_id: string; price_rpow: number }) => call<{ ok: boolean; listing_id: string }>('POST', '/market/list', b),
+  marketCancel: (b: { listing_id: string }) => call<{ ok: boolean }>('POST', '/market/cancel', b),
+    marketBuy: (b: { listing_id: string; idempotency_key: string }) => call<{ ok: boolean; sold_token_id: string }>('POST', '/market/buy', b),
 };
