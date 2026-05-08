@@ -16,9 +16,14 @@ export function MarketPage() {
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
+
+  // list form
   const [listTokenId, setListTokenId] = useState('');
   const [listPrice, setListPrice] = useState('');
   const [listMsg, setListMsg] = useState('');
+
+  // buy state: listingId -> status string
+  const [buyStatus, setBuyStatus] = useState<Record<string, string>>({});
 
   async function load() {
     try {
@@ -48,6 +53,19 @@ export function MarketPage() {
     }
   }
 
+  async function handleBuy(listing: Listing) {
+    if (!me) return;
+    const idempotency_key = `buy-${listing.id}-${Date.now()}`;
+    setBuyStatus(prev => ({ ...prev, [listing.id]: 'buying...' }));
+    try {
+      await api.marketBuy({ listing_id: listing.id, idempotency_key });
+      setBuyStatus(prev => ({ ...prev, [listing.id]: 'bought!' }));
+      load();
+    } catch (e: any) {
+      setBuyStatus(prev => ({ ...prev, [listing.id]: e?.message ?? 'error' }));
+    }
+  }
+
   async function handleCancel(listing_id: string) {
     try {
       await api.marketCancel({ listing_id });
@@ -65,7 +83,7 @@ export function MarketPage() {
         <form onSubmit={handleList} style={{ marginBottom: 16 }}>
           <pre>list a token for sale</pre>
           <div>
-            <label>token id: </label>
+            <label>token id:{'     '}</label>
             <input
               value={listTokenId}
               onChange={e => setListTokenId(e.target.value)}
@@ -100,9 +118,22 @@ seller: ${l.seller_email}
 price:  ${l.price_rpow} rpow
 minted: ${new Date(l.issued_at).toLocaleDateString()}`}
           </pre>
-          {me?.email === l.seller_email && (
-            <button onClick={() => handleCancel(l.id)}>[ cancel listing ]</button>
-          )}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {me && me.email !== l.seller_email && (
+              <button
+                onClick={() => handleBuy(l)}
+                disabled={!!buyStatus[l.id] && buyStatus[l.id] === 'buying...'}
+              >
+                [ buy for {l.price_rpow} rpow ]
+              </button>
+            )}
+            {me?.email === l.seller_email && (
+              <button onClick={() => handleCancel(l.id)}>[ cancel listing ]</button>
+            )}
+            {buyStatus[l.id] && (
+              <span style={{ marginLeft: 4 }}>{buyStatus[l.id]}</span>
+            )}
+          </div>
         </div>
       ))}
     </div>
