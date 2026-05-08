@@ -15,6 +15,7 @@ export function LedgerPage() {
   TOTAL TRANSFERRED   : ${d.total_transferred}
   CIRCULATING SUPPLY  : ${d.circulating_supply}
   CURRENT DIFFICULTY  : ${d.current_difficulty_bits} trailing zero bits
+                        (+1 bit every 1,000,000 minted; hard cap 21M)
   USER COUNT          : ${d.user_count}
 `}
         </pre>
@@ -48,8 +49,9 @@ export function LedgerPage() {
 
   rpow2.com is a modern tribute to the spirit of Finney's original.
   No IBM 4758 — Ed25519 signatures, magic-link auth, Postgres ledger.
-  Still centralized. Still no supply cap. Still no difficulty
-  adjustment. Faithful by design.
+  Still centralized — but Bitcoin-flavored where it counts: a fixed
+  21,000,000 supply cap, and a stepped difficulty adjustment that
+  adds one trailing-zero bit for every 1,000,000 coins minted.
 `}
         </pre>
       </Panel>
