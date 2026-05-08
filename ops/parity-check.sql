@@ -8,6 +8,7 @@ UNION ALL SELECT 'tokens_invalidated',count(*) FROM tokens WHERE state='INVALIDA
 UNION ALL SELECT 'transfers',         count(*) FROM transfers
 UNION ALL SELECT 'magic_links',       count(*) FROM magic_links
 UNION ALL SELECT 'magic_links_unused',count(*) FROM magic_links WHERE used_at IS NULL
+UNION ALL SELECT 'email_unsubscribes', count(*) FROM email_unsubscribes
 UNION ALL SELECT 'challenges',        count(*) FROM challenges
 UNION ALL SELECT 'challenges_unclaimed', count(*) FROM challenges WHERE claimed_at IS NULL
 UNION ALL SELECT 'pending_transfers', count(*) FROM pending_transfers

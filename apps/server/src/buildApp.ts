@@ -11,6 +11,7 @@ import { sendRoutes } from './routes/send.js';
 import { claimRoutes } from './routes/claim.js';
 import { activityRoutes } from './routes/activity.js';
 import { ledgerRoutes } from './routes/ledger.js';
+import { unsubscribeRoutes } from './routes/unsubscribe.js';
 
 export interface AppConfig {
   sessionSecret: string;
@@ -78,6 +79,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   await app.register(claimRoutes);
   await app.register(activityRoutes);
   await app.register(ledgerRoutes);
+  await app.register(unsubscribeRoutes);
 
   app.get('/.well-known/rpow-pubkey.pem', async (_req, reply) => {
     const pubDer = Buffer.concat([

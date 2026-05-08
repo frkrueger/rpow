@@ -60,7 +60,7 @@ describe('GET /claim', () => {
        VALUES ($1, 'sender@x.com', 'recipient@x.com', 1, $2, $3, now() + interval '30 days')`,
       [pendingId, randomUUID(), claimHash],
     );
-    const migration006 = await readFile(new URL('../migrations/006_pending_transfer_hardening.sql', import.meta.url), 'utf8');
+    const migration006 = await readFile(new URL('../migrations/007_pending_transfer_hardening.sql', import.meta.url), 'utf8');
 
     await ctx.pool.query(migration006);
 
@@ -110,7 +110,7 @@ describe('GET /claim', () => {
     );
     await ctx.pool.query("UPDATE app_counters SET value = value + 1 WHERE name='minted_supply'");
 
-    const migration006 = await readFile(new URL('../migrations/006_pending_transfer_hardening.sql', import.meta.url), 'utf8');
+    const migration006 = await readFile(new URL('../migrations/007_pending_transfer_hardening.sql', import.meta.url), 'utf8');
     await ctx.pool.query(migration006);
 
     const backfilled = await ctx.pool.query<{ token_id: string }>(
@@ -155,7 +155,7 @@ describe('GET /claim', () => {
       ],
     );
 
-    const migration006 = await readFile(new URL('../migrations/006_pending_transfer_hardening.sql', import.meta.url), 'utf8');
+    const migration006 = await readFile(new URL('../migrations/007_pending_transfer_hardening.sql', import.meta.url), 'utf8');
     await ctx.pool.query(migration006);
 
     const liveBackfill = await ctx.pool.query<{ token_id: string }>(

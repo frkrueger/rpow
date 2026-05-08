@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { readSession } from './auth.js';
 import { withTx } from '../db.js';
 import { signTokenPayload } from '../signing.js';
+import { makeUnsubToken } from '../unsub.js';
 
 const Body = z.object({
   recipient_email: z.string().email(),
@@ -57,7 +58,17 @@ async function sendClaimEmail(app: FastifyInstance, pending: { sender_email: str
   <p style="font-size:11px;color:#666;margin:0;">Link expires in ${PENDING_TTL_DAYS} days. rpow2.com — a modern tribute to a tribute to the original rpow by hal finney.</p>
 </div>`;
 
-  await app.mailer.send({ to: recipient, subject, text, html });
+  const unsubUrl = `${app.config.magicLinkBaseUrl}/unsubscribe?token=${makeUnsubToken(recipient, app.config.sessionSecret)}`;
+  await app.mailer.send({
+    to: recipient,
+    subject,
+    text,
+    html,
+    headers: {
+      'List-Unsubscribe': `<${unsubUrl}>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    },
+  });
 }
 
 function serializePending(row: PendingTransferRow) {
@@ -100,7 +111,7 @@ export async function sendRoutes(app: FastifyInstance) {
 
     type SendResult =
       | { ok: true; transferred: number; recipient_email: string; transfer_id: string; pending?: boolean }
-      | { error: 'BAD_REQUEST' | 'INSUFFICIENT_BALANCE'; message: string; status: number };
+      | { error: 'BAD_REQUEST' | 'INSUFFICIENT_BALANCE' | 'RECIPIENT_UNSUBSCRIBED'; message: string; status: number };
 
     let out!: SendResult;
     try {
@@ -166,6 +177,18 @@ export async function sendRoutes(app: FastifyInstance) {
             [transferId, sender, recipient, amount, idem],
           );
           return { ok: true as const, transferred: amount, recipient_email: recipient, transfer_id: transferId };
+        }
+
+        // Recipient does not exist: refuse if they've unsubscribed (we'd be
+        // about to send a claim email that the recipient explicitly asked
+        // not to receive). Reject before invalidating, so the sender's
+        // tokens stay intact.
+        const unsub = await c.query(
+          `SELECT 1 FROM email_unsubscribes WHERE email=$1`,
+          [recipient],
+        );
+        if (unsub.rowCount) {
+          return { error: 'RECIPIENT_UNSUBSCRIBED' as const, message: 'recipient has unsubscribed and cannot receive RPOW transfers', status: 400 };
         }
 
         // Recipient does not exist: invalidate sender tokens and create a pending claim.
