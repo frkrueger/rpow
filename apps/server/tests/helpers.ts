@@ -39,6 +39,8 @@ export async function makeTestApp(): Promise<{
       magicLinkBaseUrl: 'http://test',
       difficultyBits: 8,
       difficultyFloor: 4,
+      mintEpochSize: 10,
+      mintMaxSupply: 21,
       signingPrivateKeyHex: '11'.repeat(32),
       signingPublicKeyHex: '22'.repeat(32),
       webOrigin: 'http://web.test',
