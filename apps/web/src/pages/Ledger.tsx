@@ -3,19 +3,36 @@ import { Panel } from '../components/Panel.js';
 import { api } from '../api.js';
 import type { LedgerResponse } from '@rpow/shared';
 
+// Format a stringified bigint in base units as a human-readable RPOW amount.
+// 9 decimals; trims trailing zeros after the decimal but keeps the integer
+// part. Empty / "0" → "0".
+function formatRpow(baseUnitsStr: string, baseUnitsPerRpow: string): string {
+  const bu = BigInt(baseUnitsStr);
+  const denom = BigInt(baseUnitsPerRpow);
+  if (denom === 0n) return baseUnitsStr;
+  const whole = bu / denom;
+  const frac = bu % denom;
+  if (frac === 0n) return whole.toString();
+  const fracStr = frac.toString().padStart(baseUnitsPerRpow.length - 1, '0').replace(/0+$/, '');
+  return `${whole.toString()}.${fracStr}`;
+}
+
 export function LedgerPage() {
   const [d, setD] = useState<LedgerResponse | null>(null);
   useEffect(() => { api.ledger().then(setD); }, []);
   if (!d) return <Panel title="PUBLIC LEDGER"><div>loading...</div></Panel>;
+  const totalMinted = formatRpow(d.total_minted_base_units, d.base_units_per_rpow);
+  const totalTransferred = formatRpow(d.total_transferred_base_units, d.base_units_per_rpow);
+  const circulating = formatRpow(d.circulating_supply_base_units, d.base_units_per_rpow);
   return (
     <>
       <Panel title="PUBLIC LEDGER">
         <pre style={{ margin: 0 }}>
-{`  TOTAL MINTED        : ${d.total_minted}
-  TOTAL TRANSFERRED   : ${d.total_transferred}
-  CIRCULATING SUPPLY  : ${d.circulating_supply}
+{`  TOTAL MINTED        : ${totalMinted} RPOW
+  TOTAL TRANSFERRED   : ${totalTransferred} RPOW
+  CIRCULATING SUPPLY  : ${circulating} RPOW
   CURRENT DIFFICULTY  : ${d.current_difficulty_bits} trailing zero bits
-                        (+1 bit every 1,000,000 minted; hard cap 21M)
+                        (constant; halving issuance, hard cap 21M)
   USER COUNT          : ${d.user_count}
 `}
         </pre>

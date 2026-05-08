@@ -69,10 +69,19 @@ export interface ActivityEntry {
 export type ActivityResponse = ActivityEntry[];
 
 export interface LedgerResponse {
-  total_minted: number;
-  total_transferred: number;
-  circulating_supply: number;
+  total_minted_base_units: string;        // stringified bigint
+  total_transferred_base_units: string;
+  circulating_supply_base_units: string;
+  minted_supply_counter_base_units: string; // mirrors app_counters.minted_supply
+  max_supply_base_units: string;
+  base_units_per_rpow: string;            // = "1000000000"
   current_difficulty_bits: number;
+  current_reward_base_units: string;
+  next_reward_base_units: string;
+  next_halving_at_base_units: string;
+  base_units_to_next_halving: string;
+  halving_index: number;
+  is_capped: boolean;
   user_count: number;
 }
 
