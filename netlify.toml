@@ -3,7 +3,9 @@
   # `npm ci` does a clean install — required so the @rpow/shared workspace symlink
   # gets recreated in node_modules. `npm install` was reusing a stale cached
   # node_modules from when packagePath was auto-detected as apps/web.
-  command = "npm ci --workspaces --include-workspace-root && npm run build --workspace @rpow/shared && npm run build --workspace @rpow/web"
+  # `--include=dev` keeps build tools such as TypeScript and Vite installed even
+  # if the Netlify UI has NODE_ENV=production set for the site.
+  command = "npm ci --include=dev --workspaces --include-workspace-root && npm run build --workspace @rpow/shared && npm run build --workspace @rpow/web"
   publish = "apps/web/dist"
 
 [build.environment]
