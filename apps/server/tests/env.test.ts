@@ -80,4 +80,18 @@ describe('parseEnv', () => {
     expect(env.MAILER).toBe('postmark');
     expect(env.POSTMARK_MESSAGE_STREAM).toBe('outbound');
   });
+  it('defaults SRPOW envs sensibly', () => {
+    const env = parseEnv({
+      DATABASE_URL: 'postgres://u:p@h/db',
+      RESEND_API_KEY: 'rk',
+      EMAIL_FROM: 'no-reply@rpow2.com',
+      SESSION_SECRET: 'a'.repeat(32),
+      MAGIC_LINK_BASE_URL: 'http://localhost:8080',
+      RPOW_SIGNING_PRIVATE_KEY_HEX: '00'.repeat(32),
+      RPOW_SIGNING_PUBLIC_KEY_HEX: '00'.repeat(32),
+    });
+    expect(env.WRAP_ALLOWED_EMAILS).toBe('');
+    expect(env.SRPOW_COMMITMENT).toBe('confirmed');
+    expect(env.SRPOW_WRAP_TIMEOUT_MS).toBe(60_000);
+  });
 });

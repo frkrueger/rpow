@@ -23,6 +23,12 @@ const Schema = z.object({
   MINT_MAX_SUPPLY: z.coerce.number().int().positive().default(21_000_000),
   WEB_ORIGIN: z.string().url().default('http://localhost:5173'),
   TURNSTILE_SECRET: z.string().optional(),
+  SOLANA_RPC_URL: z.string().url().optional(),
+  SRPOW_MINT_ADDRESS: z.string().min(32).max(44).optional(),       // base58 pubkey
+  BRIDGE_KEYPAIR_BASE58: z.string().min(80).optional(),
+  WRAP_ALLOWED_EMAILS: z.string().default(''),                     // CSV, may be empty
+  SRPOW_COMMITMENT: z.enum(['confirmed','finalized']).default('confirmed'),
+  SRPOW_WRAP_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
 }).superRefine((v, ctx) => {
   if (v.MAILER === 'resend' && !v.RESEND_API_KEY) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['RESEND_API_KEY'], message: 'required when MAILER=resend' });
