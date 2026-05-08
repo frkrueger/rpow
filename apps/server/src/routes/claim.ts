@@ -35,7 +35,11 @@ export async function claimRoutes(app: FastifyInstance) {
         [pt.recipient_email],
       );
 
-      // Mint amount fresh tokens to recipient.
+      // Mint amount fresh tokens to recipient. These have parent_token_id=NULL
+      // so they count as "minted" supply for /ledger purposes and must
+      // increment app_counters.minted_supply (migration 005). No cap check
+      // here: the sender's tokens were already burned; refusing to claim
+      // would strand them.
       const issuedAt = new Date();
       const ownerHash = createHash('sha256').update(pt.recipient_email).digest('hex');
       for (let i = 0; i < pt.amount; i++) {
@@ -50,6 +54,10 @@ export async function claimRoutes(app: FastifyInstance) {
           [newId, pt.recipient_email, issuedAt, sig],
         );
       }
+      await c.query(
+        `UPDATE app_counters SET value = value + $1 WHERE name='minted_supply'`,
+        [pt.amount],
+      );
 
       // Record the completed transfer in the ledger (separate idempotency-key namespace).
       const transferId = randomUUID();
