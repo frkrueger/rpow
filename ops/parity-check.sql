@@ -12,4 +12,7 @@ UNION ALL SELECT 'challenges',        count(*) FROM challenges
 UNION ALL SELECT 'challenges_unclaimed', count(*) FROM challenges WHERE claimed_at IS NULL
 UNION ALL SELECT 'pending_transfers', count(*) FROM pending_transfers
 UNION ALL SELECT 'pending_transfers_unclaimed', count(*) FROM pending_transfers WHERE claimed_at IS NULL
+UNION ALL SELECT 'pending_transfer_tokens', count(*) FROM pending_transfer_tokens
+UNION ALL SELECT 'app_counters',      count(*) FROM app_counters
+UNION ALL SELECT 'app_counters_minted_supply', count(*) FROM app_counters WHERE name='minted_supply'
 ORDER BY tbl;

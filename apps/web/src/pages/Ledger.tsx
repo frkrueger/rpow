@@ -3,26 +3,58 @@ import { Panel } from '../components/Panel.js';
 import { api } from '../api.js';
 import type { LedgerResponse } from '@rpow/shared';
 
+type LedgerDetails = LedgerResponse & {
+};
+
+function n(v: number | undefined) {
+  return typeof v === 'number' ? v.toLocaleString() : '--';
+}
+
 export function LedgerPage() {
-  const [d, setD] = useState<LedgerResponse | null>(null);
+  const [d, setD] = useState<LedgerDetails | null>(null);
   useEffect(() => { api.ledger().then(setD); }, []);
   if (!d) return <Panel title="PUBLIC LEDGER"><div>loading...</div></Panel>;
+  const latest = d.latest_token;
+  const pubkey = d.signing_public_key ?? d.public_key_pem_url ?? '/.well-known/rpow-pubkey.pem';
   return (
     <>
       <Panel title="PUBLIC LEDGER">
         <pre style={{ margin: 0 }}>
-{`  TOTAL MINTED        : ${d.total_minted}
-  TOTAL TRANSFERRED   : ${d.total_transferred}
-  CIRCULATING SUPPLY  : ${d.circulating_supply}
+{`  TOTAL MINTED        : ${n(d.total_minted)}
+  TOTAL TRANSFERRED   : ${n(d.total_transferred)}
+  CIRCULATING SUPPLY  : ${n(d.circulating_supply)}
+  MAX SUPPLY          : ${n(d.max_supply)}
+  EPOCH               : ${d.epoch ?? '--'}${d.epoch_size ? ` (${n(d.epoch_size)} coins/epoch)` : ''}
   CURRENT DIFFICULTY  : ${d.current_difficulty_bits} trailing zero bits
-                        (+1 bit every 1,000,000 minted; hard cap 21M)
-  USER COUNT          : ${d.user_count}
+  NEXT DIFFICULTY     : ${d.next_difficulty_bits ?? '--'} trailing zero bits
+  NEXT MILESTONE      : ${n(d.next_milestone_at)} minted
+  COINS UNTIL NEXT    : ${n(d.coins_until_next_milestone)}
+  USER COUNT          : ${n(d.user_count)}
+  CAP STATUS          : ${d.is_capped ? 'MAX SUPPLY REACHED' : 'open'}
 `}
         </pre>
         <div style={{ marginTop: 12 }} className="tagline">
           a modern tribute to a tribute to the original rpow by hal finney —
           <a href="https://nakamotoinstitute.org/finney/rpow/" target="_blank" rel="noreferrer"> finney's announcement</a>
         </div>
+      </Panel>
+
+      <Panel title="TOKEN PROVENANCE">
+        <pre style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+{`  MODEL        : each RPOW is a server-signed token. On transfer, sender
+                 tokens are invalidated and fresh recipient tokens are issued.
+  SIGNATURE    : Ed25519 over canonical token payload
+  PUBLIC KEY   : ${pubkey}
+  VERIFY PEM   : /.well-known/rpow-pubkey.pem
+
+  LATEST TOKEN : ${latest?.id ?? 'not returned by /ledger yet'}
+  PARENT TOKEN : ${latest?.parent_token_id ?? 'root mint or not returned'}
+  OWNER HASH   : ${latest?.owner_email_hash ?? 'not returned'}
+  VALUE        : ${latest?.value ?? 1} RPOW
+  ISSUED AT    : ${latest?.issued_at ?? 'not returned'}
+  SERVER SIG   : ${latest?.server_sig ?? 'not returned'}
+`}
+        </pre>
       </Panel>
 
       <Panel title="ABOUT RPOW">

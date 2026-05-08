@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS transfers (
   sender_email TEXT NOT NULL,
   recipient_email TEXT NOT NULL,
   amount INT NOT NULL,
-  idempotency_key TEXT NOT NULL UNIQUE,
+  idempotency_key TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

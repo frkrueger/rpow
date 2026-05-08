@@ -15,6 +15,13 @@
 ssh ubuntu@15.204.254.192 'sudo /usr/local/bin/rpow-status'
 ```
 
+## Health endpoints
+
+- `GET /health`: lightweight liveness. It should answer when the node process is up.
+- `GET /ready`: readiness. It should answer only when the API can serve traffic, including required dependencies such as Postgres.
+
+Use `/ready` for restart watchdogs, smoke tests, load balancer checks, and external uptime monitors. Keep `/health` for quick process liveness checks and human debugging.
+
 ## Service recovery
 
 Three layers (every layer has been tested):
@@ -22,13 +29,27 @@ Three layers (every layer has been tested):
 | Failure mode | Recovery |
 |---|---|
 | node process crashes / clean exit | systemd restarts in ~2s (`Restart=always`, `RestartSec=2`, up to 10 starts per 5min before pause) |
-| node process hung but alive (deadlock, infinite loop) | `rpow-healthcheck.timer` probes `/health` every 90s; after 2 consecutive failures, runs `systemctl restart rpow-server`. Logs to `journalctl -t rpow-healthcheck` |
+| node process hung or dependencies unavailable | `rpow-healthcheck.timer` probes `/ready` every 90s; after 2 consecutive failures, runs `systemctl restart rpow-server`. Logs to `journalctl -t rpow-healthcheck` |
 | nginx / Postgres crash | distro systemd units auto-restart |
 | VPS reboot | all rpow services + nginx + postgresql + ufw + fail2ban + certbot.timer + rpow-backup.timer + rpow-healthcheck.timer are `enabled` — they come back on boot |
 | TLS cert expiry | `certbot.timer` renews 30 days before expiry, fully unattended via Cloudflare DNS-01 |
 | Backup repo corruption | restic does a 5% read-data integrity check on every nightly run; restore drill documented below |
 
-**Recommended addition (not yet wired)**: an external uptime monitor (e.g. free UptimeRobot or healthchecks.io) hitting `https://api.rpow2.com/health` every minute, paging when 3+ consecutive failures. The VPS-internal watchdog can't help if the whole box is dead — only an off-box monitor can.
+## External uptime monitoring
+
+The VPS-internal watchdog cannot report a dead VPS, broken DNS, or an upstream networking problem. Keep at least two off-box monitors:
+
+| Monitor | URL | Expected | Cadence | Alert after |
+|---|---|---|---|---|
+| API readiness | `https://api.rpow2.com/ready` | HTTP 200 | 60s | 3 consecutive failures |
+| Web entrypoint | `https://rpow2.com` | HTTP 200 | 60s | 3 consecutive failures |
+
+`ops/uptime-monitors.example.yml` is a repo-native template for UptimeRobot, Better Stack, healthchecks.io, or an equivalent monitor. Put real destinations only in the monitor provider or in server-local files; do not commit webhook URLs, phone numbers, or API tokens.
+
+Suggested alert destinations:
+
+- Primary: `ALERT_WEBHOOK_URL` in the monitoring provider or `/etc/rpow/alerts.env` on the VPS.
+- Secondary: `ops@example.com` placeholder until a real operator mailbox is chosen.
 
 To inspect the watchdog's recent activity:
 ```bash
@@ -62,9 +83,17 @@ ssh ubuntu@15.204.254.192 '
 |---|---|---|---|
 | `/etc/rpow/server.env` | 0640 | root:rpow | App env (DATABASE_URL, signing keys, Resend, etc.) |
 | `/etc/rpow/restic.env` | 0600 | root:root | B2 creds + restic password |
+| `/etc/rpow/alerts.env` | 0600 | root:root | Optional alert/report webhook URLs; no app secrets |
 | `/etc/letsencrypt/cloudflare.ini` | 0600 | root:root | Cloudflare API token for DNS-01 |
 
 After editing `server.env`: `sudo systemctl restart rpow-server`.
+
+Example `/etc/rpow/alerts.env`:
+
+```bash
+ALERT_WEBHOOK_URL=https://example.invalid/rpow-alert-webhook
+RESTORE_REPORT_WEBHOOK_URL=https://example.invalid/rpow-restore-report-webhook
+```
 
 ## Difficulty changes
 
@@ -78,7 +107,9 @@ ssh ubuntu@15.204.254.192 '
 
 - **Nightly**: `rpow-backup.timer` at 03:00 UTC (with up to 5min jitter).
 - **Manual**: `ssh ubuntu@15.204.254.192 'sudo /usr/local/bin/rpow-backup'`
-- **Restore drill**: `ssh ubuntu@15.204.254.192 'sudo /usr/local/bin/rpow-restore-test'` — restores latest snapshot into a scratch DB and prints row counts. Run weekly to keep restic + creds healthy.
+- **Failure alerting**: `rpow-backup` sources optional `/etc/rpow/alerts.env`. If `ALERT_WEBHOOK_URL` is set, failures post a plain-text alert there; otherwise failures are logged to journald under `rpow-backup`.
+- **Restore drill**: `ssh ubuntu@15.204.254.192 'sudo /usr/local/bin/rpow-restore-test'` — restores latest snapshot into a scratch DB, prints row counts, and reports the result. Run weekly to keep restic + creds healthy.
+- **Restore reporting**: `rpow-restore-test` posts success and failure reports to `RESTORE_REPORT_WEBHOOK_URL` if set, then falls back to `ALERT_WEBHOOK_URL`, then journald under `rpow-restore-test`.
 - **List snapshots**: `ssh ubuntu@15.204.254.192 'sudo bash -c "set -a; . /etc/rpow/restic.env; set +a; restic snapshots"'`
 - **Retention**: 7 daily, 4 weekly, 6 monthly. 5% read-data integrity check on each backup.
 

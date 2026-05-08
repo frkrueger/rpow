@@ -11,5 +11,5 @@
     "test": "vitest run",
     "test:watch": "vitest"
   },
-  "devDependencies": { "vitest": "^1.6.0" }
+  "devDependencies": { "vitest": "^4.1.5" }
 }

@@ -4,7 +4,7 @@ import { Panel } from '../components/Panel.js';
 import { useMe } from '../hooks/useMe.js';
 import { api } from '../api.js';
 
-type Status = 'idle' | 'mining' | 'submitting' | 'error';
+type Status = 'idle' | 'mining' | 'submitting' | 'success' | 'error';
 
 export function MinePage() {
   const { me, loading, refresh } = useMe();
@@ -16,15 +16,33 @@ export function MinePage() {
   const [error, setError] = useState('');
   const [lastTokenId, setLastTokenId] = useState('');
   const [sessionMinted, setSessionMinted] = useState(0);
+  const [autoMine, setAutoMine] = useState(true);
+  const [intensity, setIntensity] = useState(100);
+  const [mintMoment, setMintMoment] = useState('');
   const workerRef = useRef<Worker | null>(null);
   // Use a ref (not state) so the async worker callback always sees the latest value
   // without restarting the loop closure.
   const stopRequestedRef = useRef(false);
+  const autoMineRef = useRef(autoMine);
+  const intensityRef = useRef(intensity);
 
   useEffect(() => () => {
     stopRequestedRef.current = true;
     workerRef.current?.terminate();
   }, []);
+  useEffect(() => { autoMineRef.current = autoMine; }, [autoMine]);
+  useEffect(() => { intensityRef.current = intensity; }, [intensity]);
+
+  function sleep(ms: number) {
+    return new Promise(resolve => window.setTimeout(resolve, ms));
+  }
+
+  function cooldownForIntensity() {
+    if (intensityRef.current >= 100) return 0;
+    if (intensityRef.current >= 75) return 500;
+    if (intensityRef.current >= 50) return 1500;
+    return 3000;
+  }
 
   async function startOne() {
     if (stopRequestedRef.current) { setStatus('idle'); return; }
@@ -59,13 +77,18 @@ export function MinePage() {
         try {
           const r = await api.mint({ challenge_id: ch.challenge_id, solution_nonce: m.solution_nonce });
           setLastTokenId(r.token.id);
+          setMintMoment(`+ MINTED 1 RPOW -> ${r.token.id}`);
           setSessionMinted(n => n + 1);
           await refresh();
           // Loop: kick off the next challenge unless the user asked to stop.
-          if (!stopRequestedRef.current) {
+          if (!stopRequestedRef.current && autoMineRef.current) {
+            const cooldown = cooldownForIntensity();
+            if (cooldown) await sleep(cooldown);
+          }
+          if (!stopRequestedRef.current && autoMineRef.current) {
             startOne();
           } else {
-            setStatus('idle');
+            setStatus('success');
           }
         } catch (err: any) {
           setStatus('error');
@@ -81,6 +104,7 @@ export function MinePage() {
     stopRequestedRef.current = false;
     setSessionMinted(0);
     setLastTokenId('');
+    setMintMoment('');
     startOne();
   }
 
@@ -95,11 +119,30 @@ export function MinePage() {
     const mhs = (h / 1e6) / (elapsed / 1000);
     return mhs.toFixed(2) + ' MH/s';
   }
+  function ratePerSecond() {
+    if (!elapsed) return 0;
+    return Number(hashes) / (elapsed / 1000);
+  }
   function fmtElapsed() {
     const s = Math.floor(elapsed / 1000);
     const mm = String(Math.floor(s / 60)).padStart(2, '0');
     const ss = String(s % 60).padStart(2, '0');
     return `00:${mm}:${ss}`;
+  }
+  function fmtDuration(ms: number) {
+    if (!Number.isFinite(ms) || ms <= 0) return '--';
+    const total = Math.ceil(ms / 1000);
+    const hh = String(Math.floor(total / 3600)).padStart(2, '0');
+    const mm = String(Math.floor((total % 3600) / 60)).padStart(2, '0');
+    const ss = String(total % 60).padStart(2, '0');
+    return `${hh}:${mm}:${ss}`;
+  }
+  function fmtEta() {
+    if (target == null) return '--';
+    const rate = ratePerSecond();
+    if (!rate) return 'waiting for rate';
+    const expectedHashes = 2 ** target;
+    return fmtDuration((expectedHashes / rate) * 1000);
   }
 
   if (loading) return <Panel><div>loading...</div></Panel>;
@@ -113,17 +156,38 @@ export function MinePage() {
 {`  TARGET           : ${target ?? '--'} trailing zero bits
   HASHES (current) : ${Number(hashes).toLocaleString()}
   RATE             : ${fmtRate()}
+  ETA              : ${fmtEta()}
   ELAPSED          : ${fmtElapsed()}
   STATUS           : ${status.toUpperCase()}
-  MINED THIS RUN   : ${sessionMinted}${lastTokenId ? `\n  LAST TOKEN       : ${lastTokenId}` : ''}${error ? `\n  ERROR            : ${error}` : ''}
+  MINED THIS RUN   : ${sessionMinted}${lastTokenId ? `\n  LAST TOKEN       : ${lastTokenId}` : ''}${mintMoment ? `\n  SUCCESS          : ${mintMoment}` : ''}${error ? `\n  ERROR            : ${error}` : ''}
 `}
       </pre>
-      <div style={{ marginTop: 8 }}>
+      <div className="controls" style={{ marginTop: 8 }}>
+        <label>
+          <input
+            type="checkbox"
+            checked={autoMine}
+            onChange={e => setAutoMine(e.target.checked)}
+            disabled={running}
+          /> auto-mine
+        </label>
+        <label>
+          CPU intensity
+          <select value={intensity} onChange={e => setIntensity(Number(e.target.value))} disabled={running}>
+            <option value={100}>100%</option>
+            <option value={75}>75%</option>
+            <option value={50}>50%</option>
+            <option value={25}>25%</option>
+          </select>
+        </label>
         {running ? (
-          <button onClick={stop}>[ STOP ]</button>
+          <button onClick={stop}>[ PAUSE ]</button>
         ) : (
           <button onClick={start}>[ MINE ]</button>
         )}
+      </div>
+      <div className="tagline" style={{ marginTop: 8 }}>
+        one browser worker; intensity adds a rest between automatic rounds.
       </div>
     </Panel>
   );

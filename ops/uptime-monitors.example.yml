@@ -1,0 +1,26 @@
+# Example external uptime monitors for rpow2 production.
+# Copy these into UptimeRobot, Better Stack, healthchecks.io, or equivalent.
+# Keep real webhook URLs, emails, phone numbers, and API tokens out of git.
+
+alert_destinations:
+  primary_webhook: "${ALERT_WEBHOOK_URL}"
+  email: "ops@example.com"
+
+monitors:
+  - name: "rpow2 API readiness"
+    url: "https://api.rpow2.com/ready"
+    method: "GET"
+    interval_seconds: 60
+    timeout_seconds: 10
+    expected_status: 200
+    alert_after_failures: 3
+    notes: "Readiness includes app dependencies such as Postgres. Page on failure."
+
+  - name: "rpow2 web"
+    url: "https://rpow2.com"
+    method: "GET"
+    interval_seconds: 60
+    timeout_seconds: 10
+    expected_status: 200
+    alert_after_failures: 3
+    notes: "Checks the Netlify-hosted public web entrypoint."

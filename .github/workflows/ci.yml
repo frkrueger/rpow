@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16
+        image: postgres:17
         env: { POSTGRES_PASSWORD: p, POSTGRES_DB: rpow_test }
         ports: ["55432:5432"]
         options: >-
@@ -23,12 +23,12 @@ jobs:
       - run: npm run build --workspace @rpow/shared
       - run: npm run build --workspace @rpow/server
       - run: npm test
-  deploy:
+  deployment-note:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl deploy --remote-only --app rpow2-server
-        env: { FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }} }
+      - run: |
+          echo "CI passed on main."
+          echo "Production API deploys are manual on the OVH VPS; see docs/RUNBOOK.md."
+          echo "Netlify deploys the web app from main through its own integration."

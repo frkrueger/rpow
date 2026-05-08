@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # External watchdog for rpow-server.
-# Pings /health every time it runs (driven by rpow-healthcheck.timer).
+# Pings /ready every time it runs (driven by rpow-healthcheck.timer).
 # On 2 consecutive failures, restarts rpow-server. Logs to journald.
 set -uo pipefail
 
 STATE=/run/rpow-healthcheck.fails
-URL=http://127.0.0.1:8080/health
+URL=http://127.0.0.1:8080/ready
 THRESHOLD=2
 
 if curl -fsS --max-time 5 "$URL" >/dev/null 2>&1; then

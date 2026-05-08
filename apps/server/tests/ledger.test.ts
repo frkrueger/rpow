@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { makeTestApp } from './helpers.js';
+import { createHash } from 'node:crypto';
 
 describe('GET /ledger', () => {
   let cleanup: (() => Promise<void>) | null = null;
@@ -24,6 +25,9 @@ describe('GET /ledger', () => {
       coins_until_next_milestone: 10,
       next_difficulty_bits: 9,
       is_capped: false,
+      signing_public_key: '22'.repeat(32),
+      public_key_pem_url: '/.well-known/rpow-pubkey.pem',
+      latest_token: null,
     });
   });
 
@@ -45,6 +49,36 @@ describe('GET /ledger', () => {
     expect(body.coins_until_next_milestone).toBe(8);
     expect(body.next_milestone_at).toBe(20);
     expect(body.is_capped).toBe(false);
+  });
+
+  it('returns latest signed token provenance details', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    const { randomUUID } = await import('node:crypto');
+    const rootId = randomUUID();
+    const childId = randomUUID();
+    await ctx.pool.query(
+      `INSERT INTO tokens(id, owner_email, value, state, issued_at, server_sig)
+       VALUES ($1, 'root@x.com', 1, 'INVALIDATED', now() - interval '1 minute', '\\x01')`,
+      [rootId],
+    );
+    await ctx.pool.query(
+      `INSERT INTO tokens(id, owner_email, value, state, issued_at, parent_token_id, server_sig)
+       VALUES ($1, 'child@x.com', 1, 'VALID', now(), $2, '\\xdeadbeef')`,
+      [childId, rootId],
+    );
+
+    const body = (await ctx.app.inject({ method: 'GET', url: '/ledger' })).json();
+
+    expect(body.signing_public_key).toBe('22'.repeat(32));
+    expect(body.public_key_pem_url).toBe('/.well-known/rpow-pubkey.pem');
+    expect(body.latest_token).toMatchObject({
+      id: childId,
+      parent_token_id: rootId,
+      owner_email_hash: createHash('sha256').update('child@x.com').digest('hex'),
+      value: 1,
+      server_sig: 'deadbeef',
+    });
+    expect(body.latest_token.issued_at).toEqual(expect.any(String));
   });
 
   it('reports is_capped at maxSupply', async () => {

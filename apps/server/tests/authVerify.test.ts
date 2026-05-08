@@ -33,4 +33,36 @@ describe('GET /auth/verify', () => {
     const res2 = await ctx.app.inject({ method: 'GET', url: `/auth/verify?token=${link}` });
     expect(res2.statusCode).toBe(400);
   });
+
+  it('atomically consumes a magic link under concurrent verification', async () => {
+    const ctx = await makeTestApp();
+    cleanup = ctx.cleanup;
+    await ctx.app.inject({ method: 'POST', url: '/auth/request', headers: { 'content-type': 'application/json' }, payload: { email: 'race@x.com' } });
+    const link = ctx.mailer.outbox[0]!.text.match(/token=([\w-]+)/)![1];
+
+    const originalQuery = ctx.pool.query.bind(ctx.pool);
+    let releaseSelects: (() => void) | undefined;
+    const selectsReleased = new Promise<void>((resolve) => { releaseSelects = resolve; });
+    let matchedSelects = 0;
+    (ctx.pool as any).query = async (query: unknown, ...args: unknown[]) => {
+      const text = typeof query === 'string' ? query : (query as { text?: string })?.text;
+      if (typeof text === 'string' && text.includes('FROM magic_links WHERE token_hash=$1') && text.includes('used_at IS NULL')) {
+        const result = await (originalQuery as any)(query, ...args);
+        matchedSelects += 1;
+        if (matchedSelects === 2) releaseSelects!();
+        await selectsReleased;
+        return result;
+      }
+      return (originalQuery as any)(query, ...args);
+    };
+
+    const [a, b] = await Promise.all([
+      ctx.app.inject({ method: 'GET', url: `/auth/verify?token=${link}` }),
+      ctx.app.inject({ method: 'GET', url: `/auth/verify?token=${link}` }),
+    ]);
+
+    expect([a.statusCode, b.statusCode].sort()).toEqual([302, 400]);
+    const cookies = [a.headers['set-cookie'], b.headers['set-cookie']].filter(Boolean);
+    expect(cookies).toHaveLength(1);
+  });
 });

@@ -24,7 +24,8 @@ curl_ok () {
 }
 
 echo "=== rpow VPS smoke test (host=$HOST -> $VPS_IP) ==="
-curl_ok "GET /health" "https://${HOST}/health"
+curl_ok "GET /health (liveness)" "https://${HOST}/health"
+curl_ok "GET /ready (readiness)" "https://${HOST}/ready"
 
 # /ledger is public and proves DB connectivity end-to-end
 curl_ok "GET /ledger" "https://${HOST}/ledger"

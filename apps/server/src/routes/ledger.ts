@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { createHash } from 'node:crypto';
 import { difficultyForSupply, epochInfo } from '../schedule.js';
 
 // /ledger is polled aggressively by every active client (mining UI refresh,
@@ -16,11 +17,24 @@ export async function ledgerRoutes(app: FastifyInstance) {
   let inflight: Promise<unknown> | null = null;
 
   async function refresh() {
-    const [{ rows: minted }, { rows: transferred }, { rows: circ }, { rows: users }] = await Promise.all([
+    const [{ rows: minted }, { rows: transferred }, { rows: circ }, { rows: users }, { rows: latest }] = await Promise.all([
       app.pool.query<{ n: number }>(`SELECT count(*)::int AS n FROM tokens WHERE parent_token_id IS NULL`),
       app.pool.query<{ n: number }>(`SELECT coalesce(sum(amount),0)::int AS n FROM transfers`),
       app.pool.query<{ n: number }>(`SELECT count(*)::int AS n FROM tokens WHERE state='VALID'`),
       app.pool.query<{ n: number }>(`SELECT count(*)::int AS n FROM users`),
+      app.pool.query<{
+        id: string;
+        owner_email: string;
+        value: number;
+        issued_at: Date;
+        parent_token_id: string | null;
+        server_sig: Buffer;
+      }>(
+        `SELECT id, owner_email, value, issued_at, parent_token_id, server_sig
+         FROM tokens
+         ORDER BY issued_at DESC, id DESC
+         LIMIT 1`,
+      ),
     ]);
     const totalMinted = minted[0]!.n;
     const opts = {
@@ -31,6 +45,7 @@ export async function ledgerRoutes(app: FastifyInstance) {
     const scheduledBits = difficultyForSupply(totalMinted, opts);
     const currentDifficultyBits = Math.max(app.config.difficultyFloor, scheduledBits);
     const info = epochInfo(totalMinted, opts);
+    const latestToken = latest[0];
     return {
       total_minted: totalMinted,
       total_transferred: transferred[0]!.n,
@@ -44,6 +59,16 @@ export async function ledgerRoutes(app: FastifyInstance) {
       coins_until_next_milestone: info.coinsToNext,
       next_difficulty_bits: info.nextDifficultyBits,
       is_capped: info.isCapped,
+      signing_public_key: app.config.signingPublicKeyHex,
+      public_key_pem_url: '/.well-known/rpow-pubkey.pem',
+      latest_token: latestToken ? {
+        id: latestToken.id,
+        parent_token_id: latestToken.parent_token_id,
+        owner_email_hash: createHash('sha256').update(latestToken.owner_email).digest('hex'),
+        value: latestToken.value,
+        issued_at: latestToken.issued_at.toISOString(),
+        server_sig: Buffer.from(latestToken.server_sig).toString('hex'),
+      } : null,
     };
   }
 
