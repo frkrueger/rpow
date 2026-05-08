@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { difficultyForSupply, epochInfo } from '../schedule.js';
+import { difficultyBitsForSupply, scheduleInfo, BASE_UNITS_PER_RPOW } from '../schedule.js';
 
 // /ledger is polled aggressively by every active client (mining UI refresh,
 // status bar). Each call does 4 full-table scans on tokens (no suitable
@@ -9,6 +9,12 @@ import { difficultyForSupply, epochInfo } from '../schedule.js';
 // Cache the response for LEDGER_CACHE_MS and coalesce concurrent refreshes
 // behind a single in-flight promise. ~5s staleness is invisible in a ledger
 // view.
+//
+// NOTE: this route is a temporary compile-fix shim after the halving switch.
+// Halving Task 4 will rework /ledger to expose halving-schedule fields
+// (current reward, next halving boundary, halving index, etc) in base units.
+// Until then we map the new schedule API back to the old field names so the
+// existing frontend doesn't 500.
 const LEDGER_CACHE_MS = 5_000;
 
 export async function ledgerRoutes(app: FastifyInstance) {
@@ -24,13 +30,15 @@ export async function ledgerRoutes(app: FastifyInstance) {
     ]);
     const totalMinted = minted[0]!.n;
     const opts = {
-      baseBits: app.config.difficultyBits,
-      epochSize: app.config.mintEpochSize,
-      maxSupply: app.config.mintMaxSupply,
+      difficultyBits: app.config.difficultyBits,
+      maxSupplyRpow: app.config.mintMaxSupply,
     };
-    const scheduledBits = difficultyForSupply(totalMinted, opts);
+    // Approximate base-unit minted supply from the row count; Task 4 will
+    // read app_counters.minted_supply directly (authoritative bigint).
+    const approxMintedBaseUnits = BigInt(totalMinted) * BASE_UNITS_PER_RPOW;
+    const scheduledBits = difficultyBitsForSupply(approxMintedBaseUnits, opts);
     const currentDifficultyBits = Math.max(app.config.difficultyFloor, scheduledBits);
-    const info = epochInfo(totalMinted, opts);
+    const info = scheduleInfo(approxMintedBaseUnits, opts);
     return {
       total_minted: totalMinted,
       total_transferred: transferred[0]!.n,
@@ -38,11 +46,10 @@ export async function ledgerRoutes(app: FastifyInstance) {
       current_difficulty_bits: currentDifficultyBits,
       user_count: users[0]!.n,
       max_supply: app.config.mintMaxSupply,
-      epoch: info.epoch,
-      epoch_size: app.config.mintEpochSize,
-      next_milestone_at: info.nextMilestoneAt,
-      coins_until_next_milestone: info.coinsToNext,
-      next_difficulty_bits: info.nextDifficultyBits,
+      epoch: info.halvingIndex,
+      next_milestone_at: Number(info.nextHalvingAtBaseUnits / BASE_UNITS_PER_RPOW),
+      coins_until_next_milestone: Number(info.baseUnitsToNextHalving / BASE_UNITS_PER_RPOW),
+      next_difficulty_bits: currentDifficultyBits,
       is_capped: info.isCapped,
     };
   }

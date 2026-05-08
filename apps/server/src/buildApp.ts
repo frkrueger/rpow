@@ -22,7 +22,6 @@ export interface AppConfig {
   magicLinkBaseUrl: string;
   difficultyBits: number;
   difficultyFloor: number;
-  mintEpochSize: number;
   mintMaxSupply: number;
   signingPrivateKeyHex: string;
   signingPublicKeyHex: string;
