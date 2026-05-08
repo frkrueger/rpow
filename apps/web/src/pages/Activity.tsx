@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Panel } from '../components/Panel.js';
 import { api } from '../api.js';
 import type { ActivityEntry } from '@rpow/shared';
+import { formatRpow } from '../lib/format.js';
 
 export function ActivityPage() {
   const [items, setItems] = useState<ActivityEntry[] | null>(null);
@@ -16,8 +17,8 @@ export function ActivityPage() {
   const when = e.at.replace('T', ' ').slice(0, 19);
   const who = e.counterparty_email ?? '';
   const tag = e.type.toUpperCase().padEnd(8);
-  const amt = `${e.type === 'send' ? '-' : '+'}${e.amount}`;
-  return `  ${when}  ${tag}  ${amt.padStart(4)}  ${who}`;
+  const amt = `${e.type === 'send' ? '-' : '+'}${formatRpow(e.amount_base_units)}`;
+  return `  ${when}  ${tag}  ${amt.padStart(12)}  ${who}`;
 }).join('\n')}
       </pre>
     </Panel>

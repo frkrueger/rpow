@@ -2,28 +2,15 @@ import { useEffect, useState } from 'react';
 import { Panel } from '../components/Panel.js';
 import { api } from '../api.js';
 import type { LedgerResponse } from '@rpow/shared';
-
-// Format a stringified bigint in base units as a human-readable RPOW amount.
-// 9 decimals; trims trailing zeros after the decimal but keeps the integer
-// part. Empty / "0" → "0".
-function formatRpow(baseUnitsStr: string, baseUnitsPerRpow: string): string {
-  const bu = BigInt(baseUnitsStr);
-  const denom = BigInt(baseUnitsPerRpow);
-  if (denom === 0n) return baseUnitsStr;
-  const whole = bu / denom;
-  const frac = bu % denom;
-  if (frac === 0n) return whole.toString();
-  const fracStr = frac.toString().padStart(baseUnitsPerRpow.length - 1, '0').replace(/0+$/, '');
-  return `${whole.toString()}.${fracStr}`;
-}
+import { formatRpow } from '../lib/format.js';
 
 export function LedgerPage() {
   const [d, setD] = useState<LedgerResponse | null>(null);
   useEffect(() => { api.ledger().then(setD); }, []);
   if (!d) return <Panel title="PUBLIC LEDGER"><div>loading...</div></Panel>;
-  const totalMinted = formatRpow(d.total_minted_base_units, d.base_units_per_rpow);
-  const totalTransferred = formatRpow(d.total_transferred_base_units, d.base_units_per_rpow);
-  const circulating = formatRpow(d.circulating_supply_base_units, d.base_units_per_rpow);
+  const totalMinted = formatRpow(d.total_minted_base_units);
+  const totalTransferred = formatRpow(d.total_transferred_base_units);
+  const circulating = formatRpow(d.circulating_supply_base_units);
   return (
     <>
       <Panel title="PUBLIC LEDGER">

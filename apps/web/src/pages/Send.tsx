@@ -2,29 +2,41 @@ import { useState } from 'react';
 import { Panel } from '../components/Panel.js';
 import { api } from '../api.js';
 import { useMe } from '../hooks/useMe.js';
+import { formatRpow, parseRpowToBaseUnits } from '../lib/format.js';
 
 export function SendPage() {
   const { me, refresh } = useMe();
   const [recipient, setRecipient] = useState('');
-  const [amount, setAmount] = useState(1);
+  // Decimal RPOW string typed by the user; converted to base units on submit.
+  const [amount, setAmount] = useState('1');
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [error, setError] = useState('');
   const [transferId, setTransferId] = useState('');
   const [pending, setPending] = useState(false);
   const [sentTo, setSentTo] = useState('');
-  const [sentAmt, setSentAmt] = useState(0);
+  const [sentAmt, setSentAmt] = useState('');
+
+  const balanceDisplay = me ? formatRpow(me.balance_base_units) : '0';
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!me) return;
     setStatus('sending'); setError(''); setPending(false);
+    let amount_base_units: string;
     try {
-      const r = await api.send({ recipient_email: recipient, amount, idempotency_key: crypto.randomUUID() });
+      amount_base_units = parseRpowToBaseUnits(amount);
+    } catch {
+      setStatus('error');
+      setError('invalid amount (max 9 decimal places)');
+      return;
+    }
+    try {
+      const r = await api.send({ recipient_email: recipient, amount_base_units, idempotency_key: crypto.randomUUID() });
       setStatus('sent');
       setTransferId(r.transfer_id);
       setPending(r.pending === true);
       setSentTo(r.recipient_email);
-      setSentAmt(r.transferred);
+      setSentAmt(formatRpow(r.transferred_base_units));
       await refresh();
     } catch (err: any) {
       setStatus('error');
@@ -44,7 +56,7 @@ export function SendPage() {
     <Panel title="SEND">
       <form onSubmit={submit}>
         <div>TO     : <input type="email" required value={recipient} onChange={e => setRecipient(e.target.value)} style={{ width: '40ch' }} /></div>
-        <div style={{ marginTop: 4 }}>AMOUNT : <input type="number" min={1} max={me.balance} required value={amount} onChange={e => setAmount(Number(e.target.value))} style={{ width: '10ch' }} /> RPOW</div>
+        <div style={{ marginTop: 4 }}>AMOUNT : <input type="text" inputMode="decimal" required value={amount} onChange={e => setAmount(e.target.value)} style={{ width: '14ch' }} /> RPOW <span style={{ color: '#888' }}>(balance: {balanceDisplay})</span></div>
         <div style={{ marginTop: 8 }}>
           <button type="submit" disabled={status === 'sending'}>[ {status === 'sending' ? '...' : 'SEND'} ]</button>
         </div>

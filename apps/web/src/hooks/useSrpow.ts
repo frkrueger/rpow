@@ -14,9 +14,9 @@ export function useSrpow() {
 
   useEffect(() => { refresh().catch(() => {}); }, [refresh]);
 
-  async function wrap(amount: number): Promise<WrapResponse> {
+  async function wrap(amount_base_units: string): Promise<WrapResponse> {
     const idempotency_key = crypto.randomUUID();
-    const r = await api.srpowWrap({ amount, idempotency_key });
+    const r = await api.srpowWrap({ amount_base_units, idempotency_key });
     await refresh();
     return r;
   }

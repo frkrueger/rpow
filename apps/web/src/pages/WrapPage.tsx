@@ -5,6 +5,7 @@ import { WrapForm } from '../components/WrapForm.js';
 import { WrapHistory } from '../components/WrapHistory.js';
 import { useSrpow } from '../hooks/useSrpow.js';
 import { useMe } from '../hooks/useMe.js';
+import { formatRpow } from '../lib/format.js';
 
 export function WrapPage() {
   const { me, refresh: refreshMe } = useMe();
@@ -27,14 +28,14 @@ export function WrapPage() {
         </p>
         <ConnectPhantom boundWallet={wallet} onBound={(w) => { setWallet(w); refreshMe(); }} />
         <div style={{ marginTop: 8 }}>
-          RPOW available: <strong>{me.balance ?? 0}</strong>{' · '}
-          SRPOW you've wrapped: <strong>{me.srpow_supply_owned ?? 0}</strong>
+          RPOW available: <strong>{formatRpow(me.balance_base_units)}</strong>{' · '}
+          SRPOW you've wrapped: <strong>{formatRpow(me.srpow_supply_owned_base_units)}</strong>
         </div>
       </Panel>
 
       <Panel title="WRAP">
         <WrapForm
-          available={me.balance ?? 0}
+          availableBaseUnits={me.balance_base_units}
           enabled={!!wallet}
           onWrapped={() => { refreshEvents(); refreshMe(); }}
         />

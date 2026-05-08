@@ -34,7 +34,7 @@ export const api = {
   phantomChallenge: () => call<PhantomChallengeResponse>('POST', '/phantom/challenge'),
   phantomBind: (b: { nonce: string; wallet_address: string; signature_base58: string }) =>
     call<PhantomBindResponse>('POST', '/phantom/bind', b),
-  srpowWrap: (b: { amount: number; idempotency_key: string }) =>
+  srpowWrap: (b: { amount_base_units: string; idempotency_key: string }) =>
     call<WrapResponse>('POST', '/srpow/wrap', b),
   srpowEvents: () => call<WrapEvent[]>('GET', '/srpow/events'),
 };

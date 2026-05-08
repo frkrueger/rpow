@@ -1,26 +1,34 @@
 import { useState } from 'react';
 import { useSrpow } from '../hooks/useSrpow.js';
+import { formatRpow, parseRpowToBaseUnits } from '../lib/format.js';
 
 interface Props {
-  available: number;
+  availableBaseUnits: string;
   enabled: boolean;
   onWrapped(): void;
 }
 
-export function WrapForm({ available, enabled, onWrapped }: Props) {
+export function WrapForm({ availableBaseUnits, enabled, onWrapped }: Props) {
   const { wrap } = useSrpow();
   const [amount, setAmount] = useState<string>('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
+  const availableDisplay = formatRpow(availableBaseUnits);
+
   async function handle() {
     setBusy(true); setMsg(null);
     try {
-      const n = parseInt(amount, 10);
-      if (!Number.isFinite(n) || n <= 0) throw new Error('amount must be a positive integer');
-      if (n > available) throw new Error('insufficient balance');
-      const r = await wrap(n);
-      setMsg({ kind: 'ok', text: `Wrapped ${n} RPOW. tx: ${r.solana_signature.slice(0, 8)}…` });
+      let amount_base_units: string;
+      try {
+        amount_base_units = parseRpowToBaseUnits(amount);
+      } catch {
+        throw new Error('amount must be a positive decimal (max 9 places)');
+      }
+      if (BigInt(amount_base_units) <= 0n) throw new Error('amount must be > 0');
+      if (BigInt(amount_base_units) > BigInt(availableBaseUnits)) throw new Error('insufficient balance');
+      const r = await wrap(amount_base_units);
+      setMsg({ kind: 'ok', text: `Wrapped ${formatRpow(amount_base_units)} RPOW. tx: ${r.solana_signature.slice(0, 8)}…` });
       setAmount('');
       onWrapped();
     } catch (e: any) {
@@ -34,9 +42,8 @@ export function WrapForm({ available, enabled, onWrapped }: Props) {
     <div>
       <label>Amount to wrap: </label>
       <input
-        type="number"
-        min={1}
-        max={available}
+        type="text"
+        inputMode="decimal"
         value={amount}
         onChange={(e) => setAmount(e.target.value)}
         disabled={!enabled || busy}
@@ -44,6 +51,9 @@ export function WrapForm({ available, enabled, onWrapped }: Props) {
       <button onClick={handle} disabled={!enabled || busy || !amount}>
         {busy ? 'Confirming on Solana…' : 'Wrap'}
       </button>
+      <div style={{ marginTop: 4, fontSize: 12, color: '#888' }}>
+        available: {availableDisplay} RPOW
+      </div>
       {msg && (
         <div style={{ marginTop: 8, color: msg.kind === 'ok' ? '#6ee7b7' : '#f88' }}>
           {msg.text}

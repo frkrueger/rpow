@@ -1,4 +1,5 @@
 import type { WrapEvent } from '@rpow/shared';
+import { formatRpow } from '../lib/format.js';
 
 interface Props { events: WrapEvent[] }
 
@@ -12,7 +13,7 @@ export function WrapHistory({ events }: Props) {
           style={{ borderTop: '1px solid #222', padding: '6px 0', fontFamily: 'monospace', fontSize: 12 }}
         >
           <span>{new Date(e.created_at).toISOString().slice(0, 16).replace('T', ' ')}</span>
-          {' '}<span>{e.amount} RPOW → SRPOW</span>
+          {' '}<span>{formatRpow(e.amount_base_units)} RPOW → SRPOW</span>
           {' '}<span style={{ color: statusColor(e.status) }}>{e.status}</span>
           {e.solana_signature && (
             <>

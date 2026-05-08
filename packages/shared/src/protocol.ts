@@ -35,12 +35,12 @@ export interface TokenSummary {
 
 export interface SendRequestBody {
   recipient_email: string;
-  amount: number;
+  amount_base_units: string;
   idempotency_key: string;
 }
 export interface SendResponse {
   ok: true;
-  transferred: number;
+  transferred_base_units: string;
   recipient_email: string;
   transfer_id: string;
   /** True when the recipient had no rpow2 account; an email was sent for them to claim. */
@@ -62,7 +62,7 @@ export interface ApiError { error: ApiErrorCode; message: string; retry_after?: 
 
 export interface ActivityEntry {
   type: 'mint' | 'send' | 'receive';
-  amount: number;
+  amount_base_units: string;
   counterparty_email?: string;
   at: string; // iso8601
 }
