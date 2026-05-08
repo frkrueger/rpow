@@ -15,6 +15,7 @@ import { activityRoutes } from './routes/activity.js';
 import { ledgerRoutes } from './routes/ledger.js';
 import { unsubscribeRoutes } from './routes/unsubscribe.js';
 import { phantomRoutes } from './routes/phantom.js';
+import { srpowRoutes } from './routes/srpow.js';
 
 export interface AppConfig {
   sessionSecret: string;
@@ -82,6 +83,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   await app.register(ledgerRoutes);
   await app.register(unsubscribeRoutes);
   await app.register(phantomRoutes);
+  await app.register(srpowRoutes);
 
   app.get('/.well-known/rpow-pubkey.pem', async (_req, reply) => {
     const pubDer = Buffer.concat([
