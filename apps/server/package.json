@@ -8,7 +8,8 @@
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
     "test": "vitest run",
-    "create-srpow-mint": "tsx scripts/create-srpow-mint.ts"
+    "create-srpow-mint": "tsx scripts/create-srpow-mint.ts",
+    "mint-satoshi-allocation": "tsx scripts/mint-satoshi-allocation.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^9.3.1",

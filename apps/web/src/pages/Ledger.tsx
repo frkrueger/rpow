@@ -52,6 +52,17 @@ export function LedgerPage() {
   Still centralized — but Bitcoin-flavored where it counts: a fixed
   21,000,000 supply cap, and a stepped difficulty adjustment that
   adds one trailing-zero bit for every 1,000,000 coins minted.
+
+  Founder allocation: 1,100,000 SRPOW (5.24% of the 21M cap) was
+  allocated at launch as a "satoshi" tribute, vested linearly over
+  one year via the Streamflow protocol on Solana. 19,900,000 of the
+  21M cap remains mineable by users. No transfer fees on rpow.
+
+  Caveat: this IS a centralized system. The ledger lives in a Postgres
+  database operated by one person on rented infrastructure. If that
+  server is breached, lost, or seized, your tokens may be lost with
+  it. No warranty, no recovery guarantees, and no responsibility is
+  taken for breaches, downtime, or data loss. Treat it accordingly.
 `}
         </pre>
       </Panel>
