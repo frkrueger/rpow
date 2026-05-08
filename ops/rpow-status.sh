@@ -9,10 +9,15 @@ for svc in rpow-server nginx postgresql rpow-backup.timer fail2ban ufw certbot.t
     printf "  %-25s %s\n" "$svc" "$(systemctl is-active "$svc" 2>&1)"
 done
 
-bar "rpow-server health"
+bar "rpow-server liveness"
 curl -sS -o /tmp/h -w "  HTTP %{http_code}, %{time_total}s\n" http://127.0.0.1:8080/health || true
 cat /tmp/h; echo
 rm -f /tmp/h
+
+bar "rpow-server readiness"
+curl -sS -o /tmp/rpow-ready -w "  HTTP %{http_code}, %{time_total}s\n" http://127.0.0.1:8080/ready || true
+cat /tmp/rpow-ready; echo
+rm -f /tmp/rpow-ready
 
 bar "request rate (last 5 min)"
 sudo journalctl -u rpow-server --since "5 minutes ago" --no-pager 2>/dev/null \

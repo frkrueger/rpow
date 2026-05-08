@@ -72,14 +72,15 @@ export async function authRoutes(app: FastifyInstance) {
     if (!token) return reply.code(400).send({ error: 'BAD_REQUEST', message: 'missing token' });
 
     const tokenHash = hashToken(token);
-    const { rows } = await app.pool.query(
-      'SELECT id, email, expires_at, used_at FROM magic_links WHERE token_hash=$1 AND expires_at > now() AND used_at IS NULL',
+    const { rows } = await app.pool.query<{ id: string; email: string }>(
+      `UPDATE magic_links
+       SET used_at=now()
+       WHERE token_hash=$1 AND expires_at > now() AND used_at IS NULL
+       RETURNING id, email`,
       [tokenHash],
     );
     const match = rows[0];
     if (!match) return reply.code(400).send({ error: 'BAD_REQUEST', message: 'invalid or expired link' });
-
-    await app.pool.query('UPDATE magic_links SET used_at=now() WHERE id=$1', [match.id]);
 
     await app.pool.query(
       `INSERT INTO users(email) VALUES($1)

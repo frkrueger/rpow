@@ -9,7 +9,7 @@ A faithful modern recreation of Hal Finney's [Reusable Proofs of Work](https://n
 Requires Node 22 and Docker.
 
 ```bash
-docker run --rm -d --name rpow-pg -e POSTGRES_PASSWORD=p -p 55432:5432 postgres:16
+docker run --rm -d --name rpow-pg -e POSTGRES_PASSWORD=p -p 55432:5432 postgres:17
 npm install
 npm run build --workspace @rpow/shared
 npm test
@@ -34,10 +34,11 @@ npm --workspace @rpow/web run dev
 
 ## Deploy
 
-- Server: Fly.io (`api.rpow2.com`)
-- Web: Netlify (`rpow2.com`)
-- DB: Neon Postgres (serverless)
+- Server/API: OVH VPS (`api.rpow2.com`), deployed manually over SSH/systemd.
+- Web: Netlify (`rpow2.com`), deployed automatically from `main`.
+- DB: self-hosted PostgreSQL on the OVH VPS.
+- DNS/TLS: Cloudflare DNS and certbot DNS-01.
 - Email: Resend
-- DNS: GoDaddy (registrar)
+- Backups: restic to Backblaze B2.
 
 See `docs/RUNBOOK.md` for operator instructions.

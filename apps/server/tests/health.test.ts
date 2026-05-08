@@ -12,4 +12,12 @@ describe('GET /health', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ ok: true });
   });
+
+  it('returns ready when Postgres responds', async () => {
+    const ctx = await makeTestApp();
+    cleanup = ctx.cleanup;
+    const res = await ctx.app.inject({ method: 'GET', url: '/ready' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ ok: true, db: 'ok' });
+  });
 });

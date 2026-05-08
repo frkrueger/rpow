@@ -54,7 +54,7 @@ ssh "$VPS_HOST" "sudo systemctl restart rpow-server && sleep 3 && systemctl is-a
 
 step "T+100s: GATE 2 — smoke test via --resolve"
 VPS_IP="$VPS_IP" "$HERE/smoke-test.sh"
-gate "Confirm /health, /ledger, TLS all OK"
+gate "Confirm /health, /ready, /ledger, TLS all OK"
 
 step "T+125s: DNS FLIP — point api.rpow2.com at VPS"
 "$HERE/dns-flip.sh"
@@ -68,7 +68,7 @@ for i in 1 2 3 4 5; do
 done
 
 step "T+200s: live curl through real DNS"
-curl -sS -o /dev/null -w "HTTP %{http_code} cert=%{ssl_verify_result} via %{remote_ip}\n" https://api.rpow2.com/health || true
+curl -sS -o /dev/null -w "HTTP %{http_code} cert=%{ssl_verify_result} via %{remote_ip}\n" https://api.rpow2.com/ready || true
 
 step "Cutover complete. Monitor for 30 min:"
 echo "  ssh $VPS_HOST 'journalctl -u rpow-server -f'"

@@ -34,6 +34,7 @@ body {
   font-size: 15px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
   /* very subtle CRT scanlines */
   position: relative;
 }
@@ -63,12 +64,14 @@ button {
   font: inherit;
   cursor: pointer;
   border-radius: 2px;
-  transition: background 100ms, border-color 100ms;
+  min-height: 32px;
+  transition: background 100ms, border-color 100ms, transform 100ms;
 }
 button:hover { background: var(--accent-dim); border-color: var(--accent); }
+button:active { transform: scale(0.96); }
 button:disabled { opacity: 0.4; cursor: not-allowed; }
 
-input {
+input, select {
   background: rgba(255,255,255,0.02);
   color: var(--fg);
   border: 1px solid var(--dimmer);
@@ -77,7 +80,13 @@ input {
   outline: none;
   border-radius: 2px;
 }
-input:focus { border-color: var(--accent); background: rgba(255,255,255,0.04); }
+input:focus, select:focus { border-color: var(--accent); background: rgba(255,255,255,0.04); }
+input[type="checkbox"] {
+  width: 1em;
+  height: 1em;
+  accent-color: var(--accent);
+  vertical-align: -0.12em;
+}
 
 .app-shell {
   max-width: 78ch;
@@ -169,3 +178,35 @@ input:focus { border-color: var(--accent); background: rgba(255,255,255,0.04); }
 .panel pre { margin: 0; }
 
 main { margin-top: 4px; }
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+}
+.controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pending-list {
+  display: grid;
+  gap: 12px;
+}
+.pending-row {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px dotted var(--accent-dim);
+}
+.pending-row:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+.pending-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

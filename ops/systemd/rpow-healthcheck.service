@@ -1,5 +1,5 @@
 [Unit]
-Description=rpow watchdog (probe /health, restart on persistent fails)
+Description=rpow watchdog (probe /ready, restart on persistent fails)
 After=rpow-server.service
 
 [Service]

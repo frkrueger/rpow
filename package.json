@@ -5,13 +5,17 @@
   "scripts": {
     "build": "tsc -b apps/server packages/shared && npm --workspace apps/web run build",
     "test": "npm --workspace packages/shared test && npm --workspace apps/server test && npm --workspace apps/web test",
-    "lint": "tsc -b --noEmit && eslint .",
+    "lint": "tsc --noEmit -p tsconfig.lint.json && eslint .",
     "dev:server": "npm --workspace apps/server run dev",
     "dev:web": "npm --workspace apps/web run dev"
   },
-  "engines": { "node": ">=22.0.0" },
+  "engines": { "node": ">=22.13.0" },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.3.0",
+    "globals": "^17.6.0",
     "typescript": "^5.4.0",
-    "@types/node": "^22.0.0"
+    "@types/node": "^22.0.0",
+    "typescript-eslint": "^8.59.2"
   }
 }

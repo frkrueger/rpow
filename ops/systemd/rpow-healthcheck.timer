@@ -1,5 +1,5 @@
 [Unit]
-Description=Probe rpow-server /health every 90 seconds
+Description=Probe rpow-server /ready every 90 seconds
 
 [Timer]
 OnBootSec=60

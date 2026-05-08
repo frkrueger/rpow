@@ -2,6 +2,8 @@ import type {
   AuthRequestBody, AuthRequestResponse, MeResponse,
   ChallengeResponse, MintRequestBody, MintResponse,
   SendRequestBody, SendResponse, ActivityResponse, LedgerResponse, ApiError,
+  ClaimRequestBody, ClaimResponse, ClaimStatusResponse,
+  PendingTransferActionResponse, PendingTransferSummary,
 } from '@rpow/shared';
 
 const BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080';
@@ -21,6 +23,9 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   return res.json();
 }
 
+export type ClaimStatus = ClaimStatusResponse;
+export type PendingTransfer = PendingTransferSummary;
+
 export const api = {
   authRequest: (b: AuthRequestBody) => call<AuthRequestResponse>('POST', '/auth/request', b),
   me: () => call<MeResponse>('GET', '/me'),
@@ -30,4 +35,9 @@ export const api = {
   send: (b: SendRequestBody) => call<SendResponse>('POST', '/send', b),
   activity: () => call<ActivityResponse>('GET', '/activity'),
   ledger: () => call<LedgerResponse>('GET', '/ledger'),
+  claimStatus: (token: string) => call<ClaimStatus>('GET', `/claim/status?token=${encodeURIComponent(token)}`),
+  claim: (token: string) => call<ClaimResponse>('POST', '/claim', { token } satisfies ClaimRequestBody),
+  pendingTransfers: () => call<PendingTransfer[]>('GET', '/pending-transfers'),
+  resendPendingTransfer: (id: string) => call<PendingTransferActionResponse>('POST', `/pending-transfers/${encodeURIComponent(id)}/resend`),
+  cancelPendingTransfer: (id: string) => call<PendingTransferActionResponse>('POST', `/pending-transfers/${encodeURIComponent(id)}/cancel`),
 };

@@ -46,7 +46,7 @@ export class PostmarkMailer implements Mailer {
         Headers,
       });
     } catch (e: any) {
-      throw new Error(`postmark: ${e?.message ?? e}`);
+      throw new Error(`postmark: ${e?.message ?? e}`, { cause: e });
     }
   }
 }
