@@ -75,6 +75,101 @@ describe('GET /claim', () => {
     expect(minted.rows[0]!.value).toBe('1');
   });
 
+  it('remediates already-claimed legacy pending claims that minted root tokens', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    const senderCookie = await loginAs(ctx, 'sender@x.com');
+    await mineN(ctx, senderCookie, 1);
+    const sourceToken = (await ctx.pool.query<{ id: string }>(
+      "SELECT id FROM tokens WHERE owner_email='sender@x.com' AND state='VALID' LIMIT 1",
+    )).rows[0]!;
+    await ctx.pool.query("UPDATE tokens SET state='INVALIDATED', invalidated_at=now() WHERE id=$1", [sourceToken.id]);
+
+    const pendingId = randomUUID();
+    const claimedAt = new Date();
+    const recipientRootId = randomUUID();
+    await ctx.pool.query(
+      `INSERT INTO pending_transfers
+       (id, sender_email, recipient_email, amount, idempotency_key, claim_token_hash, expires_at, claimed_at)
+       VALUES ($1, 'sender@x.com', 'recipient@x.com', 1, $2, $3, $4, $4)`,
+      [
+        pendingId,
+        randomUUID(),
+        createHash('sha256').update('already-claimed-token').digest(),
+        claimedAt,
+      ],
+    );
+    await ctx.pool.query(
+      `INSERT INTO tokens(id, owner_email, value, state, issued_at, server_sig)
+       VALUES($1, 'recipient@x.com', 1, 'VALID', $2, $3)`,
+      [recipientRootId, claimedAt, Buffer.from('legacy-claim-root')],
+    );
+    await ctx.pool.query(
+      `INSERT INTO transfers(id, sender_email, recipient_email, amount, idempotency_key, created_at)
+       VALUES($1, 'sender@x.com', 'recipient@x.com', 1, $2, $3)`,
+      [randomUUID(), `claim:${pendingId}`, claimedAt],
+    );
+    await ctx.pool.query("UPDATE app_counters SET value = value + 1 WHERE name='minted_supply'");
+
+    const migration006 = await readFile(new URL('../migrations/006_pending_transfer_hardening.sql', import.meta.url), 'utf8');
+    await ctx.pool.query(migration006);
+
+    const backfilled = await ctx.pool.query<{ token_id: string }>(
+      'SELECT token_id FROM pending_transfer_tokens WHERE pending_transfer_id=$1',
+      [pendingId],
+    );
+    expect(backfilled.rows).toEqual([{ token_id: sourceToken.id }]);
+    const remediatedRoot = await ctx.pool.query<{ parent_token_id: string | null }>(
+      'SELECT parent_token_id FROM tokens WHERE id=$1',
+      [recipientRootId],
+    );
+    expect(remediatedRoot.rows[0]!.parent_token_id).toBe(sourceToken.id);
+    const minted = await ctx.pool.query<{ value: string }>("SELECT value FROM app_counters WHERE name='minted_supply'");
+    expect(minted.rows[0]!.value).toBe('1');
+    const rootCount = await ctx.pool.query<{ n: number }>('SELECT count(*)::int AS n FROM tokens WHERE parent_token_id IS NULL');
+    expect(rootCount.rows[0]!.n).toBe(1);
+  });
+
+  it('prioritizes live legacy pending rows over expired rows when backfilling scarce tokens', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    const senderCookie = await loginAs(ctx, 'sender@x.com');
+    await mineN(ctx, senderCookie, 1);
+    const sourceToken = (await ctx.pool.query<{ id: string }>(
+      "SELECT id FROM tokens WHERE owner_email='sender@x.com' AND state='VALID' LIMIT 1",
+    )).rows[0]!;
+    await ctx.pool.query("UPDATE tokens SET state='INVALIDATED', invalidated_at=now() WHERE id=$1", [sourceToken.id]);
+
+    const expiredId = randomUUID();
+    const liveId = randomUUID();
+    await ctx.pool.query(
+      `INSERT INTO pending_transfers
+       (id, sender_email, recipient_email, amount, idempotency_key, claim_token_hash, expires_at, created_at)
+       VALUES ($1, 'sender@x.com', 'expired@x.com', 1, $2, $3, now() - interval '1 day', now() - interval '2 days'),
+              ($4, 'sender@x.com', 'live@x.com', 1, $5, $6, now() + interval '30 days', now() - interval '1 day')`,
+      [
+        expiredId,
+        randomUUID(),
+        createHash('sha256').update('expired-token').digest(),
+        liveId,
+        randomUUID(),
+        createHash('sha256').update('live-token').digest(),
+      ],
+    );
+
+    const migration006 = await readFile(new URL('../migrations/006_pending_transfer_hardening.sql', import.meta.url), 'utf8');
+    await ctx.pool.query(migration006);
+
+    const liveBackfill = await ctx.pool.query<{ token_id: string }>(
+      'SELECT token_id FROM pending_transfer_tokens WHERE pending_transfer_id=$1',
+      [liveId],
+    );
+    const expiredBackfill = await ctx.pool.query<{ token_id: string }>(
+      'SELECT token_id FROM pending_transfer_tokens WHERE pending_transfer_id=$1',
+      [expiredId],
+    );
+    expect(liveBackfill.rows).toEqual([{ token_id: sourceToken.id }]);
+    expect(expiredBackfill.rows).toEqual([]);
+  });
+
   it('returns claim status for the web claim landing page', async () => {
     const ctx = await makeTestApp(); cleanup = ctx.cleanup;
     const senderCookie = await loginAs(ctx, 'sender@x.com');

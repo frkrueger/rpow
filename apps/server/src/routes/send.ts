@@ -105,6 +105,9 @@ export async function sendRoutes(app: FastifyInstance) {
     let out!: SendResult;
     try {
       out = await withTx<SendResult>(app.pool, async (c) => {
+        // Serialize identical in-flight sends before duplicate checks and token locks.
+        await c.query('SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))', [sender, idem]);
+
         // Idempotency: check both transfers and pending_transfers tables.
         const txDup = await c.query<{ id: string; recipient_email: string; amount: number }>(
           'SELECT id, recipient_email, amount FROM transfers WHERE sender_email=$1 AND idempotency_key=$2', [sender, idem],

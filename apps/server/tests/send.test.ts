@@ -87,6 +87,58 @@ describe('POST /send', () => {
     expect(aMe.balance).toBe(1); // only one token transferred, not two
   });
 
+  it('serializes concurrent identical pending sends before checking balance', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    const aCookie = await loginAs(ctx, 'a@x.com');
+    await mineN(ctx, aCookie, 1);
+
+    const recipient = 'pending@nowhere.com';
+    const key = randomUUID();
+    const payload = { recipient_email: recipient, amount: 1, idempotency_key: key };
+    const originalSend = ctx.mailer.send.bind(ctx.mailer);
+    let releasePendingSend!: () => void;
+    const pendingSendStarted = new Promise<void>((resolveStarted) => {
+      const pendingSendReleased = new Promise<void>((resolveReleased) => {
+        releasePendingSend = resolveReleased;
+      });
+      ctx.mailer.send = async (args) => {
+        if (args.to === recipient) {
+          resolveStarted();
+          await pendingSendReleased;
+        }
+        await originalSend(args);
+      };
+    });
+
+    const first = ctx.app.inject({
+      method: 'POST',
+      url: '/send',
+      headers: { cookie: aCookie, 'content-type': 'application/json' },
+      payload,
+    });
+    await pendingSendStarted;
+
+    const second = ctx.app.inject({
+      method: 'POST',
+      url: '/send',
+      headers: { cookie: aCookie, 'content-type': 'application/json' },
+      payload,
+    });
+    const earlySecond = await Promise.race([
+      second.then((res) => res.statusCode),
+      new Promise<'waiting'>((resolve) => setTimeout(() => resolve('waiting'), 75)),
+    ]);
+
+    releasePendingSend();
+    const [firstRes, secondRes] = await Promise.all([first, second]);
+
+    expect(earlySecond).toBe('waiting');
+    expect(firstRes.statusCode).toBe(200);
+    expect(secondRes.statusCode).toBe(200);
+    expect(secondRes.json().transfer_id).toBe(firstRes.json().transfer_id);
+    expect(ctx.mailer.outbox.filter((m) => m.to === recipient)).toHaveLength(1);
+  });
+
   it('returns conflict for concurrent same-sender idempotency reuse with different parameters', async () => {
     const ctx = await makeTestApp(); cleanup = ctx.cleanup;
     const aCookie = await loginAs(ctx, 'a@x.com');
