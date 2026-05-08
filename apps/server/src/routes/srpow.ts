@@ -140,7 +140,21 @@ export async function srpowRoutes(app: FastifyInstance) {
 
     if ('fresh' in phase1) {
       const { eventId, wallet, ids } = phase1.fresh;
-      const result = await app.bridgeClient.mintTo({ recipientWallet: wallet, amountBaseUnits: target });
+
+      const result = await app.bridgeClient.mintTo(
+        { recipientWallet: wallet, amountBaseUnits: target },
+        async (signature) => {
+          // Persist signature BEFORE the bridge client awaits confirmation. If
+          // the server crashes between here and the confirmation result, the
+          // reconcile worker on next boot will see this row's solana_signature
+          // and resolve it via getSignatureStatus — preventing an erroneous
+          // refund of a wrap that actually confirmed on-chain.
+          await app.pool.query(
+            `UPDATE srpow_wrap_events SET solana_signature=$1, updated_at=now() WHERE id=$2`,
+            [signature, eventId],
+          );
+        },
+      );
 
       if (result.status === 'confirmed') {
         await withTx(app.pool, async (c) => {
@@ -156,11 +170,14 @@ export async function srpowRoutes(app: FastifyInstance) {
         return { ok: true, event_id: eventId, status: 'CONFIRMED', solana_signature: result.signature };
       }
 
-      // Failure path: refund.
+      // Failure path: refund. Note we DO NOT null out solana_signature — the
+      // pre-submit callback may have set it, and we want to preserve it so
+      // the user can see the failed tx on Solscan and the reconcile worker
+      // has a stable artifact for any future lookups.
       await withTx(app.pool, async (c) => {
         await c.query(
-          `UPDATE srpow_wrap_events SET status='REFUNDED', failure_reason=$1, solana_signature=$2, updated_at=now() WHERE id=$3`,
-          [result.failureReason, result.signature, eventId],
+          `UPDATE srpow_wrap_events SET status='REFUNDED', failure_reason=$1, updated_at=now() WHERE id=$2`,
+          [result.failureReason, eventId],
         );
         await c.query(
           `UPDATE tokens SET state='VALID', wrap_event_id=NULL WHERE id = ANY($1::uuid[])`,

@@ -146,6 +146,51 @@ describe('POST /srpow/wrap — Phase 2 failures', () => {
   });
 });
 
+describe('POST /srpow/wrap — pre-submit signature persistence', () => {
+  it('persists solana_signature before confirming (crash-recovery durability)', async () => {
+    const t = await makeTestApp({ wrapAllowlistCsv: 'alice@x.io' });
+    cleanup = t.cleanup;
+    await seedUser(t, 'alice@x.io', 'WALLET1', 1, ONE_RPOW);
+    t.bridgeClient.queueResult({ signature: 'sig_pre_confirm' });
+    const session = signSession({ email: 'alice@x.io' }, 'x'.repeat(32), 60);
+
+    const r = await t.app.inject({
+      method: 'POST', url: '/srpow/wrap', cookies: { [SESSION_COOKIE]: session },
+      payload: { amount_base_units: ONE_RPOW.toString(), idempotency_key: 'k_persist_sig' },
+    });
+    expect(r.statusCode).toBe(200);
+
+    const ev = await t.pool.query<{ solana_signature: string | null; status: string }>(
+      `SELECT solana_signature, status FROM srpow_wrap_events WHERE idempotency_key='k_persist_sig'`,
+    );
+    expect(ev.rows[0].solana_signature).toBe('sig_pre_confirm');
+    expect(ev.rows[0].status).toBe('CONFIRMED');
+  });
+
+  it('preserves solana_signature on the refund path (failure with sig set by callback)', async () => {
+    const t = await makeTestApp({ wrapAllowlistCsv: 'alice@x.io' });
+    cleanup = t.cleanup;
+    await seedUser(t, 'alice@x.io', 'WALLET1', 1, ONE_RPOW);
+    // Failure path: FakeBridgeClient now also calls onSignaturePrepared before
+    // returning the failure, so the row should have the sig persisted even
+    // though the wrap is REFUNDED.
+    t.bridgeClient.queueResult({ signature: 'sig_failed_but_recorded', error: 'rpc_blip' });
+    const session = signSession({ email: 'alice@x.io' }, 'x'.repeat(32), 60);
+
+    const r = await t.app.inject({
+      method: 'POST', url: '/srpow/wrap', cookies: { [SESSION_COOKIE]: session },
+      payload: { amount_base_units: ONE_RPOW.toString(), idempotency_key: 'k_refund_keeps_sig' },
+    });
+    expect(r.statusCode).toBe(503);
+
+    const ev = await t.pool.query<{ solana_signature: string | null; status: string }>(
+      `SELECT solana_signature, status FROM srpow_wrap_events WHERE idempotency_key='k_refund_keeps_sig'`,
+    );
+    expect(ev.rows[0].status).toBe('REFUNDED');
+    expect(ev.rows[0].solana_signature).toBe('sig_failed_but_recorded');
+  });
+});
+
 describe('POST /srpow/wrap — replay of failed wrap', () => {
   it('idempotency replay of a refunded wrap returns 503 BRIDGE_FAILED', async () => {
     const t = await makeTestApp({ wrapAllowlistCsv: 'alice@x.io' });
