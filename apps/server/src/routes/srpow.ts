@@ -78,10 +78,10 @@ export async function srpowRoutes(app: FastifyInstance) {
       return { ok: true, event_id: e.id, status: e.status, solana_signature: e.solana_signature };
     }
 
-    // Phase 2 (Task 13 will add refund-on-failure):
     if ('fresh' in phase1) {
       const { eventId, wallet, ids } = phase1.fresh;
       const result = await app.bridgeClient.mintTo({ recipientWallet: wallet, amount });
+
       if (result.status === 'confirmed') {
         await withTx(app.pool, async (c) => {
           await c.query(
@@ -95,8 +95,22 @@ export async function srpowRoutes(app: FastifyInstance) {
         });
         return { ok: true, event_id: eventId, status: 'CONFIRMED', solana_signature: result.signature };
       }
-      // failure path implemented in Task 13
-      return reply.code(503).send({ error: 'BRIDGE_FAILED', event_id: eventId, status: 'PENDING' });
+
+      // Failure path: refund.
+      await withTx(app.pool, async (c) => {
+        await c.query(
+          `UPDATE srpow_wrap_events SET status='REFUNDED', failure_reason=$1, solana_signature=$2, updated_at=now() WHERE id=$3`,
+          [result.failureReason, result.signature, eventId],
+        );
+        await c.query(
+          `UPDATE tokens SET state='VALID', wrap_event_id=NULL WHERE id = ANY($1::uuid[])`,
+          [ids],
+        );
+      });
+      return reply.code(503).send({
+        error: 'BRIDGE_FAILED', event_id: eventId, status: 'REFUNDED',
+        failure_reason: result.failureReason,
+      });
     }
   });
 }

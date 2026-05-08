@@ -94,3 +94,32 @@ describe('POST /srpow/wrap — Phase 1', () => {
     expect(r.statusCode).toBe(409);
   });
 });
+
+describe('POST /srpow/wrap — Phase 2 failures', () => {
+  it('auto-refunds on mint failure', async () => {
+    const t = await makeTestApp({ wrapAllowlistCsv: 'alice@x.io' });
+    cleanup = t.cleanup;
+    await seedUser(t, 'alice@x.io', 'WALLET1', 3);
+    t.bridgeClient.queueResult({ error: 'rpc_unavailable' });
+    const session = signSession({ email: 'alice@x.io' }, 'x'.repeat(32), 60);
+
+    const r = await t.app.inject({
+      method: 'POST', url: '/srpow/wrap', cookies: { [SESSION_COOKIE]: session },
+      payload: { amount: 2, idempotency_key: 'k_refund_1' },
+    });
+
+    expect(r.statusCode).toBe(503);
+    expect(r.json().status).toBe('REFUNDED');
+    expect(r.json().failure_reason).toBe('rpc_unavailable');
+
+    const states = await t.pool.query(`SELECT state, count(*)::int AS n FROM tokens WHERE owner_email='alice@x.io' GROUP BY state`);
+    const m = Object.fromEntries(states.rows.map(r => [r.state, r.n]));
+    expect(m.VALID).toBe(3);                                    // all back to VALID
+    expect(m.LOCKED_FOR_BRIDGE ?? 0).toBe(0);
+    expect(m.WRAPPED ?? 0).toBe(0);
+
+    const ev = await t.pool.query(`SELECT status, failure_reason FROM srpow_wrap_events`);
+    expect(ev.rows[0].status).toBe('REFUNDED');
+    expect(ev.rows[0].failure_reason).toBe('rpc_unavailable');
+  });
+});
