@@ -59,14 +59,14 @@ export class PostmarkMailer implements Mailer {
 export class SmtpMailer implements Mailer {
   private transporter: Transporter;
   constructor(
-    opts: { host: string; port: number; user: string; pass: string },
+    opts: { host: string; port: number; user?: string; pass?: string },
     private from: string,
   ) {
     this.transporter = nodemailer.createTransport({
       host: opts.host,
       port: opts.port,
       secure: opts.port === 465,
-      auth: { user: opts.user, pass: opts.pass },
+      auth: (opts.user && opts.pass) ? { user: opts.user, pass: opts.pass } : undefined,
     });
   }
   async send(a: SendArgs): Promise<void> {

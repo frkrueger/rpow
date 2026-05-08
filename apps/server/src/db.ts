@@ -9,7 +9,7 @@ export function createPool(databaseUrl: string): Pool {
   // Postgres default max_connections is 100; 30 leaves plenty of headroom
   // for backups (pg_dump uses 1) and the postgres role's own sessions.
   // 10 was bottlenecking under thousands of concurrent users.
-  return new Pool({ connectionString: databaseUrl, max: 30 });
+  return new Pool({ connectionString: databaseUrl, max: 10 });
 }
 
 export async function withClient<T>(pool: Pool, fn: (c: PoolClient) => Promise<T>): Promise<T> {

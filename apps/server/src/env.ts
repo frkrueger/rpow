@@ -4,7 +4,7 @@ const Schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(8080),
   DATABASE_URL: z.string().url(),
-  MAILER: z.enum(['resend', 'postmark', 'smtp']).default('resend'),
+  MAILER: z.enum(['resend', 'postmark', 'smtp', 'hybrid']).default('resend'),
   RESEND_API_KEY: z.string().min(1).optional(),
   POSTMARK_TOKEN: z.string().min(1).optional(),
   POSTMARK_MESSAGE_STREAM: z.string().min(1).default('outbound'),
@@ -37,10 +37,8 @@ const Schema = z.object({
   if (v.MAILER === 'postmark' && !v.POSTMARK_TOKEN) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['POSTMARK_TOKEN'], message: 'required when MAILER=postmark' });
   }
-  if (v.MAILER === 'smtp') {
-    if (!v.SMTP_HOST) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['SMTP_HOST'], message: 'required when MAILER=smtp' });
-    if (!v.SMTP_USER) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['SMTP_USER'], message: 'required when MAILER=smtp' });
-    if (!v.SMTP_PASS) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['SMTP_PASS'], message: 'required when MAILER=smtp' });
+  if (v.MAILER === 'smtp' || v.MAILER === 'hybrid') {
+    if (!v.SMTP_HOST) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['SMTP_HOST'], message: 'required when MAILER=smtp/hybrid' });
   }
 });
 

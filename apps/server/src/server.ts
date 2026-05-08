@@ -45,11 +45,30 @@ if (process.env.RPOW_TEST_INBOX === 'true') {
   };
   mailer = fake;
   console.log('using FakeMailer (RPOW_TEST_INBOX=true) — magic links print to this console');
+} else if (env.MAILER === 'hybrid') {
+  const primary = new ResendMailer(env.RESEND_API_KEY!, env.EMAIL_FROM);
+  const secondary = new SmtpMailer(
+    { host: env.SMTP_HOST!, port: env.SMTP_PORT, user: env.SMTP_USER, pass: env.SMTP_PASS },
+    env.EMAIL_FROM,
+  );
+  const pct = parseFloat(process.env.SMTP_PCT || '0.10');
+  const skipDomains = new Set(['gmail.com', 'googlemail.com']);
+  mailer = {
+    async send(a) {
+      const domain = (a.to.split('@')[1] || '').toLowerCase();
+      if (!skipDomains.has(domain) && Math.random() < pct) {
+        try { await secondary.send(a); return; }
+        catch (e: any) { console.log(`smtp failed (${e.message}), falling back to resend`); }
+      }
+      await primary.send(a);
+    },
+  };
+  console.log(`hybrid mailer: ${Math.round(pct * 100)}% self-hosted (non-gmail), rest via resend`);
 } else if (env.MAILER === 'postmark') {
   mailer = new PostmarkMailer(env.POSTMARK_TOKEN!, env.EMAIL_FROM, env.POSTMARK_MESSAGE_STREAM);
 } else if (env.MAILER === 'smtp') {
   mailer = new SmtpMailer(
-    { host: env.SMTP_HOST!, port: env.SMTP_PORT, user: env.SMTP_USER!, pass: env.SMTP_PASS! },
+    { host: env.SMTP_HOST!, port: env.SMTP_PORT, user: env.SMTP_USER, pass: env.SMTP_PASS },
     env.EMAIL_FROM,
   );
 } else {
