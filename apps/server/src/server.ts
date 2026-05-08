@@ -1,7 +1,7 @@
 import { parseEnv } from './env.js';
 import { createPool, runMigrations } from './db.js';
 import { buildApp } from './buildApp.js';
-import { ResendMailer, PostmarkMailer, FakeMailer, type Mailer } from './mailer.js';
+import { ResendMailer, PostmarkMailer, SmtpMailer, FakeMailer, type Mailer } from './mailer.js';
 
 const env = parseEnv();
 const pool = createPool(env.DATABASE_URL);
@@ -20,6 +20,11 @@ if (process.env.RPOW_TEST_INBOX === 'true') {
   console.log('using FakeMailer (RPOW_TEST_INBOX=true) — magic links print to this console');
 } else if (env.MAILER === 'postmark') {
   mailer = new PostmarkMailer(env.POSTMARK_TOKEN!, env.EMAIL_FROM, env.POSTMARK_MESSAGE_STREAM);
+} else if (env.MAILER === 'smtp') {
+  mailer = new SmtpMailer(
+    { host: env.SMTP_HOST!, port: env.SMTP_PORT, user: env.SMTP_USER!, pass: env.SMTP_PASS! },
+    env.EMAIL_FROM,
+  );
 } else {
   mailer = new ResendMailer(env.RESEND_API_KEY!, env.EMAIL_FROM);
 }

@@ -4,10 +4,14 @@ const Schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(8080),
   DATABASE_URL: z.string().url(),
-  MAILER: z.enum(['resend', 'postmark']).default('resend'),
+  MAILER: z.enum(['resend', 'postmark', 'smtp']).default('resend'),
   RESEND_API_KEY: z.string().min(1).optional(),
   POSTMARK_TOKEN: z.string().min(1).optional(),
   POSTMARK_MESSAGE_STREAM: z.string().min(1).default('outbound'),
+  SMTP_HOST: z.string().min(1).optional(),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  SMTP_USER: z.string().min(1).optional(),
+  SMTP_PASS: z.string().min(1).optional(),
   EMAIL_FROM: z.string().email().or(z.string().regex(/^[^@<>]+<[^@<>]+@[^@<>]+>$/)),
   SESSION_SECRET: z.string().min(32),
   MAGIC_LINK_BASE_URL: z.string().url(),
@@ -25,6 +29,11 @@ const Schema = z.object({
   }
   if (v.MAILER === 'postmark' && !v.POSTMARK_TOKEN) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['POSTMARK_TOKEN'], message: 'required when MAILER=postmark' });
+  }
+  if (v.MAILER === 'smtp') {
+    if (!v.SMTP_HOST) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['SMTP_HOST'], message: 'required when MAILER=smtp' });
+    if (!v.SMTP_USER) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['SMTP_USER'], message: 'required when MAILER=smtp' });
+    if (!v.SMTP_PASS) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['SMTP_PASS'], message: 'required when MAILER=smtp' });
   }
 });
 

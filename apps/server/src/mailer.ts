@@ -1,5 +1,6 @@
 import { Resend } from 'resend';
 import { ServerClient as PostmarkClient } from 'postmark';
+import nodemailer, { type Transporter } from 'nodemailer';
 
 export interface SendArgs {
   to: string;
@@ -47,6 +48,35 @@ export class PostmarkMailer implements Mailer {
       });
     } catch (e: any) {
       throw new Error(`postmark: ${e?.message ?? e}`);
+    }
+  }
+}
+
+// SMTP fallback (Gmail-compatible: smtp.gmail.com:587 with an app password).
+// Use as a stopgap when transactional providers (Resend/Postmark) are
+// unavailable. The bound user account stays in Gmail's normal sending limits
+// (free Gmail ~500/day, Workspace ~2000/day).
+export class SmtpMailer implements Mailer {
+  private transporter: Transporter;
+  constructor(
+    opts: { host: string; port: number; user: string; pass: string },
+    private from: string,
+  ) {
+    this.transporter = nodemailer.createTransport({
+      host: opts.host,
+      port: opts.port,
+      secure: opts.port === 465,
+      auth: { user: opts.user, pass: opts.pass },
+    });
+  }
+  async send(a: SendArgs): Promise<void> {
+    try {
+      await this.transporter.sendMail({
+        from: this.from, to: a.to, subject: a.subject, html: a.html, text: a.text,
+        headers: a.headers,
+      });
+    } catch (e: any) {
+      throw new Error(`smtp: ${e?.message ?? e}`);
     }
   }
 }

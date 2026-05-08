@@ -39,6 +39,33 @@ describe('parseEnv', () => {
       RPOW_SIGNING_PUBLIC_KEY_HEX: '00'.repeat(32),
     })).toThrow(/RESEND_API_KEY/);
   });
+  it('rejects MAILER=smtp without SMTP_HOST/USER/PASS', () => {
+    expect(() => parseEnv({
+      DATABASE_URL: 'postgres://u:p@h/db',
+      MAILER: 'smtp',
+      EMAIL_FROM: 'no-reply@rpow2.com',
+      SESSION_SECRET: 'a'.repeat(32),
+      MAGIC_LINK_BASE_URL: 'http://localhost:8080',
+      RPOW_SIGNING_PRIVATE_KEY_HEX: '00'.repeat(32),
+      RPOW_SIGNING_PUBLIC_KEY_HEX: '00'.repeat(32),
+    })).toThrow(/SMTP_HOST|SMTP_USER|SMTP_PASS/);
+  });
+  it('accepts MAILER=smtp with all SMTP_* set', () => {
+    const env = parseEnv({
+      DATABASE_URL: 'postgres://u:p@h/db',
+      MAILER: 'smtp',
+      SMTP_HOST: 'smtp.gmail.com',
+      SMTP_USER: 'test@gmail.com',
+      SMTP_PASS: 'app-password',
+      EMAIL_FROM: 'no-reply@rpow2.com',
+      SESSION_SECRET: 'a'.repeat(32),
+      MAGIC_LINK_BASE_URL: 'http://localhost:8080',
+      RPOW_SIGNING_PRIVATE_KEY_HEX: '00'.repeat(32),
+      RPOW_SIGNING_PUBLIC_KEY_HEX: '00'.repeat(32),
+    });
+    expect(env.MAILER).toBe('smtp');
+    expect(env.SMTP_PORT).toBe(587);
+  });
   it('accepts MAILER=postmark with POSTMARK_TOKEN', () => {
     const env = parseEnv({
       DATABASE_URL: 'postgres://u:p@h/db',
