@@ -9,6 +9,9 @@ export interface MeResponse {
   minted: number;
   sent: number;
   received: number;
+  wrap_allowed: boolean;
+  solana_wallet: string | null;
+  srpow_supply_owned: number;
 }
 
 export interface ChallengeResponse {
@@ -71,4 +74,33 @@ export interface LedgerResponse {
   circulating_supply: number;
   current_difficulty_bits: number;
   user_count: number;
+}
+
+export interface PhantomChallengeResponse {
+  nonce: string;
+  message: string;
+  expires_at: string;
+}
+
+export interface PhantomBindResponse {
+  ok: true;
+  solana_wallet: string;
+}
+
+export interface WrapResponse {
+  ok: true;
+  event_id: string;
+  status: 'CONFIRMED';
+  solana_signature: string;
+}
+
+export interface WrapEvent {
+  event_id: string;
+  direction: 'WRAP' | 'UNWRAP';
+  amount: number;
+  status: 'PENDING' | 'CONFIRMED' | 'FAILED' | 'REFUNDED';
+  solana_signature: string | null;
+  failure_reason: string | null;
+  created_at: string;
+  updated_at: string;
 }
