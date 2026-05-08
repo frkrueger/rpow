@@ -210,8 +210,9 @@ Prepare both paths; decide which to run after the pre-flight `SHOW wal_level` ch
 
 ## Backups (B2)
 
-- B2 bucket: `rpow-backups-prod`, application key restricted to write+list on this bucket.
-- Restic repo at `b2:rpow-backups-prod:restic`, init password stored in `/etc/rpow/restic.env`.
+- B2 bucket: `rpow2-ovhbackup` (bucket ID `26655ddc93da075a9fe70216`), application key restricted to write+list on this bucket.
+- Application key + key ID are stored locally in `rpow/.env` (gitignored) as `B2_KEY_ID` / `B2_APP_KEY`. These will be transferred to the VPS at `/etc/rpow/restic.env` (mode `0600`, owned `root:root`) over the existing SSH session — never via git, paste-buffer, or unencrypted transport.
+- Restic repo at `b2:rpow2-ovhbackup:restic`, init password generated on the VPS and stored in the same `restic.env`.
 - Cron / systemd timer: nightly 03:00 UTC.
 - Snapshot script:
   ```bash
