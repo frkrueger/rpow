@@ -1,3 +1,10 @@
+import {
+  Connection, Keypair, PublicKey, Commitment,
+} from '@solana/web3.js';
+import {
+  getOrCreateAssociatedTokenAccount, mintTo as splMintTo,
+} from '@solana/spl-token';
+
 export interface MintToArgs { recipientWallet: string; amount: number }
 export type MintToResult =
   | { status: 'confirmed'; signature: string }
@@ -58,5 +65,56 @@ export class FakeBridgeClient implements BridgeClient {
 
   async getSignatureStatus(signature: string): Promise<SignatureStatus> {
     return this.statuses.get(signature) ?? 'not_found';
+  }
+}
+
+export interface SolanaBridgeClientOptions {
+  connection: Connection;
+  bridge: Keypair;
+  mint: PublicKey;
+  commitment: Commitment;          // 'confirmed' | 'finalized'
+  baseUnitsPerToken: bigint;       // 10n ** 9n for SRPOW
+  timeoutMs: number;
+}
+
+export class SolanaBridgeClient implements BridgeClient {
+  constructor(private opts: SolanaBridgeClientOptions) {}
+
+  async mintTo({ recipientWallet, amount }: MintToArgs): Promise<MintToResult> {
+    // Validate recipient outside the try so an invalid pubkey throws (programmer
+    // error) rather than being silently absorbed into a refund (RPC failure).
+    const recipient = new PublicKey(recipientWallet);
+    try {
+      const ata = await getOrCreateAssociatedTokenAccount(
+        this.opts.connection, this.opts.bridge, this.opts.mint, recipient,
+        false, this.opts.commitment,
+      );
+      const baseUnits = BigInt(amount) * this.opts.baseUnitsPerToken;
+      const sig = await splMintTo(
+        this.opts.connection, this.opts.bridge, this.opts.mint, ata.address,
+        this.opts.bridge, baseUnits, [], { commitment: this.opts.commitment },
+      );
+      return { status: 'confirmed', signature: sig };
+    } catch (e: any) {
+      return { status: 'failed', signature: null, failureReason: e?.message ?? String(e) };
+    }
+  }
+
+  async getSignatureStatus(signature: string): Promise<SignatureStatus> {
+    // searchTransactionHistory=true is required for the reconcile worker to
+    // see signatures older than ~150 slots (60s). Without it, an aged
+    // confirmed tx returns null and we'd mistakenly refund.
+    const res = await this.opts.connection.getSignatureStatus(signature, {
+      searchTransactionHistory: true,
+    });
+    const v = res.value;
+    if (!v) return 'not_found';
+    if (v.err) return 'failed';
+    // confirmationStatus is one of 'processed' | 'confirmed' | 'finalized'.
+    // If it has reached the configured commitment (or finalized, which is
+    // strictly stronger), report confirmed. Otherwise it's still in flight.
+    if (v.confirmationStatus === 'finalized') return 'confirmed';
+    if (v.confirmationStatus === this.opts.commitment) return 'confirmed';
+    return 'pending';
   }
 }
