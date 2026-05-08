@@ -3,6 +3,8 @@ import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import type { Pool } from 'pg';
 import type { Mailer } from './mailer.js';
+import type { BridgeClient } from '@rpow/solana-bridge';
+import { parseAllowlist } from './wrap-allowlist.js';
 import { authRoutes } from './routes/auth.js';
 import { meRoutes } from './routes/me.js';
 import { challengeRoutes } from './routes/challenge.js';
@@ -31,6 +33,8 @@ export interface BuildAppOptions {
   pool: Pool;
   mailer: Mailer;
   config: AppConfig;
+  bridgeClient: BridgeClient;
+  wrapAllowlistCsv: string;          // raw CSV; parsed once on decoration
 }
 
 declare module 'fastify' {
@@ -38,6 +42,8 @@ declare module 'fastify' {
     pool: Pool;
     mailer: Mailer;
     config: AppConfig;
+    bridgeClient: BridgeClient;
+    wrapAllowlist: Set<string>;
   }
 }
 
@@ -55,6 +61,8 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   app.decorate('pool', opts.pool);
   app.decorate('mailer', opts.mailer);
   app.decorate('config', opts.config);
+  app.decorate('bridgeClient', opts.bridgeClient);
+  app.decorate('wrapAllowlist', parseAllowlist(opts.wrapAllowlistCsv));
 
   await app.register(cookie, { secret: opts.config.sessionSecret });
   await app.register(cors, {
