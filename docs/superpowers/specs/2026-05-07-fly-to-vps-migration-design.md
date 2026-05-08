@@ -211,8 +211,11 @@ T+100s  Smoke test via --resolve:
 T+120s  VERIFICATION GATE — all smoke tests pass?
         Any failure → ABORT (rollback below).
 
-T+125s  Cloudflare API: PATCH api.rpow2.com A-record → VPS IP.
-        With 60s TTL + DNS-only (no proxy cache), resolvers catch up in ~30–60s.
+T+125s  Cloudflare API: PATCH api.rpow2.com A-record content → VPS IP,
+        AND AAAA → VPS IPv6 (or DELETE AAAA if no IPv6 on VPS).
+        Both records as a single batch. With 60s TTL + DNS-only,
+        resolvers catch up in ~30–60s; browser DNS cache extends
+        worst-case to ~120s.
 
 T+200s  Monitor /health, journalctl, nginx logs, postgres logs for ~30 min.
 ```
@@ -331,4 +334,8 @@ Migrations: the existing `apps/server/migrations/` directory holds the SQL. The 
 - **Cloudflare proxy mode:** `api.rpow2.com` is **DNS-only** (proxy off, both A and AAAA — flipped via API on 2026-05-07). Apex `rpow2.com` and `www.rpow2.com` stay proxied — they're for the Netlify-hosted SPA which benefits from edge caching.
 - **Cloudflare API token:** scoped to `rpow2.com` zone, perms `Zone:Read + Zone:DNS:Edit`, never expires. Stored locally in `rpow/.env` as `CLOUDFLARE_API_TOKEN`. Will live on the VPS at `/etc/letsencrypt/cloudflare.ini` (mode 0600) for cert renewals.
 - **TLS issuance:** DNS-01 challenge via certbot-dns-cloudflare. Cert provisioned **before** any DNS flip (DNS-01 only needs a TXT record, not the A-record we're cutting over). Auto-renewal via cron/systemd-timer thereafter.
-- **Cloudflare zone ID:** `685720286628e21c9b43f260ac6b63bf` (cached for cutover script).
+- **Cloudflare zone ID:** `685720286628e21c9b43f260ac6b63bf` (cached for cutover script). DNS record IDs: A=`34daa777f0dbbdbd1e3c97d6c12e9837`, AAAA=`1cfb2458cc028a8f95bea16a439bff6c`.
+- **TTL:** set to 60s on `api.rpow2.com` A and AAAA records on 2026-05-07 (Cloudflare Free's minimum). Bounds the propagation tail at cutover to ≤2 minutes for ~all clients.
+- **Cutover style:** **Style A — single-hostname DNS flip.** PATCH `api.rpow2.com` A-record content from Fly IP to VPS IP via Cloudflare API at T+125s. One hostname, simplest, ~2-min bounded propagation. Style B (Netlify-led with `api2.rpow2.com`) considered and rejected — added complexity for marginal gain on this site's user behavior.
+- **IPv6:** OVH typically assigns a /128 to each VPS. During VPS setup, capture the assigned IPv6 with `ip -6 addr show`. At cutover, PATCH the AAAA record alongside the A record. (If the VPS turns out to have no IPv6 — unlikely — DELETE the AAAA record at cutover instead. This avoids split-brain where IPv6-preferring clients hit dead Fly.)
+- **Netlify:** no changes. SPA's `VITE_API_BASE_URL=https://api.rpow2.com` is hostname-only; the IP it resolves to changes but the URL doesn't. No rebuild required.
