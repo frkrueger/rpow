@@ -1,0 +1,2 @@
+*/10 * * * * postgres psql rpow -c "DELETE FROM challenges WHERE expires_at < now() - interval '1 hour' AND claimed_at IS NOT NULL;"
+0 * * * * postgres psql rpow -c "DELETE FROM magic_links WHERE expires_at < now() - interval '1 day' AND used_at IS NOT NULL;"

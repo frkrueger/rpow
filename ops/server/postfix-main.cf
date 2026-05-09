@@ -1,0 +1,49 @@
+# Postfix - rpow2.com transactional email
+smtpd_banner = mail.rpow2.com ESMTP
+biff = no
+append_dot_mydomain = no
+readme_directory = no
+
+# TLS outbound
+smtp_tls_security_level = may
+smtp_tls_CAfile = /etc/ssl/certs/ca-certificates.crt
+smtp_tls_session_cache_database = btree:${data_directory}/smtp_scache
+
+# TLS inbound (for localhost relay)
+smtpd_tls_security_level = none
+
+# Identity
+myhostname = mail.rpow2.com
+mydomain = rpow2.com
+myorigin = $mydomain
+mydestination = localhost
+mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128
+
+# Only relay from localhost (the app)
+smtpd_relay_restrictions = permit_mynetworks, reject_unauth_destination
+inet_interfaces = loopback-only
+inet_protocols = ipv4
+
+# Outbound rate control
+smtp_destination_concurrency_limit = 10
+smtp_destination_rate_delay = 0s
+default_destination_concurrency_limit = 20
+
+# Queue settings
+maximal_queue_lifetime = 1h
+bounce_queue_lifetime = 1h
+queue_run_delay = 30s
+
+# Size limits
+message_size_limit = 1048576
+mailbox_size_limit = 0
+
+# DKIM milter
+milter_protocol = 6
+milter_default_action = accept
+smtpd_milters = inet:localhost:8891
+non_smtpd_milters = inet:localhost:8891
+
+# Aliases
+alias_maps = hash:/etc/aliases
+alias_database = hash:/etc/aliases
