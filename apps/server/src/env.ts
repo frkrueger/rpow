@@ -37,6 +37,9 @@ const Schema = z.object({
   if (v.MAILER === 'postmark' && !v.POSTMARK_TOKEN) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['POSTMARK_TOKEN'], message: 'required when MAILER=postmark' });
   }
+  if (v.MAILER === 'hybrid' && !v.RESEND_API_KEY) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['RESEND_API_KEY'], message: 'required when MAILER=hybrid' });
+  }
   if (v.MAILER === 'smtp' || v.MAILER === 'hybrid') {
     if (!v.SMTP_HOST) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['SMTP_HOST'], message: 'required when MAILER=smtp/hybrid' });
   }

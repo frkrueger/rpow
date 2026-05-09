@@ -6,9 +6,8 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export function createPool(databaseUrl: string): Pool {
-  // Postgres default max_connections is 100; 30 leaves plenty of headroom
-  // for backups (pg_dump uses 1) and the postgres role's own sessions.
-  // 10 was bottlenecking under thousands of concurrent users.
+  // 10 per worker; with N cluster workers total is 10*N. Must stay under
+  // Postgres max_connections minus superuser/backup headroom.
   return new Pool({ connectionString: databaseUrl, max: 10 });
 }
 

@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>rpow2 — upgrading</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&display=swap" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0a0a0a;
+      color: #00ff41;
+      font-family: 'IBM Plex Mono', monospace;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .container {
+      border: 1px solid #00ff41;
+      padding: 40px 48px;
+      max-width: 520px;
+      width: 90%;
+      text-align: center;
+    }
+    h1 { font-size: 20px; margin-bottom: 24px; letter-spacing: 4px; }
+    .status { font-size: 14px; opacity: 0.8; margin-bottom: 24px; line-height: 1.6; }
+    .timer {
+      font-size: 48px;
+      font-weight: 700;
+      margin: 24px 0;
+      letter-spacing: 2px;
+    }
+    .label { font-size: 12px; opacity: 0.5; letter-spacing: 2px; }
+    .blink { animation: blink 1s step-end infinite; }
+    @keyframes blink { 50% { opacity: 0; } }
+    .bar {
+      margin-top: 24px;
+      height: 2px;
+      background: #001a00;
+      position: relative;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      background: #00ff41;
+      width: 0%;
+      transition: width 1s linear;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>SYSTEM UPGRADE</h1>
+    <div class="status">
+      upgrading server hardware.<br>
+      mining and auth will resume shortly.
+    </div>
+    <div class="label">ESTIMATED TIME REMAINING</div>
+    <div class="timer" id="timer">10:00</div>
+    <div class="bar"><div class="bar-fill" id="bar"></div></div>
+    <div style="margin-top: 24px; font-size: 12px; opacity: 0.5;">
+      <span class="blink">_</span> rpow2.com
+    </div>
+  </div>
+  <script>
+    const TOTAL = 10 * 60;
+    const end = Date.now() + TOTAL * 1000;
+    function tick() {
+      const left = Math.max(0, Math.ceil((end - Date.now()) / 1000));
+      const m = String(Math.floor(left / 60)).padStart(2, '0');
+      const s = String(left % 60).padStart(2, '0');
+      document.getElementById('timer').textContent = m + ':' + s;
+      document.getElementById('bar').style.width = ((1 - left / TOTAL) * 100) + '%';
+      if (left <= 0) {
+        document.getElementById('timer').textContent = '00:00';
+        location.reload();
+      } else {
+        requestAnimationFrame(() => setTimeout(tick, 250));
+      }
+    }
+    tick();
+  </script>
+</body>
+</html>

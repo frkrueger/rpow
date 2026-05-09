@@ -31,13 +31,19 @@ export async function mintRoutes(app: FastifyInstance) {
         return { error: 'INVALID_SOLUTION' as const, message: 'hash does not meet difficulty' };
       }
 
-      // Read current minted supply (BIGINT base units).
+      await c.query('UPDATE challenges SET claimed_at=now() WHERE id=$1', [ch.id]);
+
+      const tokenId = randomUUID();
+      const issuedAt = new Date();
+      const ownerHash = createHash('sha256').update(s.email).digest('hex');
+
+      // Lock the counter row, compute reward, increment, and insert token
+      // in one serialized block to prevent stale reward at halving boundaries.
       const { rows: counterRows } = await c.query<{ value: string }>(
-        `SELECT value::text FROM app_counters WHERE name='minted_supply'`,
+        `SELECT value::text FROM app_counters WHERE name='minted_supply' FOR UPDATE`,
       );
       const mintedBaseUnits = counterRows[0] ? BigInt(counterRows[0].value) : 0n;
 
-      // Compute current reward from the halving schedule.
       const reward = currentRewardBaseUnits(mintedBaseUnits, {
         maxSupplyRpow: app.config.mintMaxSupply,
       });
@@ -45,17 +51,6 @@ export async function mintRoutes(app: FastifyInstance) {
         return { error: 'SUPPLY_EXHAUSTED' as const, message: '21M cap reached or reward floored' };
       }
 
-      await c.query('UPDATE challenges SET claimed_at=now() WHERE id=$1', [ch.id]);
-
-      const tokenId = randomUUID();
-      const issuedAt = new Date();
-      const ownerHash = createHash('sha256').update(s.email).digest('hex');
-      const sig = signTokenPayload(
-        { id: tokenId, owner_email_hash: ownerHash, value: reward, issued_at: issuedAt.toISOString() },
-        app.config.signingPrivateKeyHex,
-      );
-
-      // Atomic cap-check + increment — acquired last to minimize lock hold time.
       const capBaseUnits = BigInt(app.config.mintMaxSupply) * BASE_UNITS_PER_RPOW;
       const supplyResult = await c.query(
         `UPDATE app_counters SET value = value + $2::bigint
@@ -66,6 +61,10 @@ export async function mintRoutes(app: FastifyInstance) {
         return { error: 'SUPPLY_EXHAUSTED' as const, message: '21M cap reached' };
       }
 
+      const sig = signTokenPayload(
+        { id: tokenId, owner_email_hash: ownerHash, value: reward, issued_at: issuedAt.toISOString() },
+        app.config.signingPrivateKeyHex,
+      );
       await c.query(
         `INSERT INTO tokens(id, owner_email, value, state, issued_at, server_sig)
          VALUES($1, $2, $3, 'VALID', $4, $5)`,
