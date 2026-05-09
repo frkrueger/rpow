@@ -1,16 +1,28 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Panel } from '../components/Panel.js';
 import { api } from '../api.js';
 
 const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined;
+
+declare global {
+  interface Window {
+    turnstile?: {
+      render(el: HTMLElement, opts: Record<string, unknown>): string;
+      reset(widgetId: string): void;
+      remove(widgetId: string): void;
+    };
+  }
+}
 
 export function LoginPage() {
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'cooldown' | 'error'>('idle');
   const [error, setError] = useState('');
   const [cooldown, setCooldown] = useState(0);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval>>();
-  const formRef = useRef<HTMLFormElement>(null);
+  const turnstileRef = useRef<HTMLDivElement>(null);
+  const widgetIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -27,22 +39,46 @@ export function LoginPage() {
     return () => clearInterval(timerRef.current);
   }, [cooldown]);
 
+  const renderTurnstile = useCallback(() => {
+    if (!TURNSTILE_SITE_KEY || !turnstileRef.current || !window.turnstile) return;
+    if (widgetIdRef.current) {
+      window.turnstile.remove(widgetIdRef.current);
+      widgetIdRef.current = null;
+    }
+    widgetIdRef.current = window.turnstile.render(turnstileRef.current, {
+      sitekey: TURNSTILE_SITE_KEY,
+      theme: 'dark',
+      callback: (token: string) => setTurnstileToken(token),
+      'expired-callback': () => setTurnstileToken(null),
+      'error-callback': () => setTurnstileToken(null),
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!TURNSTILE_SITE_KEY) return;
+    if (window.turnstile) {
+      renderTurnstile();
+    } else {
+      const interval = setInterval(() => {
+        if (window.turnstile) {
+          clearInterval(interval);
+          renderTurnstile();
+        }
+      }, 200);
+      return () => clearInterval(interval);
+    }
+  }, [renderTurnstile]);
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setStatus('sending'); setError('');
 
-    // Cloudflare Turnstile inserts a hidden input named cf-turnstile-response
-    // inside the widget element when the user passes the challenge. Read it
-    // straight off the form rather than wiring callbacks/refs into Cloudflare.
     let turnstile_token: string | undefined;
     if (TURNSTILE_SITE_KEY) {
-      const tokenInput = formRef.current?.querySelector(
-        'input[name="cf-turnstile-response"]'
-      ) as HTMLInputElement | null;
-      turnstile_token = tokenInput?.value || undefined;
+      turnstile_token = turnstileToken ?? undefined;
       if (!turnstile_token) {
         setStatus('error');
-        setError('please complete the human-verification challenge above');
+        setError('please complete the human-verification challenge');
         return;
       }
     }
@@ -51,6 +87,10 @@ export function LoginPage() {
       const res = await api.authRequest({ email, turnstile_token });
       setStatus('cooldown');
       setCooldown((res as any).cooldown_seconds ?? 30);
+      setTurnstileToken(null);
+      if (widgetIdRef.current && window.turnstile) {
+        window.turnstile.reset(widgetIdRef.current);
+      }
     } catch (err: any) {
       if (err?.error === 'RATE_LIMITED') {
         setStatus('cooldown');
@@ -58,6 +98,9 @@ export function LoginPage() {
       } else if (err?.error === 'TURNSTILE_REQUIRED' || err?.error === 'TURNSTILE_INVALID') {
         setStatus('error');
         setError('human verification failed; refresh and try again');
+        if (widgetIdRef.current && window.turnstile) {
+          window.turnstile.reset(widgetIdRef.current);
+        }
       } else {
         setStatus('error');
         setError(err?.message ?? 'unknown error');
@@ -69,14 +112,12 @@ export function LoginPage() {
 
   return (
     <Panel title="LOGIN">
-      <form ref={formRef} onSubmit={submit}>
+      <form onSubmit={submit}>
         <div>
           EMAIL : <input value={email} onChange={e => setEmail(e.target.value)} required type="email" autoFocus style={{ width: '36ch' }} />
         </div>
         {TURNSTILE_SITE_KEY && (
-          <div style={{ marginTop: 12 }}>
-            <div className="cf-turnstile" data-sitekey={TURNSTILE_SITE_KEY} data-theme="dark" data-size="normal" />
-          </div>
+          <div style={{ marginTop: 12 }} ref={turnstileRef} />
         )}
         <div style={{ marginTop: 8 }}>
           <button type="submit" disabled={disabled}>
