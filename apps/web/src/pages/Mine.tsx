@@ -45,6 +45,13 @@ export function MinePage() {
     try {
       ch = await api.challenge();
     } catch (err: any) {
+      if (err?.error === 'COOLDOWN') {
+        const wait = (err.retry_after ?? 5) * 1000;
+        await new Promise(r => setTimeout(r, wait));
+        if (!stopRequestedRef.current) startOne();
+        else setStatus('idle');
+        return;
+      }
       setStatus('error');
       setError(err?.message ?? 'failed to fetch challenge');
       return;

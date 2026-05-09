@@ -53,6 +53,25 @@ export async function challengeRoutes(app: FastifyInstance) {
       };
     }
 
+    // Per-account cooldown: 5 seconds between completed challenges.
+    const { rows: lastClaimed } = await app.pool.query<{ claimed_at: Date }>(
+      `SELECT claimed_at FROM challenges
+       WHERE user_email=$1 AND claimed_at IS NOT NULL
+       ORDER BY claimed_at DESC LIMIT 1`,
+      [s.email],
+    );
+    if (lastClaimed[0]) {
+      const elapsedMs = Date.now() - lastClaimed[0].claimed_at.getTime();
+      if (elapsedMs < 5000) {
+        const wait = Math.ceil((5000 - elapsedMs) / 1000);
+        return reply.code(429).send({
+          error: 'COOLDOWN',
+          message: `wait ${wait}s before next challenge`,
+          retry_after: wait,
+        });
+      }
+    }
+
     const minted = await mintedSupplyBaseUnits();
     const capBaseUnits = BigInt(app.config.mintMaxSupply) * BASE_UNITS_PER_RPOW;
     if (minted >= capBaseUnits) {
