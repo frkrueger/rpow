@@ -53,7 +53,10 @@ export async function authRoutes(app: FastifyInstance) {
     );
     const link = `${app.config.magicLinkBaseUrl}/auth/verify?token=${token}`;
     const unsubUrl = `${app.config.magicLinkBaseUrl}/unsubscribe?token=${makeUnsubToken(email, app.config.sessionSecret)}`;
-    await app.mailer.send({
+
+    // Fire-and-forget: return 200 immediately, send email in background.
+    // The magic link is already in the DB so retries will hit the cooldown.
+    app.mailer.send({
       to: email,
       subject: 'rpow2 — your magic link',
       text: `Click to sign in:\n${link}\n\nLink expires in 15 minutes.`,
@@ -62,7 +65,7 @@ export async function authRoutes(app: FastifyInstance) {
         'List-Unsubscribe': `<${unsubUrl}>`,
         'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
       },
-    });
+    }).catch(err => app.log.error({ err, email }, 'background magic-link email failed'));
 
     return { ok: true, cooldown_seconds: 30 };
   });
