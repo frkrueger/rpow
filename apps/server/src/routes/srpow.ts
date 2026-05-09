@@ -31,6 +31,14 @@ export async function srpowRoutes(app: FastifyInstance) {
     if (!isAllowed(app.wrapAllowlist, s.email)) {
       return reply.code(403).send({ error: 'FORBIDDEN', message: 'wrap not enabled for your account' });
     }
+    const todayUtc = new Date().toISOString().slice(0, 10);
+    const { rows: wrapCount } = await app.pool.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM srpow_wrap_events WHERE user_email=$1 AND created_at::date = $2::date`,
+      [s.email, todayUtc],
+    );
+    if ((wrapCount[0]?.n ?? 0) >= 1) {
+      return reply.code(429).send({ error: 'DAILY_WRAP_LIMIT', message: '1 wrap per day; resets at UTC midnight' });
+    }
     const parsed = WrapBody.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: 'BAD_REQUEST', message: 'invalid body' });
     const { amount_base_units, idempotency_key } = parsed.data;
