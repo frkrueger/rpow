@@ -1,5 +1,5 @@
 import { parseEnv } from './env.js';
-import { createPool, runMigrations } from './db.js';
+import { createPool } from './db.js';
 import { buildApp } from './buildApp.js';
 import { ResendMailer, PostmarkMailer, SmtpMailer, FakeMailer, ThrottledMailer, type Mailer } from './mailer.js';
 import { Connection, PublicKey } from '@solana/web3.js';
@@ -9,7 +9,6 @@ import { reconcilePendingWraps } from './srpow-reconcile.js';
 
 const env = parseEnv();
 const pool = createPool(env.DATABASE_URL);
-await runMigrations(pool);
 
 let bridgeClient: BridgeClient;
 if (env.SOLANA_RPC_URL && env.SRPOW_MINT_ADDRESS && env.BRIDGE_KEYPAIR_BASE58) {

@@ -1,7 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { scheduleInfo, BASE_UNITS_PER_RPOW } from '../schedule.js';
 
-const LEDGER_CACHE_MS = 5_000;
+// Ledger data is expensive (full-table scans on tokens). Cache aggressively
+// since this is a read-only dashboard endpoint — 60s staleness is fine.
+const LEDGER_CACHE_MS = 60_000;
 
 export async function ledgerRoutes(app: FastifyInstance) {
   let cached: { ts: number; body: unknown } | null = null;
@@ -9,15 +11,11 @@ export async function ledgerRoutes(app: FastifyInstance) {
 
   async function refresh() {
     const [
-      { rows: minted },
       { rows: transferred },
       { rows: circulating },
       { rows: users },
       { rows: counter },
     ] = await Promise.all([
-      app.pool.query<{ n: string }>(
-        `SELECT coalesce(sum(value),0)::text AS n FROM tokens WHERE parent_token_id IS NULL`,
-      ),
       app.pool.query<{ n: string }>(
         `SELECT coalesce(sum(amount),0)::text AS n FROM transfers`,
       ),
@@ -32,10 +30,10 @@ export async function ledgerRoutes(app: FastifyInstance) {
       ),
     ]);
 
-    const totalMintedBaseUnits = BigInt(minted[0]!.n);
+    const counterBaseUnits = counter[0] ? BigInt(counter[0].value) : 0n;
+    const totalMintedBaseUnits = counterBaseUnits;
     const totalTransferredBaseUnits = BigInt(transferred[0]!.n);
     const circulatingBaseUnits = BigInt(circulating[0]!.n);
-    const counterBaseUnits = counter[0] ? BigInt(counter[0].value) : 0n;
     const maxSupplyBaseUnits = BigInt(app.config.mintMaxSupply) * BASE_UNITS_PER_RPOW;
 
     const info = scheduleInfo(counterBaseUnits, {
