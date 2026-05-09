@@ -482,8 +482,8 @@ const API = (window.location.hostname === 'localhost' && window.location.port ==
   ? 'http://localhost:8080'
   : '/api';
 
-const BAKED = {"total_minted":9311488,"total_transferred":383188,"circulating_supply":9311208,"current_difficulty_bits":34,"user_count":16765,"max_supply":21000000,"epoch":9,"epoch_size":1000000,"next_milestone_at":10000000,"coins_until_next_milestone":688512,"next_difficulty_bits":35,"is_capped":false};
-const BAKED_AT = "2026-05-08T20:20:00Z";
+const BAKED = {"total_minted":9857622,"total_transferred":2218560,"circulating_supply":4568165,"current_difficulty_bits":25,"user_count":31017,"max_supply":19000000,"epoch":0,"epoch_size":10000000,"next_milestone_at":10000000,"coins_until_next_milestone":142378,"next_difficulty_bits":26,"is_capped":false};
+const BAKED_AT = "2026-05-09T15:10:00Z";
 
 const $ = (id) => document.getElementById(id);
 let prev = {};
@@ -649,6 +649,29 @@ function renderWithTimestamp(d, ts) {
   prev = d;
 }
 
+// Convert new base-units API response to the integer format the dashboard expects.
+function normalizeLedger(raw) {
+  const BU = BigInt(raw.base_units_per_rpow || '1000000000');
+  const toRpow = (s) => Number(BigInt(s || '0') / BU);
+  if (raw.total_minted_base_units !== undefined) {
+    return {
+      total_minted: toRpow(raw.minted_supply_counter_base_units || raw.total_minted_base_units),
+      total_transferred: toRpow(raw.total_transferred_base_units),
+      circulating_supply: toRpow(raw.circulating_supply_base_units),
+      current_difficulty_bits: raw.current_difficulty_bits,
+      user_count: raw.user_count,
+      max_supply: Number(BigInt(raw.max_supply_base_units) / BU),
+      epoch: raw.halving_index || 0,
+      epoch_size: Number(BigInt(raw.next_halving_at_base_units || '10000000000000000') / BU) / Math.max(raw.halving_index + 1, 1),
+      next_milestone_at: toRpow(raw.next_halving_at_base_units),
+      coins_until_next_milestone: toRpow(raw.base_units_to_next_halving),
+      next_difficulty_bits: raw.current_difficulty_bits + 1,
+      is_capped: raw.is_capped,
+    };
+  }
+  return raw;
+}
+
 async function fetchStats(force) {
   if (!force) {
     const cached = loadCache();
@@ -661,7 +684,8 @@ async function fetchStats(force) {
   try {
     const res = await fetch(API + '/ledger');
     if (!res.ok) throw new Error(res.statusText);
-    const d = await res.json();
+    const raw = await res.json();
+    const d = normalizeLedger(raw);
     const now = Date.now();
     saveCache(d);
     renderWithTimestamp(d, now);
