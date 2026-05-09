@@ -34,7 +34,16 @@ export async function reconcilePendingWraps(pool: Pool, bridge: BridgeClient): P
 async function confirm(pool: Pool, eventId: string): Promise<void> {
   await withTx(pool, async (c) => {
     await c.query(`UPDATE srpow_wrap_events SET status='CONFIRMED', updated_at=now() WHERE id=$1`, [eventId]);
-    await c.query(`UPDATE tokens SET state='WRAPPED' WHERE wrap_event_id=$1`, [eventId]);
+    // Source tokens (is_change=false) -> WRAPPED.
+    await c.query(
+      `UPDATE tokens SET state='WRAPPED' WHERE wrap_event_id=$1 AND is_change=FALSE`,
+      [eventId],
+    );
+    // Change token (is_change=true), if any, becomes spendable.
+    await c.query(
+      `UPDATE tokens SET state='VALID' WHERE wrap_event_id=$1 AND is_change=TRUE`,
+      [eventId],
+    );
   });
 }
 
@@ -44,8 +53,16 @@ async function refund(pool: Pool, eventId: string, reason: string): Promise<void
       `UPDATE srpow_wrap_events SET status='REFUNDED', failure_reason=$1, updated_at=now() WHERE id=$2`,
       [reason, eventId],
     );
+    // Restore source tokens to VALID; clear the wrap_event_id link.
     await c.query(
-      `UPDATE tokens SET state='VALID', wrap_event_id=NULL WHERE wrap_event_id=$1`,
+      `UPDATE tokens SET state='VALID', wrap_event_id=NULL
+       WHERE wrap_event_id=$1 AND is_change=FALSE`,
+      [eventId],
+    );
+    // Discard any change token that was provisionally issued — it was never
+    // user-visible (state was LOCKED_FOR_BRIDGE) so deleting it is safe.
+    await c.query(
+      `DELETE FROM tokens WHERE wrap_event_id=$1 AND is_change=TRUE`,
       [eventId],
     );
   });

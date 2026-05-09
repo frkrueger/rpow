@@ -1,9 +1,10 @@
 import type { FastifyInstance } from 'fastify';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { z } from 'zod';
 import { readSession } from './auth.js';
 import { withTx } from '../db.js';
 import { isAllowed } from '../wrap-allowlist.js';
+import { signTokenPayload } from '../signing.js';
 
 const WrapBody = z.object({
   amount_base_units: z
@@ -61,7 +62,7 @@ export async function srpowRoutes(app: FastifyInstance) {
 
       // Pull candidate tokens largest-first; FOR UPDATE locks them so concurrent
       // /send|/wrap calls don't race over the same rows. No LIMIT — we need the
-      // full pool to pick an exact-sum subset.
+      // full pool to pick a subset summing to >= target.
       const { rows: pool } = await c.query<{ id: string; value: string }>(
         `SELECT id, value::text AS value FROM tokens
          WHERE owner_email=$1 AND state='VALID'
@@ -75,20 +76,29 @@ export async function srpowRoutes(app: FastifyInstance) {
         return { error: 'INSUFFICIENT_BALANCE' as const };
       }
 
-      // Greedy exact-sum: walk largest-first, skip rows that would overshoot.
+      // Greedy largest-first accumulation: pick rows until sum >= target.
+      // The leftover (sum - target) is issued back as a CHANGE token, so the
+      // user can wrap any amount up to their full balance regardless of how
+      // their tokens are denominated.
       const picked: { id: string; value: bigint }[] = [];
       let total = 0n;
       for (const row of pool) {
         const v = BigInt(row.value);
-        if (total + v <= target) {
-          picked.push({ id: row.id, value: v });
-          total += v;
-          if (total === target) break;
-        }
+        picked.push({ id: row.id, value: v });
+        total += v;
+        if (total >= target) break;
       }
-      if (total !== target) {
-        return { error: 'EXACT_SUM_REQUIRED' as const };
+      // Trim trailing tokens that aren't needed: if removing the smallest
+      // picked token still leaves total >= target, drop it. Repeats until
+      // the picked set is the minimal accumulating prefix.
+      while (picked.length > 1) {
+        const tail = picked[picked.length - 1].value;
+        if (total - tail >= target) {
+          total -= tail;
+          picked.pop();
+        } else break;
       }
+      const change = total - target;
 
       const eventId = randomUUID();
       await c.query(
@@ -104,7 +114,25 @@ export async function srpowRoutes(app: FastifyInstance) {
         [eventId, ids],
       );
 
-      return { fresh: { eventId, wallet, ids } };
+      // If there's a change amount, issue a LOCKED change token now. It
+      // becomes VALID on Phase-2 confirm, or is deleted on Phase-2 refund.
+      let changeId: string | null = null;
+      if (change > 0n) {
+        changeId = randomUUID();
+        const issuedAt = new Date();
+        const ownerHash = createHash('sha256').update(s.email).digest('hex');
+        const sig = signTokenPayload(
+          { id: changeId, owner_email_hash: ownerHash, value: change, issued_at: issuedAt.toISOString() },
+          app.config.signingPrivateKeyHex,
+        );
+        await c.query(
+          `INSERT INTO tokens(id, owner_email, value, state, issued_at, server_sig, wrap_event_id, is_change)
+           VALUES($1, $2, $3, 'LOCKED_FOR_BRIDGE', $4, $5, $6, TRUE)`,
+          [changeId, s.email, change.toString(), issuedAt, sig, eventId],
+        );
+      }
+
+      return { fresh: { eventId, wallet, ids, changeId, change } };
     });
 
     if ('error' in phase1) {
@@ -112,10 +140,6 @@ export async function srpowRoutes(app: FastifyInstance) {
       if (code === 'DUP_DIFFERENT_PARAMS') return reply.code(409).send({ error: 'BAD_REQUEST', message: 'idempotency_key reused with different parameters' });
       if (code === 'NO_WALLET_BOUND') return reply.code(400).send({ error: 'NO_WALLET_BOUND', message: 'bind a Solana wallet first' });
       if (code === 'INSUFFICIENT_BALANCE') return reply.code(400).send({ error: 'INSUFFICIENT_BALANCE', message: 'not enough VALID tokens' });
-      if (code === 'EXACT_SUM_REQUIRED') return reply.code(400).send({
-        error: 'EXACT_SUM_REQUIRED',
-        message: 'your tokens cannot be combined to exactly equal that amount; pick an amount that matches your denominations',
-      });
     }
 
     // Replay path: a previous call already completed Phase 1+2 (or refunded).
@@ -139,7 +163,7 @@ export async function srpowRoutes(app: FastifyInstance) {
     }
 
     if ('fresh' in phase1) {
-      const { eventId, wallet, ids } = phase1.fresh;
+      const { eventId, wallet, ids, changeId, change } = phase1.fresh;
 
       const result = await app.bridgeClient.mintTo(
         { recipientWallet: wallet, amountBaseUnits: target },
@@ -162,18 +186,34 @@ export async function srpowRoutes(app: FastifyInstance) {
             `UPDATE srpow_wrap_events SET status='CONFIRMED', solana_signature=$1, updated_at=now() WHERE id=$2`,
             [result.signature, eventId],
           );
+          // Source tokens -> WRAPPED (state already filtered by !is_change in
+          // case the event has both source and change tokens linked).
           await c.query(
             `UPDATE tokens SET state='WRAPPED' WHERE id = ANY($1::uuid[])`,
             [ids],
           );
+          // Change token (if any) -> VALID, becomes user-spendable.
+          if (changeId) {
+            await c.query(
+              `UPDATE tokens SET state='VALID' WHERE id=$1`,
+              [changeId],
+            );
+          }
         });
-        return { ok: true, event_id: eventId, status: 'CONFIRMED', solana_signature: result.signature };
+        return {
+          ok: true,
+          event_id: eventId,
+          status: 'CONFIRMED',
+          solana_signature: result.signature,
+          change_base_units: change.toString(),
+        };
       }
 
-      // Failure path: refund. Note we DO NOT null out solana_signature — the
-      // pre-submit callback may have set it, and we want to preserve it so
-      // the user can see the failed tx on Solscan and the reconcile worker
-      // has a stable artifact for any future lookups.
+      // Failure path: refund. Source tokens go back to VALID; the change token
+      // (if any) is deleted since it was never user-visible. We DO NOT null
+      // out solana_signature — the pre-submit callback may have set it, and
+      // we want to preserve it so the user can see the failed tx on Solscan
+      // and the reconcile worker has a stable artifact for any future lookups.
       await withTx(app.pool, async (c) => {
         await c.query(
           `UPDATE srpow_wrap_events SET status='REFUNDED', failure_reason=$1, updated_at=now() WHERE id=$2`,
@@ -183,6 +223,9 @@ export async function srpowRoutes(app: FastifyInstance) {
           `UPDATE tokens SET state='VALID', wrap_event_id=NULL WHERE id = ANY($1::uuid[])`,
           [ids],
         );
+        if (changeId) {
+          await c.query(`DELETE FROM tokens WHERE id=$1`, [changeId]);
+        }
       });
       return reply.code(503).send({
         error: 'BRIDGE_FAILED', event_id: eventId, status: 'REFUNDED',

@@ -65,18 +65,59 @@ describe('POST /srpow/wrap — Phase 1', () => {
     expect(r.json().error).toBe('INSUFFICIENT_BALANCE');
   });
 
-  it('returns 400 EXACT_SUM_REQUIRED when no token combo equals target', async () => {
+  it('makes change when no exact-sum subset exists', async () => {
     const t = await makeTestApp({ wrapAllowlistCsv: 'alice@x.io' });
     cleanup = t.cleanup;
     // Alice has two 1-RPOW tokens; she wants to wrap 0.5 RPOW.
+    // The wrap locks one 1-RPOW source token and provisionally issues a
+    // 0.5-RPOW change token (LOCKED). On Phase 2 confirm, source -> WRAPPED
+    // and change -> VALID, leaving Alice with one unwrapped 1-RPOW token plus
+    // a fresh 0.5-RPOW change token (1.5 RPOW spendable on rpow2 + 0.5 SRPOW
+    // on Solana).
     await seedUser(t, 'alice@x.io', 'WALLET1', 2);
+    t.bridgeClient.queueResult({ signature: 'sig_change' });
     const session = signSession({ email: 'alice@x.io' }, 'x'.repeat(32), 60);
+
     const r = await t.app.inject({
       method: 'POST', url: '/srpow/wrap', cookies: { [SESSION_COOKIE]: session },
-      payload: { amount_base_units: (ONE_RPOW / 2n).toString(), idempotency_key: 'k_exact_1' },
+      payload: { amount_base_units: (ONE_RPOW / 2n).toString(), idempotency_key: 'k_change_1' },
     });
-    expect(r.statusCode).toBe(400);
-    expect(r.json().error).toBe('EXACT_SUM_REQUIRED');
+    expect(r.statusCode).toBe(200);
+    const body = r.json();
+    expect(body.status).toBe('CONFIRMED');
+    expect(body.change_base_units).toBe((ONE_RPOW / 2n).toString());
+
+    // After confirm: 1 source WRAPPED + 1 untouched VALID + 1 new change VALID
+    const tokens = await t.pool.query<{ state: string; value: string; is_change: boolean }>(
+      `SELECT state, value::text AS value, is_change FROM tokens WHERE owner_email='alice@x.io' ORDER BY state, is_change`,
+    );
+    const rows = tokens.rows;
+    expect(rows.filter((r) => r.state === 'WRAPPED').length).toBe(1);
+    expect(rows.filter((r) => r.state === 'VALID' && !r.is_change).length).toBe(1);
+    const change = rows.find((r) => r.is_change);
+    expect(change?.state).toBe('VALID');
+    expect(change?.value).toBe((ONE_RPOW / 2n).toString());
+  });
+
+  it('uses an exact-sum subset when one exists (no change token issued)', async () => {
+    const t = await makeTestApp({ wrapAllowlistCsv: 'alice@x.io' });
+    cleanup = t.cleanup;
+    // Alice has two 1-RPOW tokens; she wants to wrap exactly 1 RPOW.
+    await seedUser(t, 'alice@x.io', 'WALLET1', 2);
+    t.bridgeClient.queueResult({ signature: 'sig_exact' });
+    const session = signSession({ email: 'alice@x.io' }, 'x'.repeat(32), 60);
+
+    const r = await t.app.inject({
+      method: 'POST', url: '/srpow/wrap', cookies: { [SESSION_COOKIE]: session },
+      payload: { amount_base_units: ONE_RPOW.toString(), idempotency_key: 'k_exact_1' },
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().change_base_units).toBe('0');
+
+    const tokens = await t.pool.query<{ is_change: boolean }>(
+      `SELECT is_change FROM tokens WHERE owner_email='alice@x.io'`,
+    );
+    expect(tokens.rows.find((r) => r.is_change)).toBeUndefined();
   });
 
   it('replays a same-key + same-params request without double-locking', async () => {
