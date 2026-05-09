@@ -45,6 +45,7 @@ export default function App() {
             ) : (
               <NavLink to="/login">[ login ]</NavLink>
             )}
+            <a href="https://stats.rpow2.com/" target="_blank" rel="noreferrer">[ stats ]</a>{' '}
             {' · '}
             <button onClick={() => setTheme(nextTheme(theme))} title="cycle theme">[ theme: {theme} ]</button>
           </nav>
