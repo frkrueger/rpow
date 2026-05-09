@@ -12,6 +12,12 @@ export interface MeResponse {
   wrap_allowed: boolean;
   solana_wallet: string | null;
   srpow_supply_owned_base_units: string;
+  /** Per-account UTC-day mint quota. Scales with the current halving reward. */
+  daily_mint_cap_base_units: string;
+  /** Amount this account has already minted in the current UTC day. */
+  daily_minted_base_units: string;
+  /** Convenience: cap - minted (clamped at 0). */
+  daily_remaining_base_units: string;
 }
 
 export interface ChallengeResponse {

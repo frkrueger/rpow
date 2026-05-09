@@ -24,6 +24,9 @@ describe('GET /me', () => {
     const cookie = await login(ctx, 'a@b.com');
     const res = await ctx.app.inject({ method: 'GET', url: '/me', headers: { cookie } });
     expect(res.statusCode).toBe(200);
+    // Daily mint cap = currentReward * 100,000. With test schedule defaults
+    // (base reward 0.001 RPOW = 1_000_000 base units) the cap is 100 RPOW
+    // expressed as base units = '100000000000'.
     expect(res.json()).toEqual({
       email: 'a@b.com',
       balance_base_units: '0',
@@ -33,6 +36,9 @@ describe('GET /me', () => {
       wrap_allowed: false,
       solana_wallet: null,
       srpow_supply_owned_base_units: '0',
+      daily_mint_cap_base_units: '100000000000',
+      daily_minted_base_units: '0',
+      daily_remaining_base_units: '100000000000',
     });
   });
 });

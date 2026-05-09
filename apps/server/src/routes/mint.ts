@@ -9,6 +9,12 @@ import { currentRewardBaseUnits, BASE_UNITS_PER_RPOW } from '../schedule.js';
 
 const Body = z.object({ challenge_id: z.string().uuid(), solution_nonce: z.string().regex(/^\d{1,20}$/) });
 
+// Per-account per-UTC-day mint cap = (current reward) * SOLUTIONS_PER_DAY_PER_HUMAN.
+// At ~1.2 sol/sec sustained this is comfortably above an active laptop miner;
+// at 100x GPU speed a rig fills the bucket in ~15 minutes and idles until UTC
+// midnight, which is the whole point.
+const SOLUTIONS_PER_DAY_PER_HUMAN = 100_000n;
+
 export async function mintRoutes(app: FastifyInstance) {
   app.post('/mint', async (req, reply) => {
     const s = readSession(req as any, app.config.sessionSecret);
@@ -48,7 +54,30 @@ export async function mintRoutes(app: FastifyInstance) {
         maxSupplyRpow: app.config.mintMaxSupply,
       });
       if (reward === 0n) {
-        return { error: 'SUPPLY_EXHAUSTED' as const, message: '21M cap reached or reward floored' };
+        return { error: 'SUPPLY_EXHAUSTED' as const, message: 'mining cap reached or reward floored' };
+      }
+
+      // Per-account daily cap: scales with current reward so it shrinks at
+      // each halving. Atomic UPSERT-then-conditional-INCREMENT avoids races.
+      const dailyCap = reward * SOLUTIONS_PER_DAY_PER_HUMAN;
+      const todayUtc = new Date().toISOString().slice(0, 10);
+      await c.query(
+        `INSERT INTO daily_mint_buckets(email, day_utc, total_base_units)
+         VALUES($1, $2, 0)
+         ON CONFLICT (email, day_utc) DO NOTHING`,
+        [s.email, todayUtc],
+      );
+      const bucketResult = await c.query(
+        `UPDATE daily_mint_buckets
+         SET total_base_units = total_base_units + $3::bigint
+         WHERE email=$1 AND day_utc=$2 AND total_base_units + $3::bigint <= $4::bigint`,
+        [s.email, todayUtc, reward.toString(), dailyCap.toString()],
+      );
+      if (bucketResult.rowCount === 0) {
+        return {
+          error: 'DAILY_CAP_REACHED' as const,
+          message: 'daily mint quota reached for this account; resets at UTC midnight',
+        };
       }
 
       const capBaseUnits = BigInt(app.config.mintMaxSupply) * BASE_UNITS_PER_RPOW;
@@ -58,7 +87,7 @@ export async function mintRoutes(app: FastifyInstance) {
         [capBaseUnits.toString(), reward.toString()],
       );
       if (supplyResult.rowCount === 0) {
-        return { error: 'SUPPLY_EXHAUSTED' as const, message: '21M cap reached' };
+        return { error: 'SUPPLY_EXHAUSTED' as const, message: 'mining cap reached' };
       }
 
       const sig = signTokenPayload(
@@ -74,7 +103,10 @@ export async function mintRoutes(app: FastifyInstance) {
     });
 
     if ('error' in result) {
-      const status = result.error === 'CHALLENGE_EXPIRED' || result.error === 'SUPPLY_EXHAUSTED' ? 410 : 400;
+      let status: number;
+      if (result.error === 'CHALLENGE_EXPIRED' || result.error === 'SUPPLY_EXHAUSTED') status = 410;
+      else if (result.error === 'DAILY_CAP_REACHED') status = 429;
+      else status = 400;
       return reply.code(status).send(result);
     }
     return result;
