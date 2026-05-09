@@ -36,5 +36,10 @@ export function usePhantom() {
     return bs58.encode(signature);
   }
 
-  return { wallet, installed, connect, signMessage };
+  async function disconnect(): Promise<void> {
+    await window.solana?.disconnect();
+    setWallet(null);
+  }
+
+  return { wallet, installed, connect, signMessage, disconnect };
 }

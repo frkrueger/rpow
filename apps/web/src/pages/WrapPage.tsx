@@ -26,7 +26,11 @@ export function WrapPage() {
           via Phantom. The operator takes no fee and no warranty is provided. Treat
           with care.
         </p>
-        <ConnectPhantom boundWallet={wallet} onBound={(w) => { setWallet(w); refreshMe(); }} />
+        <ConnectPhantom
+          boundWallet={wallet}
+          onBound={(w) => { setWallet(w); refreshMe(); }}
+          onDisconnect={() => { setWallet(null); }}
+        />
         <div style={{ marginTop: 8 }}>
           RPOW available: <strong>{formatRpow(me.balance_base_units)}</strong>{' · '}
           SRPOW you've wrapped: <strong>{formatRpow(me.srpow_supply_owned_base_units)}</strong>

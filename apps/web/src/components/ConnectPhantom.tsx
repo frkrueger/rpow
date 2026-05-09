@@ -5,15 +5,39 @@ import { api } from '../api.js';
 interface Props {
   boundWallet: string | null;
   onBound(wallet: string): void;
+  onDisconnect?(): void;
 }
 
-export function ConnectPhantom({ boundWallet, onBound }: Props) {
+export function ConnectPhantom({ boundWallet, onBound, onDisconnect }: Props) {
   const phantom = usePhantom();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   if (boundWallet) {
-    return <div>Phantom: <code>{abbr(boundWallet)}</code></div>;
+    return (
+      <div>
+        Phantom: <code>{abbr(boundWallet)}</code>
+        {' '}
+        <a
+          href={`https://solscan.io/account/${boundWallet}`}
+          target="_blank"
+          rel="noreferrer"
+          style={{ color: '#6ee7b7', fontSize: 12 }}
+        >
+          [view]
+        </a>
+        {' '}
+        <button
+          style={{ fontSize: 12 }}
+          onClick={async () => {
+            try { await phantom.disconnect?.(); } catch {}
+            onDisconnect?.();
+          }}
+        >
+          [disconnect]
+        </button>
+      </div>
+    );
   }
   if (!phantom.installed) {
     return (
