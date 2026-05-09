@@ -45,6 +45,13 @@ export function MinePage() {
     try {
       ch = await api.challenge();
     } catch (err: any) {
+      if (err?.error === 'CHALLENGE_PENDING') {
+        // Already have an unsolved challenge — wait a moment and retry.
+        await new Promise(r => setTimeout(r, 2000));
+        if (!stopRequestedRef.current) startOne();
+        else setStatus('idle');
+        return;
+      }
       setStatus('error');
       setError(err?.message ?? 'failed to fetch challenge');
       return;
