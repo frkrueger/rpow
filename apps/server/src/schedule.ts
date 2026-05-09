@@ -10,7 +10,7 @@
 
 export const MINT_DIFFICULTY_BITS_DEFAULT = 24;
 export const BASE_UNITS_PER_RPOW = 1_000_000_000n;        // 9 decimals
-export const MINT_BASE_REWARD_BASE_UNITS = 1_000_000n;    // 0.001 RPOW
+export const MINT_BASE_REWARD_BASE_UNITS = 10_000_000n;   // 0.01 RPOW
 export const MINT_HALVING_INTERVAL_RPOW = 1_000_000;
 export const MINT_MAX_SUPPLY_RPOW = 19_000_000;
 export const MINT_SCHEDULE_OFFSET_RPOW = 9_000_000;       // halving #0 starts here
