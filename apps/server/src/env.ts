@@ -19,7 +19,7 @@ const Schema = z.object({
   RPOW_SIGNING_PUBLIC_KEY_HEX: z.string().regex(/^[0-9a-f]{64}$/),
   DIFFICULTY_BITS: z.coerce.number().int().min(4).max(40).default(28),
   DIFFICULTY_FLOOR: z.coerce.number().int().min(4).max(40).default(20),
-  MINT_MAX_SUPPLY: z.coerce.number().int().positive().default(21_000_000),
+  MINT_MAX_SUPPLY: z.coerce.number().int().positive().default(19_000_000),
   WEB_ORIGIN: z.string().url().default('http://localhost:5173'),
   TURNSTILE_SECRET: z.string().optional(),
   MAIL_THROTTLE_RPS: z.coerce.number().positive().default(4),

@@ -3,10 +3,10 @@ import { makeTestApp } from './helpers.js';
 
 // Test fixture (see helpers.ts):
 //   difficultyBits=8, difficultyFloor=4, mintMaxSupply=21 (RPOW).
-// 1 RPOW = 1_000_000_000 base units. The default halving interval (1M RPOW)
-// is far above the 21-RPOW test cap, so we never cross a halving boundary in
-// these tests: halving_index stays 0, current_reward stays at 7_812_500, and
-// next_halving_at_base_units is clamped to the maxSupply (21 * 1e9).
+// 1 RPOW = 1_000_000_000 base units. The 21-RPOW test cap is far below the
+// 9M RPOW schedule offset, so the schedule stays in epoch 0: halving_index=0,
+// current_reward = 1_000_000 (= 0.001 RPOW), and next_halving_at_base_units
+// is clamped to the maxSupply (21 * 1e9).
 
 const RPOW = 1_000_000_000n;
 const MAX_SUPPLY_BU = 21n * RPOW;
@@ -29,9 +29,9 @@ describe('GET /ledger', () => {
       base_units_per_rpow: RPOW.toString(),
       // difficultyBits=8 from fixture, well above the floor=4
       current_difficulty_bits: 8,
-      // initial reward: 1/128 RPOW = 7_812_500 base units; halves at next milestone
-      current_reward_base_units: '7812500',
-      next_reward_base_units: '3906250',
+      // initial reward: 0.001 RPOW = 1_000_000 base units; halves at next milestone
+      current_reward_base_units: '1000000',
+      next_reward_base_units: '500000',
       // halving boundary clamped to maxSupply (21 RPOW)
       next_halving_at_base_units: MAX_SUPPLY_BU.toString(),
       base_units_to_next_halving: MAX_SUPPLY_BU.toString(),

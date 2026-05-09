@@ -3,9 +3,10 @@ import { makeTestApp } from './helpers.js';
 import { findSolutionForTest } from '../src/pow.js';
 
 // In the halving schedule with test config (mintMaxSupply=21 RPOW), one mint
-// always credits MINT_BASE_REWARD_BASE_UNITS = 7,812,500 base units (the cap is
-// reached far before the first 1M-RPOW halving boundary).
-const REWARD_BASE_UNITS = 7_812_500n;
+// always credits MINT_BASE_REWARD_BASE_UNITS = 1,000,000 base units (= 0.001 RPOW).
+// Test minted_supply stays well below the 9M RPOW schedule offset, so the
+// schedule reports halving #0 throughout.
+const REWARD_BASE_UNITS = 1_000_000n;
 const ONE_RPOW = 1_000_000_000n;
 const CAP_BASE_UNITS = 21n * ONE_RPOW;            // = 21,000,000,000
 
