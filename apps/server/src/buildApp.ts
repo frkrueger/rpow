@@ -5,7 +5,7 @@ import rateLimit from '@fastify/rate-limit';
 import type { Pool } from 'pg';
 import type { Mailer } from './mailer.js';
 import type { BridgeClient } from '@rpow/solana-bridge';
-import { parseAllowlist } from './wrap-allowlist.js';
+import { parseAllowlist, type WrapAllowlist } from './wrap-allowlist.js';
 import { authRoutes } from './routes/auth.js';
 import { meRoutes } from './routes/me.js';
 import { challengeRoutes } from './routes/challenge.js';
@@ -51,7 +51,7 @@ declare module 'fastify' {
     mailer: Mailer;
     config: AppConfig;
     bridgeClient: BridgeClient;
-    wrapAllowlist: Set<string>;
+    wrapAllowlist: WrapAllowlist;
   }
 }
 
@@ -70,7 +70,8 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   app.decorate('mailer', opts.mailer);
   app.decorate('config', opts.config);
   app.decorate('bridgeClient', opts.bridgeClient);
-  app.decorate('wrapAllowlist', parseAllowlist(opts.wrapAllowlistCsv));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  app.decorate('wrapAllowlist', parseAllowlist(opts.wrapAllowlistCsv) as any);
 
   await app.register(cookie, { secret: opts.config.sessionSecret });
   await app.register(cors, {

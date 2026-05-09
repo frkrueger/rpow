@@ -3,21 +3,38 @@ import { parseAllowlist, isAllowed } from '../src/wrap-allowlist.js';
 
 describe('wrap-allowlist', () => {
   it('parses comma-separated emails, lowercased, trimmed', () => {
-    const set = parseAllowlist(' Alice@Example.com ,  bob@test.io ,carol@x.io ');
-    expect(set.size).toBe(3);
-    expect(set.has('alice@example.com')).toBe(true);
-    expect(set.has('bob@test.io')).toBe(true);
+    const list = parseAllowlist(' Alice@Example.com ,  bob@test.io ,carol@x.io ');
+    expect(list.kind).toBe('list');
+    if (list.kind !== 'list') throw new Error('expected list kind');
+    expect(list.emails.size).toBe(3);
+    expect(list.emails.has('alice@example.com')).toBe(true);
+    expect(list.emails.has('bob@test.io')).toBe(true);
   });
 
   it('handles empty / whitespace-only string', () => {
-    expect(parseAllowlist('').size).toBe(0);
-    expect(parseAllowlist('   ').size).toBe(0);
-    expect(parseAllowlist(',').size).toBe(0);
+    for (const csv of ['', '   ', ',']) {
+      const list = parseAllowlist(csv);
+      expect(list.kind).toBe('list');
+      if (list.kind !== 'list') throw new Error('expected list kind');
+      expect(list.emails.size).toBe(0);
+    }
+  });
+
+  it('treats "*" as a wildcard that allows everyone', () => {
+    const list = parseAllowlist('*');
+    expect(list.kind).toBe('all');
+    expect(isAllowed(list, 'anyone@anywhere.com')).toBe(true);
+    expect(isAllowed(list, 'someone-else@whatever.io')).toBe(true);
   });
 
   it('isAllowed is case-insensitive', () => {
-    const set = parseAllowlist('alice@example.com');
-    expect(isAllowed(set, 'ALICE@example.COM')).toBe(true);
-    expect(isAllowed(set, 'mallory@example.com')).toBe(false);
+    const list = parseAllowlist('alice@example.com');
+    expect(isAllowed(list, 'ALICE@example.COM')).toBe(true);
+    expect(isAllowed(list, 'mallory@example.com')).toBe(false);
+  });
+
+  it('empty allowlist allows no one', () => {
+    const list = parseAllowlist('');
+    expect(isAllowed(list, 'anyone@x.com')).toBe(false);
   });
 });

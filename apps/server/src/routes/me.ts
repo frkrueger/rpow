@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { readSession } from './auth.js';
 import { currentRewardBaseUnits } from '../schedule.js';
+import { isAllowed } from '../wrap-allowlist.js';
 
 const SOLUTIONS_PER_DAY_PER_HUMAN = 100_000n;
 
@@ -64,7 +65,7 @@ export async function meRoutes(app: FastifyInstance) {
       minted_base_units: minted[0]!.n,
       sent_base_units: sent[0]!.n,
       received_base_units: recv[0]!.n,
-      wrap_allowed: app.wrapAllowlist.has(email.toLowerCase()),
+      wrap_allowed: isAllowed(app.wrapAllowlist, email),
       solana_wallet: userRow[0]?.solana_wallet ?? null,
       srpow_supply_owned_base_units: wrappedRow[0]?.n ?? '0',
       daily_mint_cap_base_units: dailyCap.toString(),
