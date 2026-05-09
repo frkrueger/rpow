@@ -102,7 +102,11 @@ export function MinePage() {
 
   function stop() {
     stopRequestedRef.current = true;
-    workerRef.current?.postMessage({ type: 'abort' });
+    if (workerRef.current) {
+      workerRef.current.postMessage({ type: 'abort' });
+    } else {
+      setStatus('idle');
+    }
   }
 
   function fmtRate() {
