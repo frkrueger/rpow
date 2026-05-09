@@ -53,7 +53,7 @@ export async function sendRoutes(app: FastifyInstance) {
 
     type SendResult =
       | { ok: true; transferred_base_units: string; recipient_email: string; transfer_id: string; pending?: boolean }
-      | { error: 'BAD_REQUEST' | 'INSUFFICIENT_BALANCE' | 'RECIPIENT_UNSUBSCRIBED' | 'EXACT_SUM_REQUIRED'; message: string; status: number };
+      | { error: 'BAD_REQUEST' | 'INSUFFICIENT_BALANCE' | 'RECIPIENT_UNSUBSCRIBED'; message: string; status: number };
 
     let out!: SendResult;
     try {
@@ -108,45 +108,63 @@ export async function sendRoutes(app: FastifyInstance) {
           return { error: 'INSUFFICIENT_BALANCE' as const, message: 'not enough tokens', status: 400 };
         }
 
-        // Greedy exact-sum: walk largest-first, skip rows that would overshoot.
+        // Greedy largest-first: accumulate until sum >= target, then trim
+        // unnecessary trailing tokens. Overshoot is handled by issuing a
+        // change token back to the sender.
         const picked: { id: string; value: bigint }[] = [];
         let total = 0n;
         for (const row of pool) {
           const v = BigInt(row.value);
-          if (total + v <= target) {
-            picked.push({ id: row.id, value: v });
-            total += v;
-            if (total === target) break;
-          }
+          picked.push({ id: row.id, value: v });
+          total += v;
+          if (total >= target) break;
         }
-        if (total !== target) {
-          return {
-            error: 'EXACT_SUM_REQUIRED' as const,
-            message: 'your tokens cannot be combined to exactly equal that amount; pick an amount that matches your denominations',
-            status: 400,
-          };
+        while (picked.length > 1) {
+          const tail = picked[picked.length - 1].value;
+          if (total - tail >= target) { total -= tail; picked.pop(); }
+          else break;
         }
+        if (total < target) {
+          return { error: 'INSUFFICIENT_BALANCE' as const, message: 'not enough tokens', status: 400 };
+        }
+        const change = total - target;
 
         const recipientExists = await c.query('SELECT 1 FROM users WHERE email=$1', [recipient]);
 
         if (recipientExists.rowCount) {
-          // Existing recipient: invalidate sender tokens, mint fresh tokens for
-          // recipient with the SAME per-token denominations.
           const transferId = randomUUID();
-          const ownerHash = createHash('sha256').update(recipient).digest('hex');
           const issuedAt = new Date();
 
+          // Invalidate sender tokens.
           for (const t of picked) {
-            const newId = randomUUID();
-            const sig = signTokenPayload(
-              { id: newId, owner_email_hash: ownerHash, value: t.value, issued_at: issuedAt.toISOString() },
+            await c.query(`UPDATE tokens SET state='INVALIDATED', invalidated_at=now() WHERE id=$1`, [t.id]);
+          }
+
+          // Mint a single token for the recipient with the exact target amount.
+          const recipientHash = createHash('sha256').update(recipient).digest('hex');
+          const recipientTokenId = randomUUID();
+          const recipientSig = signTokenPayload(
+            { id: recipientTokenId, owner_email_hash: recipientHash, value: target, issued_at: issuedAt.toISOString() },
+            app.config.signingPrivateKeyHex,
+          );
+          await c.query(
+            `INSERT INTO tokens(id, owner_email, value, state, issued_at, parent_token_id, server_sig)
+             VALUES($1, $2, $3, 'VALID', $4, $5, $6)`,
+            [recipientTokenId, recipient, target.toString(), issuedAt, picked[0].id, recipientSig],
+          );
+
+          // Issue change back to sender if overshoot.
+          if (change > 0n) {
+            const senderHash = createHash('sha256').update(sender).digest('hex');
+            const changeId = randomUUID();
+            const changeSig = signTokenPayload(
+              { id: changeId, owner_email_hash: senderHash, value: change, issued_at: issuedAt.toISOString() },
               app.config.signingPrivateKeyHex,
             );
-            await c.query(`UPDATE tokens SET state='INVALIDATED', invalidated_at=now() WHERE id=$1`, [t.id]);
             await c.query(
               `INSERT INTO tokens(id, owner_email, value, state, issued_at, parent_token_id, server_sig)
                VALUES($1, $2, $3, 'VALID', $4, $5, $6)`,
-              [newId, recipient, t.value.toString(), issuedAt, t.id, sig],
+              [changeId, sender, change.toString(), issuedAt, picked[0].id, changeSig],
             );
           }
 
@@ -174,9 +192,23 @@ export async function sendRoutes(app: FastifyInstance) {
           return { error: 'RECIPIENT_UNSUBSCRIBED' as const, message: 'recipient has unsubscribed and cannot receive RPOW transfers', status: 400 };
         }
 
-        // Recipient does not exist: invalidate sender tokens and create a pending claim.
+        // Recipient does not exist: invalidate sender tokens, issue change, create pending claim.
         for (const t of picked) {
           await c.query(`UPDATE tokens SET state='INVALIDATED', invalidated_at=now() WHERE id=$1`, [t.id]);
+        }
+        if (change > 0n) {
+          const senderHash = createHash('sha256').update(sender).digest('hex');
+          const changeId = randomUUID();
+          const issuedAt = new Date();
+          const changeSig = signTokenPayload(
+            { id: changeId, owner_email_hash: senderHash, value: change, issued_at: issuedAt.toISOString() },
+            app.config.signingPrivateKeyHex,
+          );
+          await c.query(
+            `INSERT INTO tokens(id, owner_email, value, state, issued_at, parent_token_id, server_sig)
+             VALUES($1, $2, $3, 'VALID', $4, $5, $6)`,
+            [changeId, sender, change.toString(), issuedAt, picked[0].id, changeSig],
+          );
         }
 
         const claimToken = randomBytes(32).toString('base64url');

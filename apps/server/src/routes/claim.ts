@@ -35,11 +35,10 @@ export async function claimRoutes(app: FastifyInstance) {
         [pt.recipient_email],
       );
 
-      // Mint a single fresh token to recipient with value = pt.amount in base
-      // units. parent_token_id=NULL so it counts as "minted" supply for
-      // /ledger purposes and must increment app_counters.minted_supply by the
-      // base-unit total. No cap check here: the sender's tokens were already
-      // burned; refusing to claim would strand them.
+      // Issue a fresh token to recipient. Uses parent_token_id to link back
+      // to the sender's invalidated tokens (transfer, not new issuance).
+      // Do NOT increment minted_supply — these tokens were already counted
+      // when the sender originally mined them.
       const issuedAt = new Date();
       const ownerHash = createHash('sha256').update(pt.recipient_email).digest('hex');
       const newId = randomUUID();
@@ -51,10 +50,6 @@ export async function claimRoutes(app: FastifyInstance) {
         `INSERT INTO tokens(id, owner_email, value, state, issued_at, server_sig)
          VALUES($1, $2, $3, 'VALID', $4, $5)`,
         [newId, pt.recipient_email, BigInt(pt.amount).toString(), issuedAt, sig],
-      );
-      await c.query(
-        `UPDATE app_counters SET value = value + $1::bigint WHERE name='minted_supply'`,
-        [BigInt(pt.amount).toString()],
       );
 
       // Record the completed transfer in the ledger (separate idempotency-key namespace).

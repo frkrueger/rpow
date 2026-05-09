@@ -148,6 +148,7 @@ export async function srpowRoutes(app: FastifyInstance) {
       if (code === 'DUP_DIFFERENT_PARAMS') return reply.code(409).send({ error: 'BAD_REQUEST', message: 'idempotency_key reused with different parameters' });
       if (code === 'NO_WALLET_BOUND') return reply.code(400).send({ error: 'NO_WALLET_BOUND', message: 'bind a Solana wallet first' });
       if (code === 'INSUFFICIENT_BALANCE') return reply.code(400).send({ error: 'INSUFFICIENT_BALANCE', message: 'not enough VALID tokens' });
+      return reply.code(500).send({ error: 'INTERNAL', message: 'unexpected wrap error' });
     }
 
     // Replay path: a previous call already completed Phase 1+2 (or refunded).

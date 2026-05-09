@@ -12,10 +12,12 @@ export interface SendArgs {
 export interface Mailer { send(args: SendArgs): Promise<void> }
 
 export class ResendMailer implements Mailer {
-  constructor(private apiKey: string, private from: string) {}
+  private client: Resend;
+  constructor(private apiKey: string, private from: string) {
+    this.client = new Resend(apiKey);
+  }
   async send(a: SendArgs): Promise<void> {
-    const c = new Resend(this.apiKey);
-    const { error } = await c.emails.send({
+    const { error } = await this.client.emails.send({
       from: this.from, to: a.to, subject: a.subject, html: a.html, text: a.text,
       headers: a.headers,
     });

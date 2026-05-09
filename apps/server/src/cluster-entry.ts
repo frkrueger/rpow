@@ -14,9 +14,16 @@ if (cluster.isPrimary) {
 
   console.log(`primary ${process.pid}: migrations done, spawning ${WORKERS} workers`);
   for (let i = 0; i < WORKERS; i++) cluster.fork();
+  const lastSpawn = new Map<number, number>();
   cluster.on('exit', (worker, code) => {
     console.log(`worker ${worker.process.pid} exited (code ${code}), respawning`);
-    cluster.fork();
+    const now = Date.now();
+    const prev = lastSpawn.get(worker.id) ?? 0;
+    const delay = (now - prev < 5000) ? 3000 : 0;
+    setTimeout(() => {
+      const w = cluster.fork();
+      lastSpawn.set(w.id, Date.now());
+    }, delay);
   });
 } else {
   await import('./server.js');
