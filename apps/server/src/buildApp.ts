@@ -1,6 +1,7 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 import type { Pool } from 'pg';
 import type { Mailer } from './mailer.js';
 import type { BridgeClient } from '@rpow/solana-bridge';
@@ -75,6 +76,20 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   await app.register(cors, {
     origin: opts.config.webOrigin,
     credentials: true,
+  });
+
+  // Per-route opt-in rate limiter. Globally generous (effectively off) so
+  // routes that don't opt in are unaffected; /mint sets a tight per-IP cap
+  // via its `config.rateLimit` option (anti-GPU tier 1c).
+  // NB: in-memory store is per-worker, so the effective limit is
+  // (per-route max * worker count). With 4 workers and max=10/min, the real
+  // ceiling is ~40/IP/min — still far below GPU rig throughput.
+  await app.register(rateLimit, {
+    global: false,
+    max: 100_000,
+    timeWindow: '1 minute',
+    keyGenerator: (req) => req.ip,
+    skipOnError: true,
   });
 
   app.get('/health', async () => ({ ok: true }));

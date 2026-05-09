@@ -16,7 +16,18 @@ const Body = z.object({ challenge_id: z.string().uuid(), solution_nonce: z.strin
 const SOLUTIONS_PER_DAY_PER_HUMAN = 100_000n;
 
 export async function mintRoutes(app: FastifyInstance) {
-  app.post('/mint', async (req, reply) => {
+  // Per-IP rate limit: 10 mints/IP/minute per worker. With 4 workers the real
+  // ceiling is ~40 mints/IP/min. This is a backstop against scripted /mint
+  // floods from a single IP — the per-account daily cap is the primary
+  // anti-GPU lever, this just makes the cap harder to fill in a burst.
+  app.post(
+    '/mint',
+    {
+      config: {
+        rateLimit: { max: 10, timeWindow: '1 minute' },
+      },
+    },
+    async (req, reply) => {
     const s = readSession(req as any, app.config.sessionSecret);
     if (!s) return reply.code(401).send({ error: 'UNAUTHORIZED', message: 'login required' });
     const parsed = Body.safeParse(req.body);
