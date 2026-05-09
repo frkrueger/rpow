@@ -100,6 +100,7 @@ const app = await buildApp({
     signingPublicKeyHex: env.RPOW_SIGNING_PUBLIC_KEY_HEX,
     webOrigin: env.WEB_ORIGIN,
     secureCookies: env.NODE_ENV === 'production',
+    turnstileSecret: env.TURNSTILE_SECRET,
   },
 });
 await app.listen({ host: '0.0.0.0', port: env.PORT });

@@ -27,6 +27,12 @@ export interface AppConfig {
   signingPublicKeyHex: string;
   webOrigin: string;
   secureCookies: boolean;
+  /**
+   * Cloudflare Turnstile secret. When set, /auth/request requires a valid
+   * `turnstile_token` in the body. When undefined, the gate is skipped
+   * (dev/test environments).
+   */
+  turnstileSecret?: string;
 }
 
 export interface BuildAppOptions {

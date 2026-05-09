@@ -8,6 +8,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&display=swap" />
     <link rel="stylesheet" href="/src/styles.css" />
+    <!-- Cloudflare Turnstile (loaded only if VITE_TURNSTILE_SITE_KEY is configured;
+         the script is harmless when no widget mounts). -->
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
   </head>
   <body>
     <div id="root"></div>

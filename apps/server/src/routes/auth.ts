@@ -5,7 +5,30 @@ import { hashToken, issueMagicLink } from '../magic.js';
 import { signSession, SESSION_COOKIE, SESSION_TTL_SECONDS, verifySession } from '../session.js';
 import { makeUnsubToken } from '../unsub.js';
 
-const RequestBody = z.object({ email: z.string().email() });
+const RequestBody = z.object({
+  email: z.string().email(),
+  turnstile_token: z.string().min(1).max(2048).optional(),
+});
+
+// Verify a Cloudflare Turnstile token. Returns true if the token is valid for
+// the given secret. Returns false on any failure (network, malformed JSON,
+// Cloudflare-side rejection). Caller decides how to surface the rejection.
+async function verifyTurnstile(secret: string, token: string, ip: string): Promise<boolean> {
+  try {
+    const body = new URLSearchParams({ secret, response: token, remoteip: ip });
+    const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      body,
+      // Don't let a slow Cloudflare hold the magic-link path forever.
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (!res.ok) return false;
+    const json = await res.json() as { success?: boolean };
+    return json.success === true;
+  } catch {
+    return false;
+  }
+}
 
 export async function authRoutes(app: FastifyInstance) {
   app.post('/auth/request', async (req, reply) => {
@@ -13,6 +36,19 @@ export async function authRoutes(app: FastifyInstance) {
     if (!parsed.success) return reply.code(400).send({ error: 'BAD_REQUEST', message: 'invalid email' });
     const email = parsed.data.email.toLowerCase().trim();
     const ip = (req.ip ?? '0.0.0.0');
+
+    // Turnstile gate: only enforced when the server is configured with a
+    // secret. In dev/test envs without TURNSTILE_SECRET the route stays open.
+    if (app.config.turnstileSecret) {
+      const token = parsed.data.turnstile_token;
+      if (!token) {
+        return reply.code(400).send({ error: 'TURNSTILE_REQUIRED', message: 'human verification required' });
+      }
+      const ok = await verifyTurnstile(app.config.turnstileSecret, token, ip);
+      if (!ok) {
+        return reply.code(401).send({ error: 'TURNSTILE_INVALID', message: 'human verification failed' });
+      }
+    }
 
     const cooldown = await app.pool.query<{ created_at: Date }>(
       `SELECT created_at FROM magic_links WHERE email=$1 ORDER BY created_at DESC LIMIT 1`,
