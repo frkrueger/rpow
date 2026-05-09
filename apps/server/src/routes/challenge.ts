@@ -37,20 +37,20 @@ export async function challengeRoutes(app: FastifyInstance) {
     const s = readSession(req as any, app.config.sessionSecret);
     if (!s) return reply.code(401).send({ error: 'UNAUTHORIZED', message: 'login required' });
 
-    // Don't issue a new challenge if this user already has an unsolved one.
-    const { rows: pending } = await app.pool.query<{ id: string; expires_at: Date }>(
-      `SELECT id, expires_at FROM challenges
+    // Return existing unsolved challenge instead of issuing a new one.
+    const { rows: pending } = await app.pool.query<{ id: string; nonce_prefix: Buffer; difficulty_bits: number; expires_at: Date }>(
+      `SELECT id, nonce_prefix, difficulty_bits, expires_at FROM challenges
        WHERE user_email=$1 AND claimed_at IS NULL AND expires_at > now()
        ORDER BY issued_at DESC LIMIT 1`,
       [s.email],
     );
     if (pending[0]) {
-      return reply.code(429).send({
-        error: 'CHALLENGE_PENDING',
-        message: 'solve or wait for your current challenge to expire',
+      return {
         challenge_id: pending[0].id,
+        nonce_prefix: pending[0].nonce_prefix.toString('hex'),
+        difficulty_bits: pending[0].difficulty_bits,
         expires_at: pending[0].expires_at.toISOString(),
-      });
+      };
     }
 
     const minted = await mintedSupplyBaseUnits();
