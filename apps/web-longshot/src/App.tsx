@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { fetchMe, fetchAccess, spin, formatRpow, type Me, type SpinResponse } from './api.js';
 import { ODDS_TIERS, type OddsChoice, payoutMultipleFor, winProbabilityFor } from './odds.js';
+import { playSpin, playWin, playLose, isMuted, toggleMute } from './sound.js';
 
 const MIN_BASE_UNITS = 10_000_000n;     // 0.01 RPOW
 const MAX_BASE_UNITS = 1_000_000_000n;  // 1.0 RPOW
@@ -14,6 +15,7 @@ export function App() {
   const [odds, setOdds] = useState<OddsChoice>('1:1');
   const [busy, setBusy] = useState(false);
   const [last, setLast] = useState<SpinResponse | null>(null);
+  const [muted, setMuted] = useState(isMuted());
 
   useEffect(() => {
     fetchMe().then(setMe).catch(e => setError(String(e)));
@@ -24,10 +26,12 @@ export function App() {
     if (!me) return;
     setBusy(true);
     setLast(null);
+    playSpin();
     try {
       const r = await spin(stake.toString(), odds);
       setLast(r);
       setMe({ ...me, balance_base_units: r.new_balance_base_units });
+      if (r.outcome === 'WIN') playWin(); else playLose();
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -52,6 +56,12 @@ export function App() {
 
   return (
     <main>
+      <button
+        className="mute"
+        onClick={() => setMuted(toggleMute())}
+        title={muted ? 'unmute' : 'mute'}
+        aria-label={muted ? 'unmute' : 'mute'}
+      >{muted ? '🔇' : '🔊'}</button>
       <h1>RPOW Long Shot</h1>
       <p>balance: <strong>{formatRpow(me.balance_base_units)} RPOW</strong></p>
 

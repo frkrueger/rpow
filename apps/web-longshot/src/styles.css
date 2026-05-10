@@ -7,7 +7,7 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--bg); color: var(--fg); font-family: ui-monospace, monospace; }
-main { max-width: 720px; margin: 40px auto; padding: 0 24px; }
+main { max-width: 720px; margin: 40px auto; padding: 0 24px; position: relative; }
 h1 { font-size: 1.5rem; letter-spacing: 0.04em; }
 
 .card {
@@ -48,3 +48,13 @@ input[type="range"] { width: 100%; accent-color: var(--accent); margin: 12px 0 1
 .result.win { color: var(--accent); }
 .result.lose { color: var(--warn); }
 .footnote { color: var(--dim); font-size: 0.78rem; margin-top: 32px; }
+.mute {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  background: transparent;
+  border: 0;
+  color: var(--dim);
+  font-size: 1.2rem;
+  cursor: pointer;
+}
