@@ -32,7 +32,7 @@ const Schema = z.object({
   SRPOW_COMMITMENT: z.enum(['confirmed','finalized']).default('confirmed'),
   SRPOW_WRAP_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
   LONGSHOT_MIN_BASE_UNITS: z.coerce.number().int().positive().default(10_000_000),
-  LONGSHOT_MAX_BASE_UNITS: z.coerce.number().int().positive().default(1_000_000_000),
+  LONGSHOT_MAX_BASE_UNITS: z.coerce.number().int().positive().default(10_000_000_000),
   LONGSHOT_ALLOWED_EMAILS: z.string().default('frkrueger@mac.com'),
   // CSV of emails treated as trusted operators. Bypasses /auth/request
   // cooldown+caps and /challenge per-user lock+cooldown.

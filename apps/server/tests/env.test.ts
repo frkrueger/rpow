@@ -105,9 +105,9 @@ describe('parseEnv', () => {
       RPOW_SIGNING_PRIVATE_KEY_HEX: '00'.repeat(32),
       RPOW_SIGNING_PUBLIC_KEY_HEX: '00'.repeat(32),
     });
-    // Defaults: 0.01 RPOW = 10_000_000 base units, 1.0 RPOW = 1_000_000_000 base units
+    // Defaults: 0.01 RPOW = 10_000_000 base units, 10 RPOW = 10_000_000_000 base units
     expect(env.LONGSHOT_MIN_BASE_UNITS).toBe(10_000_000);
-    expect(env.LONGSHOT_MAX_BASE_UNITS).toBe(1_000_000_000);
+    expect(env.LONGSHOT_MAX_BASE_UNITS).toBe(10_000_000_000);
   });
 
   it('LONGSHOT_ALLOWED_EMAILS defaults to frkrueger@mac.com', () => {
