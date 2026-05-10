@@ -94,6 +94,17 @@ describe('migration 014: gladiator', () => {
     await expect(insertUserNoEmail()).rejects.toThrow();
   });
 
+  it('enforces gladiator_chat_messages SYSTEM-must-not-have-account_email CHECK constraint', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    // SYSTEM row with account_email should fail (inverse direction of the biconditional)
+    await ctx.pool.query(`INSERT INTO users(email) VALUES('m@n.com')`);
+    const insertSystemWithEmail = () => ctx.pool.query(
+      `INSERT INTO gladiator_chat_messages(id, kind, account_email, body)
+       VALUES('00000000-0000-0000-0000-000000000005', 'SYSTEM', 'm@n.com', 'hello')`,
+    );
+    await expect(insertSystemWithEmail()).rejects.toThrow();
+  });
+
   it('partial unique index gladiator_sessions_one_open_per_user rejects two OPEN rows for same user', async () => {
     const ctx = await makeTestApp(); cleanup = ctx.cleanup;
     await ctx.pool.query(`INSERT INTO users(email) VALUES('g@h.com')`);

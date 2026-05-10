@@ -150,4 +150,51 @@ describe('parseEnv', () => {
       LONGSHOT_MAX_BASE_UNITS: '100',
     })).toThrow();
   });
+
+  it('parses GLADIATOR_* vars with defaults', () => {
+    const env = parseEnv({
+      DATABASE_URL: 'postgres://u:p@h/db',
+      RESEND_API_KEY: 'rk_test',
+      EMAIL_FROM: 'no-reply@rpow2.com',
+      SESSION_SECRET: 'a'.repeat(32),
+      MAGIC_LINK_BASE_URL: 'http://localhost:8080',
+      RPOW_SIGNING_PRIVATE_KEY_HEX: '00'.repeat(32),
+      RPOW_SIGNING_PUBLIC_KEY_HEX: '00'.repeat(32),
+    });
+    expect(env.GLADIATOR_MIN_BET_BASE_UNITS).toBe(10_000_000);
+    expect(env.GLADIATOR_MAX_BET_BASE_UNITS).toBe(10_000_000_000);
+    expect(env.GLADIATOR_MAX_BANKROLL_BASE_UNITS).toBe(100_000_000_000);
+    expect(env.GLADIATOR_SESSION_TTL_HOURS).toBe(48);
+    expect(env.GLADIATOR_CHAT_RETENTION_DAYS).toBe(30);
+    expect(env.GLADIATOR_ALLOWED_EMAILS).toBe('*');
+    expect(env.GLADIATOR_WEB_ORIGIN).toBe('https://gladiator.rpow2.com');
+  });
+
+  it('rejects GLADIATOR_MAX_BET_BASE_UNITS less than GLADIATOR_MIN_BET_BASE_UNITS', () => {
+    expect(() => parseEnv({
+      DATABASE_URL: 'postgres://u:p@h/db',
+      RESEND_API_KEY: 'rk_test',
+      EMAIL_FROM: 'no-reply@rpow2.com',
+      SESSION_SECRET: 'a'.repeat(32),
+      MAGIC_LINK_BASE_URL: 'http://localhost:8080',
+      RPOW_SIGNING_PRIVATE_KEY_HEX: '00'.repeat(32),
+      RPOW_SIGNING_PUBLIC_KEY_HEX: '00'.repeat(32),
+      GLADIATOR_MIN_BET_BASE_UNITS: '1000000000',
+      GLADIATOR_MAX_BET_BASE_UNITS: '100',
+    })).toThrow();
+  });
+
+  it('rejects GLADIATOR_MAX_BANKROLL_BASE_UNITS less than GLADIATOR_MAX_BET_BASE_UNITS', () => {
+    expect(() => parseEnv({
+      DATABASE_URL: 'postgres://u:p@h/db',
+      RESEND_API_KEY: 'rk_test',
+      EMAIL_FROM: 'no-reply@rpow2.com',
+      SESSION_SECRET: 'a'.repeat(32),
+      MAGIC_LINK_BASE_URL: 'http://localhost:8080',
+      RPOW_SIGNING_PRIVATE_KEY_HEX: '00'.repeat(32),
+      RPOW_SIGNING_PUBLIC_KEY_HEX: '00'.repeat(32),
+      GLADIATOR_MAX_BET_BASE_UNITS: '1000000000',
+      GLADIATOR_MAX_BANKROLL_BASE_UNITS: '100',
+    })).toThrow();
+  });
 });
