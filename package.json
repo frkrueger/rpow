@@ -3,11 +3,12 @@
   "private": true,
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
-    "build": "tsc -b apps/server packages/shared packages/solana-bridge && npm --workspace apps/web run build",
-    "test": "npm --workspace packages/shared test && npm --workspace packages/solana-bridge test && npm --workspace apps/server test && npm --workspace apps/web test",
+    "build": "tsc -b apps/server packages/shared packages/solana-bridge && npm --workspace apps/web run build && npm --workspace apps/web-longshot run build",
+    "test": "npm --workspace packages/shared test && npm --workspace packages/solana-bridge test && npm --workspace apps/server test && npm --workspace apps/web test && npm --workspace apps/web-longshot test",
     "lint": "tsc -b --noEmit && eslint .",
     "dev:server": "npm --workspace apps/server run dev",
-    "dev:web": "npm --workspace apps/web run dev"
+    "dev:web": "npm --workspace apps/web run dev",
+    "dev:longshot": "npm --workspace apps/web-longshot run dev"
   },
   "engines": { "node": ">=22.0.0" },
   "devDependencies": {

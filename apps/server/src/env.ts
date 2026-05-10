@@ -21,6 +21,7 @@ const Schema = z.object({
   DIFFICULTY_FLOOR: z.coerce.number().int().min(4).max(40).default(20),
   MINT_MAX_SUPPLY: z.coerce.number().int().positive().default(19_000_000),
   WEB_ORIGIN: z.string().url().default('http://localhost:5173'),
+  LONGSHOT_WEB_ORIGIN: z.string().url().default('https://longshot.rpow2.com'),
   TURNSTILE_SECRET: z.string().optional(),
   MAIL_THROTTLE_RPS: z.coerce.number().positive().default(4),
   MAIL_THROTTLE_MAX_QUEUE: z.coerce.number().int().positive().default(200),
@@ -30,6 +31,9 @@ const Schema = z.object({
   WRAP_ALLOWED_EMAILS: z.string().default(''),                     // CSV, may be empty
   SRPOW_COMMITMENT: z.enum(['confirmed','finalized']).default('confirmed'),
   SRPOW_WRAP_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
+  LONGSHOT_MIN_BASE_UNITS: z.coerce.number().int().positive().default(10_000_000),
+  LONGSHOT_MAX_BASE_UNITS: z.coerce.number().int().positive().default(1_000_000_000),
+  LONGSHOT_ALLOWED_EMAILS: z.string().default('frkrueger@mac.com'),
 }).superRefine((v, ctx) => {
   if (v.MAILER === 'resend' && !v.RESEND_API_KEY) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['RESEND_API_KEY'], message: 'required when MAILER=resend' });
@@ -42,6 +46,9 @@ const Schema = z.object({
   }
   if (v.MAILER === 'smtp' || v.MAILER === 'hybrid') {
     if (!v.SMTP_HOST) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['SMTP_HOST'], message: 'required when MAILER=smtp/hybrid' });
+  }
+  if (v.LONGSHOT_MAX_BASE_UNITS < v.LONGSHOT_MIN_BASE_UNITS) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['LONGSHOT_MAX_BASE_UNITS'], message: 'LONGSHOT_MAX_BASE_UNITS must be >= LONGSHOT_MIN_BASE_UNITS' });
   }
 });
 

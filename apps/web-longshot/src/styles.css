@@ -1,0 +1,78 @@
+:root {
+  --bg: #0a0a0a;
+  --fg: #e5e5e5;
+  --dim: #666;
+  --accent: #4ade80;
+  --warn: #f87171;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--fg); font-family: ui-monospace, monospace; }
+main { max-width: 720px; margin: 40px auto; padding: 0 24px; position: relative; }
+h1 { font-size: 1.5rem; letter-spacing: 0.04em; }
+
+.card {
+  border: 1px solid #222;
+  padding: 20px;
+  margin: 24px 0;
+  background: #111;
+}
+.row { display: flex; justify-content: space-between; align-items: baseline; }
+input[type="range"] { width: 100%; accent-color: var(--accent); margin: 12px 0 18px; }
+.pills { display: flex; gap: 8px; margin-bottom: 12px; }
+.pill {
+  flex: 1;
+  background: transparent;
+  border: 1px solid #333;
+  color: var(--fg);
+  padding: 8px 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.pill.active { background: var(--accent); color: #000; border-color: var(--accent); }
+.hint { color: var(--dim); font-size: 0.9rem; }
+.primary {
+  display: block;
+  width: 100%;
+  background: var(--accent);
+  color: #000;
+  border: 0;
+  padding: 14px;
+  font-family: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+  margin-top: 8px;
+}
+.primary:disabled { background: #333; color: #888; cursor: not-allowed; }
+.result { margin-top: 16px; font-size: 1.4rem; font-weight: 700; }
+.result.win { color: var(--accent); }
+.result.lose { color: var(--warn); }
+.footnote { color: var(--dim); font-size: 0.78rem; margin-top: 32px; }
+.mute {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  background: transparent;
+  border: 0;
+  color: var(--dim);
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.history { margin-top: 32px; }
+.history h2 { font-size: 0.9rem; letter-spacing: 0.1em; color: var(--dim); text-transform: uppercase; }
+.history ul { list-style: none; padding: 0; margin: 0; font-family: ui-monospace, monospace; }
+.history li {
+  display: grid;
+  grid-template-columns: 90px 60px 1fr 60px 100px;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid #1a1a1a;
+  font-size: 0.86rem;
+}
+.history .when { color: var(--dim); }
+.history .outcome { font-weight: 700; }
+.history li.win .outcome, .history li.win .delta { color: var(--accent); }
+.history li.lose .outcome, .history li.lose .delta { color: var(--warn); }
+.history .delta { text-align: right; }
+.history .stake { color: var(--dim); }

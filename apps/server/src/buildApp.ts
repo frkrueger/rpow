@@ -17,6 +17,7 @@ import { ledgerRoutes } from './routes/ledger.js';
 import { unsubscribeRoutes } from './routes/unsubscribe.js';
 import { phantomRoutes } from './routes/phantom.js';
 import { srpowRoutes } from './routes/srpow.js';
+import { longshotRoutes } from './routes/longshot.js';
 
 export interface AppConfig {
   sessionSecret: string;
@@ -27,6 +28,13 @@ export interface AppConfig {
   signingPrivateKeyHex: string;
   signingPublicKeyHex: string;
   webOrigin: string;
+  longShotWebOrigin: string;
+  /** Min stake in base units for RPOW Long Shot. */
+  longShotMinBaseUnits: number;
+  /** Max stake in base units for RPOW Long Shot. */
+  longShotMaxBaseUnits: number;
+  /** CSV of emails allowed to play; '*' opens to all. */
+  longShotAllowedEmails: string;
   secureCookies: boolean;
   /**
    * Cloudflare Turnstile secret. When set, /auth/request requires a valid
@@ -74,8 +82,15 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   app.decorate('wrapAllowlist', parseAllowlist(opts.wrapAllowlistCsv) as any);
 
   await app.register(cookie, { secret: opts.config.sessionSecret });
+  // Allow both the main rpow2.com frontend and the longshot.rpow2.com
+  // subdomain frontend. Both share the .rpow2.com session cookie via
+  // credentials=include and need credentialed-CORS to api.rpow2.com.
+  const allowedOrigins = [opts.config.webOrigin, opts.config.longShotWebOrigin];
   await app.register(cors, {
-    origin: opts.config.webOrigin,
+    origin: (origin, cb) => {
+      if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+      cb(null, false);
+    },
     credentials: true,
   });
 
@@ -105,6 +120,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   await app.register(unsubscribeRoutes);
   await app.register(phantomRoutes);
   await app.register(srpowRoutes);
+  await app.register(longshotRoutes);
 
   app.get('/.well-known/rpow-pubkey.pem', async (_req, reply) => {
     const pubDer = Buffer.concat([
