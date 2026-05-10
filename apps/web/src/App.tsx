@@ -10,6 +10,7 @@ import { SendPage } from './pages/Send.js';
 import { ActivityPage } from './pages/Activity.js';
 import { LedgerPage } from './pages/Ledger.js';
 import { WrapPage } from './pages/WrapPage.js';
+import { AppsPage } from './pages/Apps.js';
 
 const HEADER = [
   '+======================================================================+',
@@ -45,6 +46,7 @@ export default function App() {
             ) : (
               <NavLink to="/login">[ login ]</NavLink>
             )}
+            <NavLink to="/apps">[ apps ]</NavLink>{' '}
             <a href="https://stats.rpow2.com/" target="_blank" rel="noreferrer">[ stats ]</a>{' '}
             {' · '}
             <button onClick={() => setTheme(nextTheme(theme))} title="cycle theme">[ theme: {theme} ]</button>
@@ -59,6 +61,7 @@ export default function App() {
             <Route path="/activity" element={<ActivityPage />} />
             <Route path="/ledger" element={<LedgerPage />} />
             <Route path="/wrap" element={<WrapPage />} />
+            <Route path="/apps" element={<AppsPage />} />
           </Routes>
         </main>
       </div>
