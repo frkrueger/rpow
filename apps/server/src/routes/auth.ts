@@ -137,7 +137,10 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   app.post('/auth/logout', async (req, reply) => {
-    reply.clearCookie(SESSION_COOKIE, { path: '/' });
+    reply.clearCookie(SESSION_COOKIE, {
+      path: '/',
+      domain: app.config.secureCookies ? '.rpow2.com' : undefined,
+    });
     return { ok: true };
   });
 }
