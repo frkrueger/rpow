@@ -467,4 +467,35 @@ describe('POST /api/gladiator/admin/verify-handle', () => {
     expect(res.statusCode).toBe(404);
     expect(res.json().error).toBe('USER_NOT_FOUND');
   });
+
+  it('404 USER_NOT_FOUND leaves the pending x_verification_codes row intact', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    (ctx.app as any).config.gladiatorAdminToken = 'tok123';
+
+    // Create a real user with a pending verification code.
+    const cookie = await login(ctx, 'real@b.com');
+    await startHandle(ctx, cookie, '@pendinghandle');
+
+    // Confirm the code row exists before the admin call.
+    const before = await ctx.pool.query(
+      `SELECT count(*) as n FROM x_verification_codes WHERE account_email = 'real@b.com'`,
+    );
+    expect(parseInt(before.rows[0].n, 10)).toBe(1);
+
+    // Admin tries to verify a handle for a completely different email that has
+    // no row in the users table — this must 404.
+    const res = await ctx.app.inject({
+      method: 'POST', url: '/api/gladiator/admin/verify-handle',
+      headers: { 'content-type': 'application/json', 'authorization': 'Bearer tok123' },
+      payload: { email: 'nonexistent@example.com', handle: 'somehandle' },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().error).toBe('USER_NOT_FOUND');
+
+    // The pending code row for real@b.com must be untouched.
+    const after = await ctx.pool.query(
+      `SELECT count(*) as n FROM x_verification_codes WHERE account_email = 'real@b.com'`,
+    );
+    expect(parseInt(after.rows[0].n, 10)).toBe(1);
+  });
 });

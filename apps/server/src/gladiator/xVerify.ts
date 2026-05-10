@@ -35,6 +35,7 @@ function stripHtml(html: string): string {
   s = s.replace(/&#39;/g, "'");
   s = s.replace(/&lt;/g, '<');
   s = s.replace(/&gt;/g, '>');
+  s = s.replace(/&nbsp;/g, ' ');
   return s;
 }
 

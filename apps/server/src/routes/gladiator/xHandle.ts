@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { readSession } from './auth.js';
-import { withTx } from '../db.js';
-import { normalizeHandle, verifyTweet } from '../gladiator/xVerify.js';
+import { readSession } from '../auth.js';
+import { withTx } from '../../db.js';
+import { normalizeHandle, verifyTweet } from '../../gladiator/xVerify.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -40,7 +40,7 @@ const AdminVerifyBody = z.object({
 // Route registration
 // ---------------------------------------------------------------------------
 
-export async function gladiatorRoutes(app: FastifyInstance) {
+export async function xHandleRoutes(app: FastifyInstance) {
   // --------------------------------------------------------------------------
   // POST /api/gladiator/x-handle/start
   // --------------------------------------------------------------------------
@@ -327,7 +327,7 @@ export async function gladiatorRoutes(app: FastifyInstance) {
 
         const avatarUrl = `https://unavatar.io/twitter/${handle}`;
 
-        // Update user
+        // Update user FIRST — if user not found, return 404 without deleting the code
         const updateRes = await c.query(
           `UPDATE users
            SET x_handle = $1, x_handle_verified_at = now(), x_avatar_url = $2
@@ -339,7 +339,7 @@ export async function gladiatorRoutes(app: FastifyInstance) {
           return { error: 'USER_NOT_FOUND', message: 'user not found', status: 404 };
         }
 
-        // Delete any pending code
+        // Delete any pending code only after a successful update
         await c.query(`DELETE FROM x_verification_codes WHERE account_email = $1`, [email]);
 
         return { ok: true };
@@ -356,43 +356,5 @@ export async function gladiatorRoutes(app: FastifyInstance) {
     }
 
     return reply.code(200).send({ ok: true });
-  });
-
-  // --------------------------------------------------------------------------
-  // Remaining stubs (Slices 3–9)
-  // --------------------------------------------------------------------------
-
-  const NOT_IMPLEMENTED = { error: 'NOT_IMPLEMENTED', message: 'gladiator slice 1' };
-
-  app.post('/api/gladiator/sessions', async (_req, reply) => {
-    return reply.code(501).send(NOT_IMPLEMENTED);
-  });
-
-  app.post('/api/gladiator/sessions/:id/close', async (_req, reply) => {
-    return reply.code(501).send(NOT_IMPLEMENTED);
-  });
-
-  app.get('/api/gladiator/lobby', async (_req, reply) => {
-    return reply.code(501).send(NOT_IMPLEMENTED);
-  });
-
-  app.post('/api/gladiator/flip', async (_req, reply) => {
-    return reply.code(501).send(NOT_IMPLEMENTED);
-  });
-
-  app.get('/api/gladiator/flips/recent', async (_req, reply) => {
-    return reply.code(501).send(NOT_IMPLEMENTED);
-  });
-
-  app.get('/api/gladiator/flips/history', async (_req, reply) => {
-    return reply.code(501).send(NOT_IMPLEMENTED);
-  });
-
-  app.get('/api/gladiator/chat', async (_req, reply) => {
-    return reply.code(501).send(NOT_IMPLEMENTED);
-  });
-
-  app.post('/api/gladiator/chat', async (_req, reply) => {
-    return reply.code(501).send(NOT_IMPLEMENTED);
   });
 }

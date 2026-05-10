@@ -172,6 +172,24 @@ describe('verifyTweet', () => {
     expect(result!.text).toBe('"hello" & <world> it\'s');
   });
 
+  it('decodes &nbsp; into a regular space', async () => {
+    const mockResponse = {
+      author_url: 'https://twitter.com/Alice',
+      html: '<blockquote>word1&nbsp;word2</blockquote>',
+    };
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockResponse,
+    } as any);
+
+    const result = await verifyTweet('https://twitter.com/Alice/status/999');
+    expect(result).not.toBeNull();
+    // &nbsp; must become a regular ASCII space (0x20), not the non-breaking
+    // space character (0xa0) and not the literal string "&nbsp;"
+    expect(result!.text).toContain('word1 word2');
+    expect(result!.text.charCodeAt(result!.text.indexOf('word1') + 5)).toBe(0x20);
+  });
+
   it('retries once on transient failure and succeeds on second attempt', async () => {
     const mockResponse = {
       author_url: 'https://twitter.com/SomeUser',

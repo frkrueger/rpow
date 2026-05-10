@@ -18,7 +18,7 @@ import { unsubscribeRoutes } from './routes/unsubscribe.js';
 import { phantomRoutes } from './routes/phantom.js';
 import { srpowRoutes } from './routes/srpow.js';
 import { longshotRoutes } from './routes/longshot.js';
-import { gladiatorRoutes } from './routes/gladiator.js';
+import { gladiatorRoutes } from './routes/gladiator/index.js';
 
 export interface AppConfig {
   sessionSecret: string;
