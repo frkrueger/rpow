@@ -39,6 +39,18 @@ export async function challengeRoutes(app: FastifyInstance) {
     if (!s) return reply.code(401).send({ error: 'UNAUTHORIZED', message: 'login required' });
     const isOperator = app.config.operatorEmails.has(s.email);
 
+    // Read supply BEFORE entering withTx. mintedSupplyBaseUnits uses
+    // app.pool.query (a fresh checkout). If called inside withTx while every
+    // per-worker pool slot is already inside withTx, the supply query waits
+    // for an 11th connection that can't exist — classic intra-pool deadlock.
+    // Hoisting out also means the cap check stays read-only and advisory
+    // (/mint re-checks under its own authoritative lock).
+    const mintedPre = await mintedSupplyBaseUnits();
+    const capBaseUnits = BigInt(app.config.mintMaxSupply) * BASE_UNITS_PER_RPOW;
+    if (mintedPre >= capBaseUnits) {
+      return reply.code(410).send({ error: 'SUPPLY_EXHAUSTED', message: '21M cap reached' });
+    }
+
     // Serialize per-user with advisory lock to prevent concurrent challenge spam.
     // Use the non-blocking try variant: if a concurrent /challenge from the same
     // user already holds the lock, fail fast with 429 instead of stalling a
@@ -84,13 +96,7 @@ export async function challengeRoutes(app: FastifyInstance) {
         }
       }
 
-      const minted = await mintedSupplyBaseUnits();
-      const capBaseUnits = BigInt(app.config.mintMaxSupply) * BASE_UNITS_PER_RPOW;
-      if (minted >= capBaseUnits) {
-        return { _exhausted: true as const };
-      }
-
-      const scheduledBits = difficultyBitsForSupply(minted, {
+      const scheduledBits = difficultyBitsForSupply(mintedPre, {
         difficultyBits: app.config.difficultyBits,
         maxSupplyRpow: app.config.mintMaxSupply,
       });
@@ -116,9 +122,6 @@ export async function challengeRoutes(app: FastifyInstance) {
     }
     if ('_cooldown' in result) {
       return reply.code(429).send({ error: 'COOLDOWN', message: `wait ${result.wait}s before next challenge`, retry_after: result.wait });
-    }
-    if ('_exhausted' in result) {
-      return reply.code(410).send({ error: 'SUPPLY_EXHAUSTED', message: '21M cap reached' });
     }
     return result;
   });
