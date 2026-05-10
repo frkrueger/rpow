@@ -4,9 +4,7 @@ import { findSolutionForTest } from '../src/pow.js';
 import { randomUUID } from 'node:crypto';
 
 async function loginAs(ctx: Awaited<ReturnType<typeof makeTestApp>>, email: string): Promise<string> {
-  await ctx.app.inject({ method: 'POST', url: '/auth/request', payload: { email }, headers: { 'content-type': 'application/json' } });
-  const tok = ctx.mailer.outbox.at(-1)!.text.match(/token=([\w-]+)/)![1];
-  return (await ctx.app.inject({ method: 'GET', url: `/auth/verify?token=${tok}` })).headers['set-cookie'] as string;
+  return ctx.forgeSessionCookie(email);
 }
 async function mineN(ctx: any, cookie: string, n: number) {
   for (let i = 0; i < n; i++) {

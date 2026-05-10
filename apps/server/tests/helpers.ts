@@ -5,6 +5,7 @@ import { FakeMailer } from '../src/mailer.js';
 import { buildApp } from '../src/buildApp.js';
 import { FakeBridgeClient } from '@rpow/solana-bridge';
 import pg from 'pg';
+import { signSession, SESSION_COOKIE, SESSION_TTL_SECONDS } from '../src/session.js';
 
 export async function makeTestApp(opts: {
   bridgeClient?: FakeBridgeClient;
@@ -56,10 +57,22 @@ export async function makeTestApp(opts: {
       longShotMaxBaseUnits: 1_000_000_000,
       longShotAllowedEmails: '*',
       secureCookies: false,
+      operatorEmails: new Set<string>(),
     },
   });
   return {
     app, pool, mailer, bridgeClient,
+    /**
+     * Forge a session cookie for `email` and ensure the user row exists.
+     * Bypasses /auth/request → /auth/verify since /auth/verify now redirects
+     * with the session token in a URL fragment instead of a Set-Cookie header,
+     * which inject() can't follow into a cookie.
+     */
+    forgeSessionCookie: async (email: string): Promise<string> => {
+      await pool.query('INSERT INTO users(email) VALUES($1) ON CONFLICT (email) DO NOTHING', [email]);
+      const token = signSession({ email }, 'x'.repeat(32), SESSION_TTL_SECONDS);
+      return `${SESSION_COOKIE}=${token}; Path=/`;
+    },
     cleanup: async () => {
       await app.close();
       // Use a fresh pool to drop the schema since main pool may be closed
