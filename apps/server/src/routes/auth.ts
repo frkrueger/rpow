@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { z } from 'zod';
 import { hashToken, issueMagicLink } from '../magic.js';
 import { signSession, SESSION_COOKIE, SESSION_TTL_SECONDS, verifySession } from '../session.js';
@@ -10,6 +10,14 @@ const RequestBody = z.object({
   email: z.string().email(),
   turnstile_token: z.string().min(1).max(2048).optional(),
 });
+
+/**
+ * Stable sha256 of a plaintext API key. Server stores the hash; plaintext
+ * never touches the DB. 32-byte CSPRNG token entropy makes a fast hash safe.
+ */
+export function hashApiKey(plaintext: string): Buffer {
+  return createHash('sha256').update(plaintext).digest();
+}
 
 // Verify a Cloudflare Turnstile token. Returns true if the token is valid for
 // the given secret. Returns false on any failure (network, malformed JSON,
