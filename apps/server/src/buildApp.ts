@@ -27,6 +27,12 @@ export interface AppConfig {
   signingPrivateKeyHex: string;
   signingPublicKeyHex: string;
   webOrigin: string;
+  /** Min stake in base units for RPOW Long Shot. */
+  longShotMinBaseUnits: number;
+  /** Max stake in base units for RPOW Long Shot. */
+  longShotMaxBaseUnits: number;
+  /** CSV of emails allowed to play; '*' opens to all. */
+  longShotAllowedEmails: string;
   secureCookies: boolean;
   /**
    * Cloudflare Turnstile secret. When set, /auth/request requires a valid
