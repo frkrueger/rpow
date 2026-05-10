@@ -42,7 +42,7 @@ export default function App() {
             <NavLink to="/ledger">ledger</NavLink>
             {me?.wrap_allowed && <NavLink to="/wrap">wrap</NavLink>}
             <NavLink to="/apps">apps</NavLink>
-            <a href="https://stats.rpow2.com/" target="_blank" rel="noreferrer" className="external">stats &nearr;</a>
+            <a href="https://stats.rpow2.com/" target="_blank" rel="noreferrer" className="external">stats {'\u2197'}</a>
             <span className="sep">|</span>
             {me ? (
               <button onClick={logout} title="end session">logout</button>
