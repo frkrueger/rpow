@@ -37,13 +37,13 @@ export function XHandleClaimModal({ onVerified }: Props) {
   return (
     <div className="modal-backdrop">
       <div className="modal">
-        <h2>CLAIM YOUR X HANDLE</h2>
+        <h2>CLAIM YOUR RPOW USERNAME</h2>
         <p style={{ fontSize: 12, color: '#888' }}>
-          You need a verified X handle to fight. Globally unique per the chain.
+          Your RPOW username is your X handle, verified by tweet. Globally unique per the chain.
         </p>
         {step === 'enter-handle' && (
           <>
-            <label>X handle (without the @):</label>
+            <label>RPOW username (your X handle, without the @):</label>
             <input
               value={handle}
               onChange={e => setHandle(e.target.value)}
@@ -57,7 +57,7 @@ export function XHandleClaimModal({ onVerified }: Props) {
         )}
         {step === 'tweet' && start && (
           <>
-            <p>Tweet from <strong>@{handle}</strong>:</p>
+            <p>Claim <strong>@{handle}</strong> by tweeting from that X account:</p>
             <a href={start.tweet_intent_url} target="_blank" rel="noreferrer">
               [ OPEN TWEET COMPOSER ]
             </a>
