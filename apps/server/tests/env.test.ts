@@ -94,4 +94,60 @@ describe('parseEnv', () => {
     expect(env.SRPOW_COMMITMENT).toBe('confirmed');
     expect(env.SRPOW_WRAP_TIMEOUT_MS).toBe(60_000);
   });
+
+  it('parses LONGSHOT_MIN_BASE_UNITS and LONGSHOT_MAX_BASE_UNITS with defaults', () => {
+    const env = parseEnv({
+      DATABASE_URL: 'postgres://u:p@h/db',
+      RESEND_API_KEY: 'rk_test',
+      EMAIL_FROM: 'no-reply@rpow2.com',
+      SESSION_SECRET: 'a'.repeat(32),
+      MAGIC_LINK_BASE_URL: 'http://localhost:8080',
+      RPOW_SIGNING_PRIVATE_KEY_HEX: '00'.repeat(32),
+      RPOW_SIGNING_PUBLIC_KEY_HEX: '00'.repeat(32),
+    });
+    // Defaults: 0.01 RPOW = 10_000_000 base units, 1.0 RPOW = 1_000_000_000 base units
+    expect(env.LONGSHOT_MIN_BASE_UNITS).toBe(10_000_000);
+    expect(env.LONGSHOT_MAX_BASE_UNITS).toBe(1_000_000_000);
+  });
+
+  it('LONGSHOT_ALLOWED_EMAILS defaults to frkrueger@mac.com', () => {
+    const env = parseEnv({
+      DATABASE_URL: 'postgres://u:p@h/db',
+      RESEND_API_KEY: 'rk_test',
+      EMAIL_FROM: 'no-reply@rpow2.com',
+      SESSION_SECRET: 'a'.repeat(32),
+      MAGIC_LINK_BASE_URL: 'http://localhost:8080',
+      RPOW_SIGNING_PRIVATE_KEY_HEX: '00'.repeat(32),
+      RPOW_SIGNING_PUBLIC_KEY_HEX: '00'.repeat(32),
+    });
+    expect(env.LONGSHOT_ALLOWED_EMAILS).toBe('frkrueger@mac.com');
+  });
+
+  it('LONGSHOT_ALLOWED_EMAILS = * opens access to all', () => {
+    const env = parseEnv({
+      DATABASE_URL: 'postgres://u:p@h/db',
+      RESEND_API_KEY: 'rk_test',
+      EMAIL_FROM: 'no-reply@rpow2.com',
+      SESSION_SECRET: 'a'.repeat(32),
+      MAGIC_LINK_BASE_URL: 'http://localhost:8080',
+      RPOW_SIGNING_PRIVATE_KEY_HEX: '00'.repeat(32),
+      RPOW_SIGNING_PUBLIC_KEY_HEX: '00'.repeat(32),
+      LONGSHOT_ALLOWED_EMAILS: '*',
+    });
+    expect(env.LONGSHOT_ALLOWED_EMAILS).toBe('*');
+  });
+
+  it('rejects LONGSHOT_MAX_BASE_UNITS less than LONGSHOT_MIN_BASE_UNITS', () => {
+    expect(() => parseEnv({
+      DATABASE_URL: 'postgres://u:p@h/db',
+      RESEND_API_KEY: 'rk_test',
+      EMAIL_FROM: 'no-reply@rpow2.com',
+      SESSION_SECRET: 'a'.repeat(32),
+      MAGIC_LINK_BASE_URL: 'http://localhost:8080',
+      RPOW_SIGNING_PRIVATE_KEY_HEX: '00'.repeat(32),
+      RPOW_SIGNING_PUBLIC_KEY_HEX: '00'.repeat(32),
+      LONGSHOT_MIN_BASE_UNITS: '1000000000',
+      LONGSHOT_MAX_BASE_UNITS: '100',
+    })).toThrow();
+  });
 });
