@@ -1,10 +1,23 @@
 import { Panel } from '../components/Panel.js';
 
-const protocolApps = [
+type ProtocolApp = {
+  name: string;
+  url: string;
+  description: string;
+  comingSoon?: boolean;
+};
+
+const protocolApps: ProtocolApp[] = [
   {
     name: 'RPOW Long Shot',
     url: 'https://longshot.rpow2.com/',
     description: 'Wager RPOW at 1:1, 2:1, 3:1, or 10:1 longshot. 5% house edge. Outcomes settle against the chain\'s unmined supply.',
+  },
+  {
+    name: 'RPOW Gladiator',
+    url: 'https://gladiator.rpow2.com/',
+    description: 'PvP coin flips against X-verified opponents. Pure 50/50, zero rake, winner takes both bets. Signed audit per flip.',
+    comingSoon: true,
   },
 ];
 
@@ -35,9 +48,16 @@ export function AppsPage() {
         {protocolApps.map(app => (
           <div key={app.url} style={{ borderTop: '1px solid #222', padding: '12px 0' }}>
             <div>
-              <a href={app.url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', fontWeight: 700 }}>
-                {app.name}
-              </a>
+              {app.comingSoon ? (
+                <span style={{ color: 'var(--dim)', fontWeight: 700 }}>{app.name}</span>
+              ) : (
+                <a href={app.url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', fontWeight: 700 }}>
+                  {app.name}
+                </a>
+              )}
+              {app.comingSoon && (
+                <span style={{ fontSize: 11, marginLeft: 8, color: '#666' }}>[ coming soon ]</span>
+              )}
             </div>
             <div style={{ fontSize: 12, marginTop: 4, color: '#aaa' }}>{app.description}</div>
           </div>
