@@ -67,29 +67,40 @@ export async function challengeRoutes(app: FastifyInstance) {
         if (!lock[0]?.ok) return { _busy: true as const };
       }
 
-      const { rows: pending } = await c.query<{ id: string; nonce_prefix: Buffer; difficulty_bits: number; expires_at: Date }>(
-        `SELECT id, nonce_prefix, difficulty_bits, expires_at FROM challenges
-         WHERE user_email=$1 AND claimed_at IS NULL AND expires_at > now()
-         ORDER BY issued_at DESC LIMIT 1`,
+      // Single round-trip for both lookups: pending challenge (kind=1) and
+      // most-recent claimed_at for the cooldown check (kind=2). Halves the
+      // in-tx DB latency vs the previous two separate SELECTs.
+      const { rows: lookup } = await c.query<{
+        kind: number;
+        id: string | null;
+        nonce_prefix: Buffer | null;
+        difficulty_bits: number | null;
+        expires_at: Date | null;
+        claimed_at: Date | null;
+      }>(
+        `(SELECT 1 AS kind, id, nonce_prefix, difficulty_bits, expires_at, NULL::timestamptz AS claimed_at
+            FROM challenges
+            WHERE user_email=$1 AND claimed_at IS NULL AND expires_at > now()
+            ORDER BY issued_at DESC LIMIT 1)
+         UNION ALL
+         (SELECT 2 AS kind, NULL::uuid, NULL::bytea, NULL::int, NULL::timestamptz, claimed_at
+            FROM challenges
+            WHERE user_email=$1 AND claimed_at IS NOT NULL
+            ORDER BY claimed_at DESC LIMIT 1)`,
         [s.email],
       );
-      if (pending[0]) {
+      const pending = lookup.find(r => r.kind === 1);
+      const lastClaimed = lookup.find(r => r.kind === 2);
+      if (pending) {
         return {
-          challenge_id: pending[0].id,
-          nonce_prefix: pending[0].nonce_prefix.toString('hex'),
-          difficulty_bits: pending[0].difficulty_bits,
-          expires_at: pending[0].expires_at.toISOString(),
+          challenge_id: pending.id!,
+          nonce_prefix: pending.nonce_prefix!.toString('hex'),
+          difficulty_bits: pending.difficulty_bits!,
+          expires_at: pending.expires_at!.toISOString(),
         };
       }
-
-      const { rows: lastClaimed } = await c.query<{ claimed_at: Date }>(
-        `SELECT claimed_at FROM challenges
-         WHERE user_email=$1 AND claimed_at IS NOT NULL
-         ORDER BY claimed_at DESC LIMIT 1`,
-        [s.email],
-      );
-      if (lastClaimed[0] && !isOperator) {
-        const elapsedMs = Date.now() - lastClaimed[0].claimed_at.getTime();
+      if (lastClaimed?.claimed_at && !isOperator) {
+        const elapsedMs = Date.now() - lastClaimed.claimed_at.getTime();
         if (elapsedMs < 5000) {
           const wait = Math.ceil((5000 - elapsedMs) / 1000);
           return { _cooldown: true as const, wait };
