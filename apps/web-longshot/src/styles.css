@@ -1,0 +1,11 @@
+:root {
+  --bg: #0a0a0a;
+  --fg: #e5e5e5;
+  --dim: #666;
+  --accent: #4ade80;
+  --warn: #f87171;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--fg); font-family: ui-monospace, monospace; }
+main { max-width: 720px; margin: 40px auto; padding: 0 24px; }
+h1 { font-size: 1.5rem; letter-spacing: 0.04em; }
