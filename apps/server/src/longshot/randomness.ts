@@ -2,24 +2,25 @@ import { randomBytes } from 'node:crypto';
 
 const DENOM = 1_000_000_000n;
 
-/**
- * Roll a uniform random number in [0, 1) and return true if < p.
- * Uses Node's CSPRNG (crypto.randomBytes) — cryptographically secure.
- */
-export function rollSpin(p: number): boolean {
-  if (p <= 0) return false;
-  if (p >= 1) return true;
-  const buf = randomBytes(8);
-  const big = buf.readBigUInt64BE(0);
-  const bucket = big % DENOM;
-  const threshold = BigInt(Math.floor(p * Number(DENOM)));
-  return bucket < threshold;
+export interface SpinDraw {
+  outcome: boolean;
+  /** 16 lowercase hex chars — the actual 8 bytes that determined the outcome. */
+  hex: string;
 }
 
 /**
- * Returns 8 random bytes as 16 lowercase hex chars.
- * Stored on each bet for transparency / public log.
+ * Draw 8 cryptographically secure random bytes. Returns whether the bucket
+ * derived from those bytes is below the win threshold for probability `p`,
+ * AND the hex encoding of the SAME bytes — so the audit log accurately
+ * reflects what the server saw at decision time.
  */
-export function randomValueHex(): string {
-  return randomBytes(8).toString('hex');
+export function drawSpin(p: number): SpinDraw {
+  const buf = randomBytes(8);
+  const hex = buf.toString('hex');
+  if (p <= 0) return { outcome: false, hex };
+  if (p >= 1) return { outcome: true, hex };
+  const big = buf.readBigUInt64BE(0);
+  const bucket = big % DENOM;
+  const threshold = BigInt(Math.floor(p * Number(DENOM)));
+  return { outcome: bucket < threshold, hex };
 }

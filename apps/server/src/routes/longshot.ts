@@ -74,8 +74,9 @@ export async function longshotRoutes(app: FastifyInstance) {
 
     const p = winProbabilityFor(odds_choice);
     const m = payoutMultipleFor(odds_choice);
-    const won = randomness.rollSpin(p);
-    const rvHex = randomness.randomValueHex();
+    const draw = randomness.drawSpin(p);
+    const won = draw.outcome;
+    const rvHex = draw.hex;
     const payout = stake * BigInt(m);
 
     const email = s.email;

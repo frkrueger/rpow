@@ -96,7 +96,7 @@ describe('POST /api/longshot/spin', () => {
     const ctx = await makeTestApp(); cleanup = ctx.cleanup;
     const cookie = await login(ctx, 'a@b.com');
     await seedToken(ctx.pool, 'a@b.com', 1000n);
-    vi.spyOn(randomness, 'rollSpin').mockReturnValue(true);
+    vi.spyOn(randomness, 'drawSpin').mockReturnValue({ outcome: true, hex: 'aabbccddeeff0011' });
 
     const res = await ctx.app.inject({
       method: 'POST', url: '/api/longshot/spin',
@@ -120,7 +120,7 @@ describe('POST /api/longshot/spin', () => {
     const cookie = await login(ctx, 'a@b.com');
     await seedToken(ctx.pool, 'a@b.com', 1000n);
     await ctx.pool.query(`UPDATE app_counters SET value = 1000 WHERE name = 'minted_supply'`);
-    vi.spyOn(randomness, 'rollSpin').mockReturnValue(false);
+    vi.spyOn(randomness, 'drawSpin').mockReturnValue({ outcome: false, hex: 'aabbccddeeff0011' });
 
     const res = await ctx.app.inject({
       method: 'POST', url: '/api/longshot/spin',
@@ -144,7 +144,7 @@ describe('POST /api/longshot/spin', () => {
     const cookie = await login(ctx, 'a@b.com');
     await seedToken(ctx.pool, 'a@b.com', 1000n);
     await ctx.pool.query(`UPDATE app_counters SET value = 1000 WHERE name = 'minted_supply'`);
-    vi.spyOn(randomness, 'rollSpin').mockReturnValue(true);
+    vi.spyOn(randomness, 'drawSpin').mockReturnValue({ outcome: true, hex: 'aabbccddeeff0011' });
 
     await ctx.app.inject({
       method: 'POST', url: '/api/longshot/spin',
@@ -165,7 +165,7 @@ describe('POST /api/longshot/spin', () => {
     const cookie = await login(ctx, 'a@b.com');
     await seedToken(ctx.pool, 'a@b.com', 1000n);
     await ctx.pool.query(`UPDATE app_counters SET value = 1000 WHERE name = 'minted_supply'`);
-    vi.spyOn(randomness, 'rollSpin').mockReturnValue(false);
+    vi.spyOn(randomness, 'drawSpin').mockReturnValue({ outcome: false, hex: 'aabbccddeeff0011' });
 
     await ctx.app.inject({
       method: 'POST', url: '/api/longshot/spin',
@@ -194,7 +194,7 @@ describe('GET /api/longshot/history', () => {
     const cookie = await login(ctx, 'a@b.com');
     await seedToken(ctx.pool, 'a@b.com', 1000n);
     await ctx.pool.query(`UPDATE app_counters SET value = 1000 WHERE name = 'minted_supply'`);
-    vi.spyOn(randomness, 'rollSpin').mockReturnValue(false);
+    vi.spyOn(randomness, 'drawSpin').mockReturnValue({ outcome: false, hex: 'aabbccddeeff0011' });
     for (let i = 0; i < 3; i++) {
       await ctx.app.inject({
         method: 'POST', url: '/api/longshot/spin',
@@ -235,7 +235,7 @@ describe('POST /api/longshot/spin rate limit', () => {
     const cookie = await login(ctx, 'a@b.com');
     await seedToken(ctx.pool, 'a@b.com', 100_000n);
     await ctx.pool.query(`UPDATE app_counters SET value = 100000 WHERE name = 'minted_supply'`);
-    vi.spyOn(randomness, 'rollSpin').mockReturnValue(false);
+    vi.spyOn(randomness, 'drawSpin').mockReturnValue({ outcome: false, hex: 'aabbccddeeff0011' });
 
     let lastStatus = 0;
     for (let i = 0; i < 12; i++) {
