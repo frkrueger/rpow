@@ -141,3 +141,76 @@ describe('GET /me with API key', () => {
     expect(res.statusCode).toBe(401);
   });
 });
+
+describe('GET /activity', () => {
+  let cleanup: (() => Promise<void>) | null = null;
+  afterEach(async () => { if (cleanup) await cleanup(); cleanup = null; });
+
+  async function seedTransfer(pool: any, sender: string, recipient: string, amount: string, at: Date) {
+    await pool.query(`INSERT INTO users(email) VALUES($1), ($2) ON CONFLICT (email) DO NOTHING`, [sender, recipient]);
+    await pool.query(
+      `INSERT INTO transfers(id, sender_email, recipient_email, amount, idempotency_key, created_at)
+       VALUES($1, $2, $3, $4, $5, $6)`,
+      [randomUUID(), sender, recipient, amount, randomUUID(), at],
+    );
+  }
+
+  it('200 + bare array when called with API key and no ?since= (existing shape preserved)', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    const { plaintext } = await seedUserAndKey(ctx.pool, 'op@example.com');
+    await seedTransfer(ctx.pool, 'sender@example.com', 'op@example.com', '100', new Date('2026-05-10T12:00:00Z'));
+    const res = await ctx.app.inject({
+      method: 'GET', url: '/activity',
+      headers: { authorization: `Bearer ${plaintext}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(Array.isArray(body)).toBe(true);
+    expect(body.length).toBeGreaterThan(0);
+  });
+
+  it('returns wrapped object with entries ASC and next_cursor when ?since= is present', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    const { plaintext } = await seedUserAndKey(ctx.pool, 'op@example.com');
+    await seedTransfer(ctx.pool, 's@example.com', 'op@example.com', '10', new Date('2026-05-10T12:00:00Z'));
+    await seedTransfer(ctx.pool, 's@example.com', 'op@example.com', '20', new Date('2026-05-10T13:00:00Z'));
+    await seedTransfer(ctx.pool, 's@example.com', 'op@example.com', '30', new Date('2026-05-10T14:00:00Z'));
+
+    const res = await ctx.app.inject({
+      method: 'GET', url: '/activity?since=2026-05-10T12:30:00Z',
+      headers: { authorization: `Bearer ${plaintext}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body).toHaveProperty('entries');
+    expect(body).toHaveProperty('next_cursor');
+    // Two of the three transfers are after 12:30
+    expect(body.entries).toHaveLength(2);
+    // ASC order: 13:00 then 14:00
+    expect(body.entries[0].amount_base_units).toBe('20');
+    expect(body.entries[1].amount_base_units).toBe('30');
+    // next_cursor should be the at of the last entry
+    expect(body.next_cursor).toBe(body.entries[1].at);
+  });
+
+  it('next_cursor is null when ?since= returns no entries', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    const { plaintext } = await seedUserAndKey(ctx.pool, 'op@example.com');
+    const res = await ctx.app.inject({
+      method: 'GET', url: '/activity?since=2030-01-01T00:00:00Z',
+      headers: { authorization: `Bearer ${plaintext}` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ entries: [], next_cursor: null });
+  });
+
+  it('400 on malformed ?since= (not a parseable iso8601)', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    const { plaintext } = await seedUserAndKey(ctx.pool, 'op@example.com');
+    const res = await ctx.app.inject({
+      method: 'GET', url: '/activity?since=not-a-date',
+      headers: { authorization: `Bearer ${plaintext}` },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+});
