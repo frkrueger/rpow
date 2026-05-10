@@ -26,14 +26,14 @@ export function AppsPage() {
       {apps.map(app => (
         <div key={app.url} style={{ borderTop: '1px solid #222', padding: '12px 0' }}>
           <div>
-            <a href={app.url} target="_blank" rel="noreferrer" style={{ color: '#6ee7b7', fontWeight: 700 }}>
+            <a href={app.url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', fontWeight: 700 }}>
               {app.name}
             </a>
           </div>
           <div style={{ fontSize: 12, marginTop: 4, color: '#aaa' }}>{app.description}</div>
           <div style={{ fontSize: 11, marginTop: 4, color: '#666' }}>
             by{' '}
-            <a href={app.authorUrl} target="_blank" rel="noreferrer" style={{ color: '#888' }}>
+            <a href={app.authorUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--dim)' }}>
               {app.author}
             </a>
           </div>

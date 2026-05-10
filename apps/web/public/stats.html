@@ -188,12 +188,21 @@ function render(d) {
   const mintedPct = pct(d.total_minted, d.max_supply);
   const epochProgress = pct(d.total_minted - (d.epoch * d.epoch_size), d.epoch_size);
   const remaining = d.max_supply - d.total_minted;
+  const burned = d.total_minted - d.circulating_supply;
+  const burnPct = d.total_minted > 0 ? pct(burned, d.total_minted) : '0';
+  const xferPct = d.total_minted > 0 ? pct(d.total_transferred, d.total_minted) : '0';
+  const reward = d.current_reward || (d.epoch === 0 ? 0.01 : 0.01 / Math.pow(2, d.epoch));
+  const nextReward = reward / 2;
 
   const html = `
     <div class="stat-grid">
       <div class="stat-cell">
         <div class="stat-label">MINERS</div>
         <div class="stat-value amber" id="v-users">${fmt(d.user_count)}</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-label">MINTED</div>
+        <div class="stat-value accent" id="v-minted">${fmt(d.total_minted)}</div>
       </div>
       <div class="stat-cell">
         <div class="stat-label">CIRCULATING</div>
@@ -203,16 +212,12 @@ function render(d) {
         <div class="stat-label">TRANSFERRED</div>
         <div class="stat-value" id="v-xfer">${fmt(d.total_transferred)}</div>
       </div>
-      <div class="stat-cell">
-        <div class="stat-label">MINTED</div>
-        <div class="stat-value accent" id="v-minted">${fmt(d.total_minted)}</div>
-      </div>
     </div>
 
     <div style="padding:16px">
       <div style="display:flex; justify-content:space-between; font-size:11px; color:#6b6b6b; margin-bottom:4px;">
         <span>SUPPLY PROGRESS</span>
-        <span id="v-pct">${mintedPct}%</span>
+        <span id="v-pct">${mintedPct}% of ${fmt(d.max_supply)}</span>
       </div>
       <div class="progress-track">
         <div class="progress-fill" style="width:${mintedPct}%"></div>
@@ -229,8 +234,8 @@ function render(d) {
         <div class="stat-value amber" id="v-diff">${d.current_difficulty_bits} bits</div>
       </div>
       <div class="stat-cell">
-        <div class="stat-label">NEXT DIFF</div>
-        <div class="stat-value">${d.next_difficulty_bits} bits</div>
+        <div class="stat-label">REWARD</div>
+        <div class="stat-value accent">${reward} RPOW</div>
       </div>
       <div class="stat-cell">
         <div class="stat-label">HALVING</div>
@@ -245,6 +250,29 @@ function render(d) {
       </div>
       <div class="progress-track">
         <div class="progress-fill" style="width:${epochProgress}%"></div>
+      </div>
+      <div style="display:flex; justify-content:space-between; font-size:11px; color:#6b6b6b; margin-top:6px;">
+        <span>next reward: ${nextReward} RPOW</span>
+        <span>next difficulty: ${d.next_difficulty_bits} bits</span>
+      </div>
+    </div>
+
+    <div class="stat-grid" style="border-top:1px solid rgba(110,231,183,0.18)">
+      <div class="stat-cell">
+        <div class="stat-label">WRAPPED (SRPOW)</div>
+        <div class="stat-value">${fmt(burned)}</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-label">WRAP RATE</div>
+        <div class="stat-value">${burnPct}%</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-label">VELOCITY</div>
+        <div class="stat-value">${xferPct}%</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-label">AVG / MINER</div>
+        <div class="stat-value">${d.user_count > 0 ? fmt(Math.round(d.total_minted / d.user_count)) : '0'}</div>
       </div>
     </div>
 
