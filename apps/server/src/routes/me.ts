@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { readSession } from './auth.js';
+import { readAuth } from './auth.js';
 import { currentRewardBaseUnits } from '../schedule.js';
 import { isAllowed } from '../wrap-allowlist.js';
 import { SESSION_COOKIE, SESSION_TTL_SECONDS, signSession } from '../session.js';
@@ -8,7 +8,7 @@ const SOLUTIONS_PER_DAY_PER_HUMAN = 100_000n;
 
 export async function meRoutes(app: FastifyInstance) {
   app.get('/me', async (req, reply) => {
-    const s = readSession(req as any, app.config.sessionSecret);
+    const s = await readAuth(req, app);
     if (!s) return reply.code(401).send({ error: 'UNAUTHORIZED', message: 'login required' });
 
     // Auto-heal stale cookie state from the pre-deploy era. Users who signed
@@ -18,7 +18,8 @@ export async function meRoutes(app: FastifyInstance) {
     // legacy host-only entry and set the domain-scoped one. Makes "click link,
     // works" actually work for everyone on next page load — no manual cookie
     // clearing required.
-    if (app.config.secureCookies) {
+    // SKIP cookie reissue on API-key auth — there's no cookie to heal.
+    if (app.config.secureCookies && !s.viaApiKey) {
       const freshToken = signSession({ email: s.email }, app.config.sessionSecret, SESSION_TTL_SECONDS);
       reply.header('Set-Cookie', [
         // Clear legacy host-only cookie (no Domain attribute → host-only match).

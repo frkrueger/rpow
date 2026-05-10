@@ -110,3 +110,34 @@ describe('readAuth', () => {
     expect(after.rows[0].last_used_at).not.toBeNull();
   });
 });
+
+describe('GET /me with API key', () => {
+  let cleanup: (() => Promise<void>) | null = null;
+  afterEach(async () => { if (cleanup) await cleanup(); cleanup = null; });
+
+  it('200 when authed with a valid API key', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    const { plaintext } = await seedUserAndKey(ctx.pool, 'me-key@example.com');
+    const res = await ctx.app.inject({
+      method: 'GET', url: '/me',
+      headers: { authorization: `Bearer ${plaintext}` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().email).toBe('me-key@example.com');
+  });
+
+  it('401 with no auth at all', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    const res = await ctx.app.inject({ method: 'GET', url: '/me' });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('401 with a Bearer that does not match any key (and no session)', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    const res = await ctx.app.inject({
+      method: 'GET', url: '/me',
+      headers: { authorization: 'Bearer rpow_sk_garbage' },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+});
