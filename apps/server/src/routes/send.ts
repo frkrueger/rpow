@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { randomUUID, randomBytes, createHash } from 'node:crypto';
 import { z } from 'zod';
-import { readSession } from './auth.js';
+import { readAuth } from './auth.js';
 import { withTx } from '../db.js';
 import { signTokenPayload } from '../signing.js';
 import { makeUnsubToken } from '../unsub.js';
@@ -39,7 +39,7 @@ function formatRpow(baseUnits: bigint): string {
 
 export async function sendRoutes(app: FastifyInstance) {
   app.post('/send', async (req, reply) => {
-    const s = readSession(req as any, app.config.sessionSecret);
+    const s = await readAuth(req, app);
     if (!s) return reply.code(401).send({ error: 'UNAUTHORIZED', message: 'login required' });
     const parsed = Body.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: 'BAD_REQUEST', message: 'invalid body' });

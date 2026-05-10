@@ -214,3 +214,45 @@ describe('GET /activity', () => {
     expect(res.statusCode).toBe(400);
   });
 });
+
+describe('POST /send with API key', () => {
+  let cleanup: (() => Promise<void>) | null = null;
+  afterEach(async () => { if (cleanup) await cleanup(); cleanup = null; });
+
+  async function seedToken(pool: any, email: string, value: bigint) {
+    await pool.query(
+      `INSERT INTO tokens(id, owner_email, value, state, server_sig)
+       VALUES($1, $2, $3, 'VALID', '\\x00')`,
+      [randomUUID(), email, value.toString()],
+    );
+  }
+
+  it('200 when sender authenticates with an API key', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    const { plaintext } = await seedUserAndKey(ctx.pool, 'sender@example.com');
+    await ctx.pool.query(`INSERT INTO users(email) VALUES($1) ON CONFLICT (email) DO NOTHING`, ['recipient@example.com']);
+    await seedToken(ctx.pool, 'sender@example.com', 1_000_000_000n);
+
+    const res = await ctx.app.inject({
+      method: 'POST', url: '/send',
+      headers: { authorization: `Bearer ${plaintext}`, 'content-type': 'application/json' },
+      payload: {
+        recipient_email: 'recipient@example.com',
+        amount_base_units: '1000000',
+        idempotency_key: randomUUID(),
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().ok).toBe(true);
+  });
+
+  it('401 on /send with no auth', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    const res = await ctx.app.inject({
+      method: 'POST', url: '/send',
+      headers: { 'content-type': 'application/json' },
+      payload: { recipient_email: 'a@b.com', amount_base_units: '1', idempotency_key: 'abcdefgh' },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+});
