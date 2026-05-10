@@ -9,3 +9,42 @@
 html, body { margin: 0; background: var(--bg); color: var(--fg); font-family: ui-monospace, monospace; }
 main { max-width: 720px; margin: 40px auto; padding: 0 24px; }
 h1 { font-size: 1.5rem; letter-spacing: 0.04em; }
+
+.card {
+  border: 1px solid #222;
+  padding: 20px;
+  margin: 24px 0;
+  background: #111;
+}
+.row { display: flex; justify-content: space-between; align-items: baseline; }
+input[type="range"] { width: 100%; accent-color: var(--accent); margin: 12px 0 18px; }
+.pills { display: flex; gap: 8px; margin-bottom: 12px; }
+.pill {
+  flex: 1;
+  background: transparent;
+  border: 1px solid #333;
+  color: var(--fg);
+  padding: 8px 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+.pill.active { background: var(--accent); color: #000; border-color: var(--accent); }
+.hint { color: var(--dim); font-size: 0.9rem; }
+.primary {
+  display: block;
+  width: 100%;
+  background: var(--accent);
+  color: #000;
+  border: 0;
+  padding: 14px;
+  font-family: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+  margin-top: 8px;
+}
+.primary:disabled { background: #333; color: #888; cursor: not-allowed; }
+.result { margin-top: 16px; font-size: 1.4rem; font-weight: 700; }
+.result.win { color: var(--accent); }
+.result.lose { color: var(--warn); }
+.footnote { color: var(--dim); font-size: 0.78rem; margin-top: 32px; }
