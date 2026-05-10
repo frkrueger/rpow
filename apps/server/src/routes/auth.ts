@@ -128,18 +128,9 @@ export async function authRoutes(app: FastifyInstance) {
     );
 
     const sessionToken = signSession({ email: match.email }, app.config.sessionSecret, SESSION_TTL_SECONDS);
-    // Clear any stale cookie variants from previous domain configurations
-    // to prevent duplicate cookies (browser sends both, server reads stale one).
-    reply.clearCookie(SESSION_COOKIE, { path: '/' });
-    reply.clearCookie(SESSION_COOKIE, { path: '/', domain: 'api.rpow2.com' });
-    reply.clearCookie(SESSION_COOKIE, { path: '/', domain: '.rpow2.com' });
-    reply.clearCookie(SESSION_COOKIE, { path: '/', domain: 'rpow2.com' });
-    reply.setCookie(SESSION_COOKIE, sessionToken, {
-      httpOnly: true, secure: app.config.secureCookies,
-      sameSite: 'lax', path: '/', maxAge: SESSION_TTL_SECONDS,
-      domain: app.config.secureCookies ? '.rpow2.com' : undefined,
-    });
-    return reply.redirect(`${app.config.webOrigin}/#/`, 302);
+    // Redirect to frontend with session in URL fragment (not sent to server).
+    // Frontend JS reads it, sets the cookie on the same origin, and clears the fragment.
+    return reply.redirect(`${app.config.webOrigin}/#/auth-callback?s=${encodeURIComponent(sessionToken)}`, 302);
   });
 
   app.post('/auth/logout', async (req, reply) => {

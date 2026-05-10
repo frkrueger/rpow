@@ -11,6 +11,7 @@ import { ActivityPage } from './pages/Activity.js';
 import { LedgerPage } from './pages/Ledger.js';
 import { WrapPage } from './pages/WrapPage.js';
 import { AppsPage } from './pages/Apps.js';
+import { AuthCallbackPage } from './pages/AuthCallback.js';
 
 export default function App() {
   const [theme, setTheme] = useState<Theme>(loadTheme());
@@ -53,6 +54,7 @@ export default function App() {
             <Route path="/ledger" element={<LedgerPage />} />
             <Route path="/wrap" element={<WrapPage />} />
             <Route path="/apps" element={<AppsPage />} />
+            <Route path="/auth-callback" element={<AuthCallbackPage />} />
           </Routes>
         </main>
       </div>
