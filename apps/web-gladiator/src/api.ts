@@ -10,12 +10,24 @@ export interface Me {
   balance_base_units: string;
 }
 
+export interface SessionRow {
+  id: string;
+  bet_base_units: string;
+  bankroll_initial_base_units: string;
+  bankroll_remaining_base_units: string;
+  flips_won: number;
+  flips_lost: number;
+  status: 'OPEN' | 'CLOSED';
+  opened_at: string;
+  last_flip_at: string | null;
+}
+
 export interface GladiatorProfile {
   email: string;
   x_handle: string | null;
   x_handle_verified_at: string | null;
   x_avatar_url: string | null;
-  open_session: any | null;
+  open_session: SessionRow | null;
   career: { wins: number; losses: number };
 }
 
@@ -134,6 +146,68 @@ export async function verifyXTweet(tweetUrl: string): Promise<{ x_handle: string
   if (!res.ok) {
     const e = await res.json().catch(() => ({ error: 'UNKNOWN' }));
     throw new Error(e.error || `x-handle/verify ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function enterArena(bankrollBaseUnits: string, betBaseUnits: string): Promise<{
+  session_id: string;
+  bet_base_units: string;
+  bankroll_initial_base_units: string;
+  bankroll_remaining_base_units: string;
+  status: 'OPEN';
+  opened_at: string;
+}> {
+  const res = await fetch(`${API_BASE}/api/gladiator/sessions`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ bankroll_base_units: bankrollBaseUnits, bet_base_units: betBaseUnits }),
+  });
+  if (!res.ok) {
+    const e = await res.json().catch(() => ({ error: 'UNKNOWN' }));
+    throw new Error(e.error || `enterArena ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function closeSession(sessionId: string): Promise<{ status: string; closed_at: string; refunded_base_units: string }> {
+  const res = await fetch(`${API_BASE}/api/gladiator/sessions/${sessionId}/close`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+  });
+  if (!res.ok) {
+    const e = await res.json().catch(() => ({ error: 'UNKNOWN' }));
+    throw new Error(e.error || `closeSession ${res.status}`);
+  }
+  return res.json();
+}
+
+export interface FlipResponse {
+  flip_id: string;
+  winner_email: string;
+  winner_x_handle: string;
+  bet_base_units: string;
+  random_value_hex: string;
+  signature: string;
+  server_time: string;
+  share_text: string;
+  session_status: 'OPEN' | 'CLOSED';
+  bankroll_remaining_base_units: string;
+  closed_at: string | null;
+}
+
+export async function flipAgainst(sessionId: string): Promise<FlipResponse> {
+  const res = await fetch(`${API_BASE}/api/gladiator/flip`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ session_id: sessionId }),
+  });
+  if (!res.ok) {
+    const e = await res.json().catch(() => ({ error: 'UNKNOWN' }));
+    throw new Error(e.error || `flip ${res.status}`);
   }
   return res.json();
 }
