@@ -3,9 +3,9 @@ import { fetchMe, fetchAccess, spin, fetchHistory, formatRpow, type Me, type Spi
 import { ODDS_TIERS, type OddsChoice, payoutMultipleFor, winProbabilityFor } from './odds.js';
 import { playSpin, playWin, playLose, isMuted, toggleMute } from './sound.js';
 
-const MIN_BASE_UNITS = 10_000_000n;     // 0.01 RPOW
-const MAX_BASE_UNITS = 1_000_000_000n;  // 1.0 RPOW
-const STEP = 10_000_000n;               // 0.01 RPOW
+const MIN_BASE_UNITS = 10_000_000n;       // 0.01 RPOW
+const MAX_BASE_UNITS = 10_000_000_000n;   // 10 RPOW
+const STEP = 10_000_000n;                 // 0.01 RPOW
 
 export function App() {
   const [me, setMe] = useState<Me | null>(null);
