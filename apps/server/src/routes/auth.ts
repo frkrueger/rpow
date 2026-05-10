@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { randomUUID, createHash } from 'node:crypto';
 import { z } from 'zod';
 import { hashToken, issueMagicLink } from '../magic.js';
@@ -202,14 +202,14 @@ export function readSession(
  * updates last_used_at fire-and-forget.
  */
 export async function readAuth(
-  req: any,
-  app: { pool: { query: (sql: string, params?: unknown[]) => Promise<{ rows: any[] }> }; config: { sessionSecret: string }; log?: { warn: (...args: any[]) => void } },
+  req: FastifyRequest,
+  app: FastifyInstance,
 ): Promise<{ email: string; viaApiKey: boolean } | null> {
   const auth = req.headers?.['authorization'];
   if (typeof auth === 'string' && auth.startsWith('Bearer rpow_sk_')) {
     const plaintext = auth.slice('Bearer '.length);
     const hashBuf = hashApiKey(plaintext);
-    const { rows } = await app.pool.query(
+    const { rows } = await app.pool.query<{ email: string }>(
       'SELECT email FROM api_keys WHERE token_hash = $1',
       [hashBuf],
     );

@@ -50,7 +50,7 @@ describe('readAuth', () => {
       headers: { authorization: `Bearer ${plaintext}` },
       cookies: {},
     };
-    const result = await readAuth(fakeReq, ctx.app);
+    const result = await readAuth(fakeReq as any, ctx.app);
     expect(result).toEqual({ email: 'op@example.com', viaApiKey: true });
     expect(fakeReq.viaApiKey).toBe(true);
     expect(typeof fakeReq.apiKeyHash).toBe('string');
@@ -65,7 +65,7 @@ describe('readAuth', () => {
       headers: { authorization: 'Bearer rpow_sk_doesnotexist' },
       cookies: { rpow_session: sessionCookieValue },
     };
-    const result = await readAuth(fakeReq, ctx.app);
+    const result = await readAuth(fakeReq as any, ctx.app);
     expect(result).toEqual({ email: 'op@example.com', viaApiKey: false });
     expect(fakeReq.viaApiKey).toBe(false);
   });
@@ -78,7 +78,7 @@ describe('readAuth', () => {
       headers: {},
       cookies: { rpow_session: sessionCookieValue },
     };
-    const result = await readAuth(fakeReq, ctx.app);
+    const result = await readAuth(fakeReq as any, ctx.app);
     expect(result?.email).toBe('session@example.com');
     expect(result?.viaApiKey).toBe(false);
   });
@@ -86,7 +86,7 @@ describe('readAuth', () => {
   it('returns null when neither Bearer nor session is present', async () => {
     const ctx = await makeTestApp(); cleanup = ctx.cleanup;
     const fakeReq: any = { headers: {}, cookies: {} };
-    const result = await readAuth(fakeReq, ctx.app);
+    const result = await readAuth(fakeReq as any, ctx.app);
     expect(result).toBeNull();
   });
 
@@ -100,7 +100,7 @@ describe('readAuth', () => {
 
     const { plaintext } = await seedUserAndKey(ctx.pool, 'lastused@example.com');
     const fakeReq: any = { headers: { authorization: `Bearer ${plaintext}` }, cookies: {} };
-    await readAuth(fakeReq, ctx.app);
+    await readAuth(fakeReq as any, ctx.app);
 
     // last_used_at update is fire-and-forget; give it a beat to land
     await new Promise(r => setTimeout(r, 100));
