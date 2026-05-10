@@ -49,7 +49,7 @@ export default function App() {
             ) : (
               <NavLink to="/login">login</NavLink>
             )}
-            <button onClick={() => setTheme(nextTheme(theme))} title="cycle theme">{theme}</button>
+            <button onClick={() => setTheme(nextTheme(theme))} title="cycle theme" style={{ fontSize: 11 }}>{'\u25cf'}</button>
           </nav>
         </header>
         <main>
