@@ -315,10 +315,97 @@ export async function flipRoutes(app: FastifyInstance) {
   });
 
   app.get('/api/gladiator/flips/recent', async (_req, reply) => {
-    return reply.code(501).send(NOT_IMPLEMENTED);
+    const res = await app.pool.query<{
+      id: string;
+      offerer_email: string;
+      challenger_email: string;
+      offerer_x_handle: string | null;
+      challenger_x_handle: string | null;
+      bet_base_units: string;
+      winner_email: string;
+      random_value_hex: string;
+      created_at: Date;
+    }>(
+      `SELECT
+         gf.id,
+         gf.offerer_email,
+         gf.challenger_email,
+         ou.x_handle AS offerer_x_handle,
+         cu.x_handle AS challenger_x_handle,
+         gf.bet_base_units::text,
+         gf.winner_email,
+         gf.random_value_hex,
+         gf.created_at
+       FROM gladiator_flips gf
+       LEFT JOIN users ou ON ou.email = gf.offerer_email
+       LEFT JOIN users cu ON cu.email = gf.challenger_email
+       ORDER BY gf.created_at DESC
+       LIMIT 50`,
+    );
+
+    const flips = res.rows.map((row) => ({
+      id: row.id,
+      offerer_email: row.offerer_email,
+      challenger_email: row.challenger_email,
+      offerer_x_handle: row.offerer_x_handle ?? null,
+      challenger_x_handle: row.challenger_x_handle ?? null,
+      bet_base_units: row.bet_base_units,
+      winner_email: row.winner_email,
+      random_value_hex: row.random_value_hex,
+      created_at: row.created_at.toISOString(),
+    }));
+
+    return reply.code(200).send({ flips });
   });
 
-  app.get('/api/gladiator/flips/history', async (_req, reply) => {
-    return reply.code(501).send(NOT_IMPLEMENTED);
+  app.get('/api/gladiator/flips/history', async (req, reply) => {
+    const s = readSession(req as any, app.config.sessionSecret);
+    if (!s) return reply.code(401).send({ error: 'UNAUTHORIZED', message: 'login required' });
+
+    const email = s.email;
+
+    const res = await app.pool.query<{
+      id: string;
+      offerer_email: string;
+      challenger_email: string;
+      offerer_x_handle: string | null;
+      challenger_x_handle: string | null;
+      bet_base_units: string;
+      winner_email: string;
+      random_value_hex: string;
+      created_at: Date;
+    }>(
+      `SELECT
+         gf.id,
+         gf.offerer_email,
+         gf.challenger_email,
+         ou.x_handle AS offerer_x_handle,
+         cu.x_handle AS challenger_x_handle,
+         gf.bet_base_units::text,
+         gf.winner_email,
+         gf.random_value_hex,
+         gf.created_at
+       FROM gladiator_flips gf
+       LEFT JOIN users ou ON ou.email = gf.offerer_email
+       LEFT JOIN users cu ON cu.email = gf.challenger_email
+       WHERE gf.offerer_email = $1 OR gf.challenger_email = $1
+       ORDER BY gf.created_at DESC
+       LIMIT 50`,
+      [email],
+    );
+
+    const flips = res.rows.map((row) => ({
+      id: row.id,
+      offerer_email: row.offerer_email,
+      challenger_email: row.challenger_email,
+      offerer_x_handle: row.offerer_x_handle ?? null,
+      challenger_x_handle: row.challenger_x_handle ?? null,
+      bet_base_units: row.bet_base_units,
+      winner_email: row.winner_email,
+      random_value_hex: row.random_value_hex,
+      created_at: row.created_at.toISOString(),
+    }));
+
+    return reply.code(200).send({ flips });
   });
 }
