@@ -99,6 +99,7 @@ const app = await buildApp({
     signingPrivateKeyHex: env.RPOW_SIGNING_PRIVATE_KEY_HEX,
     signingPublicKeyHex: env.RPOW_SIGNING_PUBLIC_KEY_HEX,
     webOrigin: env.WEB_ORIGIN,
+    longShotWebOrigin: env.LONGSHOT_WEB_ORIGIN,
     longShotMinBaseUnits: env.LONGSHOT_MIN_BASE_UNITS,
     longShotMaxBaseUnits: env.LONGSHOT_MAX_BASE_UNITS,
     longShotAllowedEmails: env.LONGSHOT_ALLOWED_EMAILS,

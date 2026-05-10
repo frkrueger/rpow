@@ -51,6 +51,7 @@ Append to `/etc/rpow/server.env`:
 LONGSHOT_MIN_BASE_UNITS=10000000
 LONGSHOT_MAX_BASE_UNITS=1000000000
 LONGSHOT_ALLOWED_EMAILS=frkrueger@mac.com
+LONGSHOT_WEB_ORIGIN=https://longshot.rpow2.com
 ```
 
 (Once validated, flip to `LONGSHOT_ALLOWED_EMAILS=*` and `systemctl restart rpow-server` to open access.)
