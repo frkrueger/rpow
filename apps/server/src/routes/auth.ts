@@ -128,6 +128,12 @@ export async function authRoutes(app: FastifyInstance) {
     );
 
     const sessionToken = signSession({ email: match.email }, app.config.sessionSecret, SESSION_TTL_SECONDS);
+    // Clear any stale cookie variants from previous domain configurations
+    // to prevent duplicate cookies (browser sends both, server reads stale one).
+    reply.clearCookie(SESSION_COOKIE, { path: '/' });
+    reply.clearCookie(SESSION_COOKIE, { path: '/', domain: 'api.rpow2.com' });
+    reply.clearCookie(SESSION_COOKIE, { path: '/', domain: '.rpow2.com' });
+    reply.clearCookie(SESSION_COOKIE, { path: '/', domain: 'rpow2.com' });
     reply.setCookie(SESSION_COOKIE, sessionToken, {
       httpOnly: true, secure: app.config.secureCookies,
       sameSite: 'lax', path: '/', maxAge: SESSION_TTL_SECONDS,
