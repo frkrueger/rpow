@@ -205,4 +205,46 @@ export async function longshotRoutes(app: FastifyInstance) {
       server_time: now.toISOString(),
     };
   });
+
+  app.get('/api/longshot/history', async (req, reply) => {
+    const s = readSession(req as any, app.config.sessionSecret);
+    if (!s) return reply.code(401).send({ error: 'UNAUTHORIZED', message: 'login required' });
+
+    const limitRaw = (req.query as { limit?: string })?.limit ?? '20';
+    const limit = Math.max(1, Math.min(100, parseInt(limitRaw, 10) || 20));
+
+    const { rows } = await app.pool.query<{
+      id: string;
+      stake_base_units: string;
+      odds_choice: string;
+      outcome: string;
+      net_user_change_base_units: string;
+      created_at: Date;
+    }>(
+      `SELECT id, stake_base_units::text, odds_choice, outcome,
+              net_user_change_base_units::text, created_at
+       FROM long_shot_bets
+       WHERE account_email = $1
+       ORDER BY created_at DESC
+       LIMIT $2`,
+      [s.email, limit],
+    );
+    return { spins: rows.map(r => ({ ...r, created_at: r.created_at.toISOString() })) };
+  });
+
+  app.get('/api/longshot/stats', async () => {
+    const totals = await app.pool.query<{ total_spins: string; total_volume: string }>(
+      `SELECT count(*)::text AS total_spins,
+              COALESCE(SUM(stake_base_units), 0)::text AS total_volume
+       FROM long_shot_bets`,
+    );
+    const pnl = await app.pool.query<{ value: string }>(
+      `SELECT value::text FROM app_counters WHERE name = 'long_shot_house_pnl_base_units'`,
+    );
+    return {
+      total_spins: parseInt(totals.rows[0].total_spins, 10),
+      total_volume_base_units: totals.rows[0].total_volume,
+      house_pnl_base_units: pnl.rows[0]?.value ?? '0',
+    };
+  });
 }

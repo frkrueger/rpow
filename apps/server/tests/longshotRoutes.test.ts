@@ -178,3 +178,50 @@ describe('POST /api/longshot/spin', () => {
     expect(pnl.rows[0].value).toBe('100');
   });
 });
+
+describe('GET /api/longshot/history', () => {
+  let cleanup: (() => Promise<void>) | null = null;
+  afterEach(async () => { if (cleanup) await cleanup(); cleanup = null; });
+
+  it('401 without session', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    const res = await ctx.app.inject({ method: 'GET', url: '/api/longshot/history' });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("returns the user's spins, newest first", async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    const cookie = await login(ctx, 'a@b.com');
+    await seedToken(ctx.pool, 'a@b.com', 1000n);
+    await ctx.pool.query(`UPDATE app_counters SET value = 1000 WHERE name = 'minted_supply'`);
+    vi.spyOn(randomness, 'rollSpin').mockReturnValue(false);
+    for (let i = 0; i < 3; i++) {
+      await ctx.app.inject({
+        method: 'POST', url: '/api/longshot/spin',
+        headers: { cookie, 'content-type': 'application/json' },
+        payload: { stake_base_units: '50', odds_choice: '1:1' },
+      });
+    }
+    const res = await ctx.app.inject({ method: 'GET', url: '/api/longshot/history', headers: { cookie } });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.spins).toHaveLength(3);
+    expect(body.spins[0].outcome).toBe('LOSE');
+  });
+});
+
+describe('GET /api/longshot/stats', () => {
+  let cleanup: (() => Promise<void>) | null = null;
+  afterEach(async () => { if (cleanup) await cleanup(); cleanup = null; });
+
+  it('returns global stats, no auth required', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    const res = await ctx.app.inject({ method: 'GET', url: '/api/longshot/stats' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body).toHaveProperty('total_spins');
+    expect(body).toHaveProperty('total_volume_base_units');
+    expect(body).toHaveProperty('house_pnl_base_units');
+    expect(body.total_spins).toBe(0);
+  });
+});
