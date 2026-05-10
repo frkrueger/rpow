@@ -70,7 +70,7 @@ Overflow: `429 Too Many Requests` with body `{ "error": "RATE_LIMITED", ... }`. 
 |---|---|---|
 | 401 | `UNAUTHORIZED` | Missing or invalid token. |
 | 400 | `BAD_REQUEST` | Malformed body, bad `since` format, etc. |
-| 409 | `INSUFFICIENT_BALANCE` | `/send` failed: not enough RPOW. |
+| 400 | `INSUFFICIENT_BALANCE` | `/send` failed: not enough RPOW. |
 | 429 | `RATE_LIMITED` | Burst or hourly cap on `/send` hit. |
 
 ## Key rotation

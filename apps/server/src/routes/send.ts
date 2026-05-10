@@ -62,10 +62,13 @@ export async function sendRoutes(app: FastifyInstance) {
         // a non-colliding bucket Fastify never reads.
         keyGenerator: (req: any) => req.apiKeyHash ?? `__skip__:${req.ip}`,
         allowList: (req: any) => !req.viaApiKey,
-        errorResponseBuilder: () => {
-          const err: any = new Error('API key burst limit (10/sec) exceeded');
+        errorResponseBuilder: (_req: any, ctx: any) => {
+          const err: any = {
+            error: 'RATE_LIMITED',
+            message: 'API key burst limit (10/sec) exceeded',
+            retry_after: Math.ceil(ctx.ttl / 1000),
+          };
           err.statusCode = 429;
-          err.error = 'RATE_LIMITED';
           return err;
         },
       },

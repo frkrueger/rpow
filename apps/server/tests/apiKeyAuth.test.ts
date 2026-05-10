@@ -289,6 +289,11 @@ describe('rate limit on /send via API key', () => {
     const limited = sends.filter(r => r.statusCode === 429).length;
     expect(successes).toBeLessThanOrEqual(10);
     expect(limited).toBeGreaterThanOrEqual(2);
+    const limitedRes = sends.find(r => r.statusCode === 429)!;
+    const body = limitedRes.json();
+    expect(body.error).toBe('RATE_LIMITED');
+    expect(body.message).toMatch(/burst limit/);
+    expect(typeof body.retry_after).toBe('number');
   });
 
   it('does NOT rate-limit session-based /send', async () => {
