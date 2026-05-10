@@ -142,8 +142,33 @@ export async function authRoutes(app: FastifyInstance) {
   });
 }
 
-export function readSession(req: { cookies: Record<string, string | undefined> }, secret: string): { email: string } | null {
-  const tok = req.cookies[SESSION_COOKIE];
-  if (!tok) return null;
-  return verifySession(tok, secret);
+export function readSession(
+  req: { cookies: Record<string, string | undefined>; headers?: { cookie?: string | string[] } },
+  secret: string,
+): { email: string } | null {
+  // Browsers may send TWO rpow_session cookies in the Cookie header during the
+  // post-deploy migration window: a legacy host-only HttpOnly one, and the new
+  // Domain=.rpow2.com one. The cookie-parser only surfaces the last entry it
+  // sees, which can be either depending on browser ordering. Try every value
+  // we can find and return the first that validates.
+  const candidates: string[] = [];
+  const fromParsed = req.cookies?.[SESSION_COOKIE];
+  if (fromParsed) candidates.push(fromParsed);
+  const rawHeader = req.headers?.cookie;
+  const rawHeaderStr = Array.isArray(rawHeader) ? rawHeader.join('; ') : (rawHeader || '');
+  if (rawHeaderStr) {
+    for (const part of rawHeaderStr.split(/;\s*/)) {
+      const eq = part.indexOf('=');
+      if (eq <= 0) continue;
+      const name = part.slice(0, eq);
+      if (name !== SESSION_COOKIE) continue;
+      const value = part.slice(eq + 1);
+      if (value && !candidates.includes(value)) candidates.push(value);
+    }
+  }
+  for (const tok of candidates) {
+    const session = verifySession(tok, secret);
+    if (session) return session;
+  }
+  return null;
 }

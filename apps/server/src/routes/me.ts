@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { readSession } from './auth.js';
 import { currentRewardBaseUnits } from '../schedule.js';
 import { isAllowed } from '../wrap-allowlist.js';
+import { SESSION_COOKIE, SESSION_TTL_SECONDS, signSession } from '../session.js';
 
 const SOLUTIONS_PER_DAY_PER_HUMAN = 100_000n;
 
@@ -9,6 +10,24 @@ export async function meRoutes(app: FastifyInstance) {
   app.get('/me', async (req, reply) => {
     const s = readSession(req as any, app.config.sessionSecret);
     if (!s) return reply.code(401).send({ error: 'UNAUTHORIZED', message: 'login required' });
+
+    // Auto-heal stale cookie state from the pre-deploy era. Users who signed
+    // in before the .rpow2.com domain switch may still have a legacy host-only
+    // HttpOnly rpow_session cookie that JS in AuthCallback can't clear (HttpOnly
+    // blocks JS write/clear). Reissue server-side on every /me: clear the
+    // legacy host-only entry and set the domain-scoped one. Makes "click link,
+    // works" actually work for everyone on next page load — no manual cookie
+    // clearing required.
+    if (app.config.secureCookies) {
+      const freshToken = signSession({ email: s.email }, app.config.sessionSecret, SESSION_TTL_SECONDS);
+      reply.header('Set-Cookie', [
+        // Clear legacy host-only cookie (no Domain attribute → host-only match).
+        `${SESSION_COOKIE}=; Path=/; Max-Age=0; Secure; SameSite=Lax`,
+        // Reissue with proper Domain so it works across subdomains. Match
+        // AuthCallback's non-HttpOnly format for consistency with the new flow.
+        `${SESSION_COOKIE}=${freshToken}; Path=/; Max-Age=${SESSION_TTL_SECONDS}; Domain=.rpow2.com; SameSite=Lax; Secure`,
+      ]);
+    }
 
     const email = s.email;
     const todayUtc = new Date().toISOString().slice(0, 10);
