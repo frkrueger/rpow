@@ -131,6 +131,7 @@ export async function authRoutes(app: FastifyInstance) {
     reply.setCookie(SESSION_COOKIE, sessionToken, {
       httpOnly: true, secure: app.config.secureCookies,
       sameSite: 'lax', path: '/', maxAge: SESSION_TTL_SECONDS,
+      domain: app.config.secureCookies ? '.rpow2.com' : undefined,
     });
     return reply.redirect(`${app.config.webOrigin}/#/`, 302);
   });
