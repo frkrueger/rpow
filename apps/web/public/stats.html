@@ -198,8 +198,8 @@ function render(d) {
   const mintedPct = pct(d.total_minted, d.max_supply);
   const epochProgress = pct(d.total_minted - (d.epoch * d.epoch_size), d.epoch_size);
   const remaining = d.max_supply - d.total_minted;
-  const burned = d.total_minted - d.circulating_supply;
-  const burnPct = d.total_minted > 0 ? pct(burned, d.total_minted) : '0';
+  const wrapped = d.wrapped_supply || 0;
+  const wrapPct = d.total_minted > 0 ? pct(wrapped, d.total_minted) : '0';
   const xferPct = d.total_minted > 0 ? pct(d.total_transferred, d.total_minted) : '0';
   const reward = d.current_reward || (d.epoch === 0 ? 0.01 : 0.01 / Math.pow(2, d.epoch));
   const nextReward = reward / 2;
@@ -270,11 +270,11 @@ function render(d) {
     <div class="stat-grid" style="border-top:1px solid rgba(110,231,183,0.18)">
       <div class="stat-cell">
         <div class="stat-label">WRAPPED (SRPOW)</div>
-        <div class="stat-value">${fmt(burned)}</div>
+        <div class="stat-value">${fmt(wrapped)}</div>
       </div>
       <div class="stat-cell">
         <div class="stat-label">WRAP RATE</div>
-        <div class="stat-value">${burnPct}%</div>
+        <div class="stat-value">${wrapPct}%</div>
       </div>
       <div class="stat-cell">
         <div class="stat-label">VELOCITY</div>
@@ -352,6 +352,7 @@ function normalizeLedger(raw) {
       total_minted: toRpow(raw.minted_supply_counter_base_units || raw.total_minted_base_units),
       total_transferred: toRpow(raw.total_transferred_base_units),
       circulating_supply: toRpow(raw.circulating_supply_base_units),
+      wrapped_supply: toRpow(raw.wrapped_supply_base_units || '0'),
       current_difficulty_bits: raw.current_difficulty_bits,
       user_count: raw.user_count,
       max_supply: Number(BigInt(raw.max_supply_base_units) / BU),

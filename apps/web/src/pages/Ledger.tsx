@@ -7,16 +7,18 @@ export function LedgerPage() {
   const [d, setD] = useState<LedgerResponse | null>(null);
   useEffect(() => { api.ledger().then(setD); }, []);
   if (!d) return <Panel title="PUBLIC LEDGER"><div>loading...</div></Panel>;
+  const bu = BigInt(d.base_units_per_rpow);
+  const toRpow = (s: string) => (BigInt(s) / bu).toLocaleString('en-US');
   return (
     <>
       <Panel title="PUBLIC LEDGER">
         <pre style={{ margin: 0 }}>
-{`  TOTAL MINTED        : ${d.total_minted}
-  TOTAL TRANSFERRED   : ${d.total_transferred}
-  CIRCULATING SUPPLY  : ${d.circulating_supply}
+{`  TOTAL MINTED        : ${toRpow(d.minted_supply_counter_base_units)}
+  TOTAL TRANSFERRED   : ${toRpow(d.total_transferred_base_units)}
+  CIRCULATING SUPPLY  : ${toRpow(d.circulating_supply_base_units)}
   CURRENT DIFFICULTY  : ${d.current_difficulty_bits} trailing zero bits
-                        (+1 bit every 1,000,000 minted; hard cap 21M)
-  USER COUNT          : ${d.user_count}
+                        (+1 bit every 1,000,000 minted; hard cap 19M)
+  USER COUNT          : ${d.user_count.toLocaleString('en-US')}
 `}
         </pre>
         <div style={{ marginTop: 12 }} className="tagline">

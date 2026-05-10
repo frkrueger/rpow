@@ -13,6 +13,7 @@ export async function ledgerRoutes(app: FastifyInstance) {
     const [
       { rows: transferred },
       { rows: circulating },
+      { rows: wrapped },
       { rows: users },
       { rows: counter },
     ] = await Promise.all([
@@ -21,6 +22,9 @@ export async function ledgerRoutes(app: FastifyInstance) {
       ),
       app.pool.query<{ n: string }>(
         `SELECT coalesce(sum(value),0)::text AS n FROM tokens WHERE state='VALID'`,
+      ),
+      app.pool.query<{ n: string }>(
+        `SELECT coalesce(sum(value),0)::text AS n FROM tokens WHERE state='WRAPPED'`,
       ),
       app.pool.query<{ n: number }>(
         `SELECT count(*)::int AS n FROM users`,
@@ -34,6 +38,7 @@ export async function ledgerRoutes(app: FastifyInstance) {
     const totalMintedBaseUnits = counterBaseUnits;
     const totalTransferredBaseUnits = BigInt(transferred[0]!.n);
     const circulatingBaseUnits = BigInt(circulating[0]!.n);
+    const wrappedBaseUnits = BigInt(wrapped[0]!.n);
     const maxSupplyBaseUnits = BigInt(app.config.mintMaxSupply) * BASE_UNITS_PER_RPOW;
 
     const info = scheduleInfo(counterBaseUnits, {
@@ -45,6 +50,7 @@ export async function ledgerRoutes(app: FastifyInstance) {
       total_minted_base_units: totalMintedBaseUnits.toString(),
       total_transferred_base_units: totalTransferredBaseUnits.toString(),
       circulating_supply_base_units: circulatingBaseUnits.toString(),
+      wrapped_supply_base_units: wrappedBaseUnits.toString(),
       minted_supply_counter_base_units: counterBaseUnits.toString(),
       max_supply_base_units: maxSupplyBaseUnits.toString(),
       base_units_per_rpow: BASE_UNITS_PER_RPOW.toString(),

@@ -78,6 +78,7 @@ export interface LedgerResponse {
   total_minted_base_units: string;        // stringified bigint
   total_transferred_base_units: string;
   circulating_supply_base_units: string;
+  wrapped_supply_base_units: string;      // tokens in WRAPPED state (sRPOW backing)
   minted_supply_counter_base_units: string; // mirrors app_counters.minted_supply
   max_supply_base_units: string;
   base_units_per_rpow: string;            // = "1000000000"
