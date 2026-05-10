@@ -11,6 +11,14 @@
   # Playwright is a devDep of apps/web for E2E tests only. Skip the ~150MB Chromium download on Netlify builds.
   PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1"
 
+# Proxy auth verify through rpow2.com so cookie is set on same origin
+[[redirects]]
+  from = "/auth/verify"
+  to = "https://api.rpow2.com/auth/verify"
+  status = 200
+  force = true
+  headers = {X-Forwarded-Host = "rpow2.com"}
+
 # Static pages served directly (before SPA catch-all)
 [[redirects]]
   from = "/stats"
