@@ -12,6 +12,8 @@ declare module 'fastify' {
     viaApiKey?: boolean;
     /** Hex-encoded sha256 of the API-key plaintext. Used as a rate-limit bucket key. */
     apiKeyHash?: string;
+    /** Stashed by the /send preHandler so the route handler doesn't re-call readAuth(). */
+    resolvedAuth?: { email: string; viaApiKey: boolean };
   }
 }
 

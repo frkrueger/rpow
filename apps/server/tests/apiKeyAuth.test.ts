@@ -256,3 +256,85 @@ describe('POST /send with API key', () => {
     expect(res.statusCode).toBe(401);
   });
 });
+
+describe('rate limit on /send via API key', () => {
+  let cleanup: (() => Promise<void>) | null = null;
+  afterEach(async () => { if (cleanup) await cleanup(); cleanup = null; });
+
+  async function seedToken(pool: any, email: string, value: bigint) {
+    await pool.query(
+      `INSERT INTO tokens(id, owner_email, value, state, server_sig)
+       VALUES($1, $2, $3, 'VALID', '\\x00')`,
+      [randomUUID(), email, value.toString()],
+    );
+  }
+
+  it('429s after 10 burst sends in one second from the same key', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    const { plaintext } = await seedUserAndKey(ctx.pool, 'burst@example.com');
+    await ctx.pool.query(`INSERT INTO users(email) VALUES($1) ON CONFLICT (email) DO NOTHING`, ['recv@example.com']);
+    // Seed plenty of balance: 20 tokens of 100 base units each
+    for (let i = 0; i < 20; i++) await seedToken(ctx.pool, 'burst@example.com', 100n);
+
+    const sends = await Promise.all(
+      Array.from({ length: 12 }, (_, i) =>
+        ctx.app.inject({
+          method: 'POST', url: '/send',
+          headers: { authorization: `Bearer ${plaintext}`, 'content-type': 'application/json' },
+          payload: { recipient_email: 'recv@example.com', amount_base_units: '1', idempotency_key: `burst-${i}` },
+        }),
+      ),
+    );
+    const successes = sends.filter(r => r.statusCode === 200).length;
+    const limited = sends.filter(r => r.statusCode === 429).length;
+    expect(successes).toBeLessThanOrEqual(10);
+    expect(limited).toBeGreaterThanOrEqual(2);
+  });
+
+  it('does NOT rate-limit session-based /send', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    const cookie = await loginAndGetCookie(ctx, 'sess@example.com');
+    await ctx.pool.query(`INSERT INTO users(email) VALUES($1) ON CONFLICT (email) DO NOTHING`, ['recv@example.com']);
+    for (let i = 0; i < 20; i++) await seedToken(ctx.pool, 'sess@example.com', 100n);
+
+    const sends = await Promise.all(
+      Array.from({ length: 12 }, (_, i) =>
+        ctx.app.inject({
+          method: 'POST', url: '/send',
+          headers: { cookie, 'content-type': 'application/json' },
+          payload: { recipient_email: 'recv@example.com', amount_base_units: '1', idempotency_key: `sess-${i}` },
+        }),
+      ),
+    );
+    const limited = sends.filter(r => r.statusCode === 429).length;
+    expect(limited).toBe(0);
+  });
+
+  it('429s on /send when sender already has 1000+ transfers in the last hour', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    const { plaintext } = await seedUserAndKey(ctx.pool, 'cap@example.com');
+    await ctx.pool.query(`INSERT INTO users(email) VALUES($1), ($2) ON CONFLICT (email) DO NOTHING`, ['cap@example.com', 'recv@example.com']);
+    await seedToken(ctx.pool, 'cap@example.com', 100_000n);
+
+    // Pre-seed 1000 transfers in the last hour (bulk insert)
+    const values: string[] = [];
+    const params: any[] = [];
+    let p = 1;
+    for (let i = 0; i < 1000; i++) {
+      values.push(`($${p++}, $${p++}, $${p++}, $${p++}, $${p++}, now())`);
+      params.push(randomUUID(), 'cap@example.com', 'recv@example.com', '1', `seed-${i}`);
+    }
+    await ctx.pool.query(
+      `INSERT INTO transfers(id, sender_email, recipient_email, amount, idempotency_key, created_at) VALUES ${values.join(',')}`,
+      params,
+    );
+
+    const res = await ctx.app.inject({
+      method: 'POST', url: '/send',
+      headers: { authorization: `Bearer ${plaintext}`, 'content-type': 'application/json' },
+      payload: { recipient_email: 'recv@example.com', amount_base_units: '1', idempotency_key: 'over-cap' },
+    });
+    expect(res.statusCode).toBe(429);
+    expect(res.json().error).toBe('RATE_LIMITED');
+  });
+});
