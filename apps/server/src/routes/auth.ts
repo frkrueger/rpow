@@ -37,6 +37,7 @@ export async function authRoutes(app: FastifyInstance) {
     if (!parsed.success) return reply.code(400).send({ error: 'BAD_REQUEST', message: 'invalid email' });
     const email = parsed.data.email.toLowerCase().trim();
     const ip = (req.ip ?? '0.0.0.0');
+    const isOperator = app.config.operatorEmails.has(email);
 
     // Turnstile gate: only enforced when the server is configured with a
     // secret. In dev/test envs without TURNSTILE_SECRET the route stays open.
@@ -51,34 +52,36 @@ export async function authRoutes(app: FastifyInstance) {
       }
     }
 
-    const cooldown = await app.pool.query<{ created_at: Date }>(
-      `SELECT created_at FROM magic_links WHERE email=$1 ORDER BY created_at DESC LIMIT 1`,
-      [email],
-    );
-    if (cooldown.rows[0]) {
-      const elapsedMs = Date.now() - cooldown.rows[0].created_at.getTime();
-      if (elapsedMs < 30_000) {
-        return reply.code(429).send({ error: 'RATE_LIMITED', message: 'try again shortly', retry_after: Math.ceil((30_000 - elapsedMs) / 1000) });
+    if (!isOperator) {
+      const cooldown = await app.pool.query<{ created_at: Date }>(
+        `SELECT created_at FROM magic_links WHERE email=$1 ORDER BY created_at DESC LIMIT 1`,
+        [email],
+      );
+      if (cooldown.rows[0]) {
+        const elapsedMs = Date.now() - cooldown.rows[0].created_at.getTime();
+        if (elapsedMs < 30_000) {
+          return reply.code(429).send({ error: 'RATE_LIMITED', message: 'try again shortly', retry_after: Math.ceil((30_000 - elapsedMs) / 1000) });
+        }
       }
-    }
 
-    const perEmail = await app.pool.query<{ n: number }>(
-      `SELECT count(*)::int AS n FROM magic_links WHERE email=$1 AND created_at > now() - interval '1 hour'`,
-      [email],
-    );
-    if ((perEmail.rows[0]?.n ?? 0) >= 30) {
-      return reply.code(429).send({ error: 'RATE_LIMITED', message: 'too many attempts on this email; try again later', retry_after: 60 * 30 });
-    }
+      const perEmail = await app.pool.query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM magic_links WHERE email=$1 AND created_at > now() - interval '1 hour'`,
+        [email],
+      );
+      if ((perEmail.rows[0]?.n ?? 0) >= 30) {
+        return reply.code(429).send({ error: 'RATE_LIMITED', message: 'too many attempts on this email; try again later', retry_after: 60 * 30 });
+      }
 
-    // Per-IP cap is generous so corporate/home NATs aren't penalized when many
-    // genuine users sign up from the same egress IP. Per-email cap is the real
-    // anti-spam lever; per-IP only catches scripted attacks.
-    const perIp = await app.pool.query<{ n: number }>(
-      `SELECT count(*)::int AS n FROM magic_links WHERE ip_addr=$1 AND created_at > now() - interval '1 hour'`,
-      [ip],
-    );
-    if ((perIp.rows[0]?.n ?? 0) >= 1000) {
-      return reply.code(429).send({ error: 'RATE_LIMITED', message: 'too many attempts from this network', retry_after: 60 * 30 });
+      // Per-IP cap is generous so corporate/home NATs aren't penalized when many
+      // genuine users sign up from the same egress IP. Per-email cap is the real
+      // anti-spam lever; per-IP only catches scripted attacks.
+      const perIp = await app.pool.query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM magic_links WHERE ip_addr=$1 AND created_at > now() - interval '1 hour'`,
+        [ip],
+      );
+      if ((perIp.rows[0]?.n ?? 0) >= 1000) {
+        return reply.code(429).send({ error: 'RATE_LIMITED', message: 'too many attempts from this network', retry_after: 60 * 30 });
+      }
     }
 
     const { token, hash } = issueMagicLink();

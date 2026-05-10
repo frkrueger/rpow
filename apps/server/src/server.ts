@@ -105,6 +105,9 @@ const app = await buildApp({
     longShotAllowedEmails: env.LONGSHOT_ALLOWED_EMAILS,
     secureCookies: env.NODE_ENV === 'production',
     turnstileSecret: env.TURNSTILE_SECRET,
+    operatorEmails: new Set(
+      env.OPERATOR_EMAILS.split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
+    ),
   },
 });
 await app.listen({ host: '0.0.0.0', port: env.PORT });

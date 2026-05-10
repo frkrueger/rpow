@@ -37,10 +37,23 @@ export async function challengeRoutes(app: FastifyInstance) {
   app.post('/challenge', async (req, reply) => {
     const s = readSession(req as any, app.config.sessionSecret);
     if (!s) return reply.code(401).send({ error: 'UNAUTHORIZED', message: 'login required' });
+    const isOperator = app.config.operatorEmails.has(s.email);
 
     // Serialize per-user with advisory lock to prevent concurrent challenge spam.
+    // Use the non-blocking try variant: if a concurrent /challenge from the same
+    // user already holds the lock, fail fast with 429 instead of stalling a
+    // connection. Legit users only ever have one in-flight call so they never
+    // hit this path; bots that fan-out parallel calls per account get rejected
+    // immediately, freeing pg pool slots for everyone else.
+    // Operator accounts bypass the lock entirely.
     const result = await withTx(app.pool, async (c) => {
-      await c.query(`SELECT pg_advisory_xact_lock(hashtext('rpow_challenge'), hashtext($1))`, [s.email]);
+      if (!isOperator) {
+        const { rows: lock } = await c.query<{ ok: boolean }>(
+          `SELECT pg_try_advisory_xact_lock(hashtext('rpow_challenge'), hashtext($1)) AS ok`,
+          [s.email],
+        );
+        if (!lock[0]?.ok) return { _busy: true as const };
+      }
 
       const { rows: pending } = await c.query<{ id: string; nonce_prefix: Buffer; difficulty_bits: number; expires_at: Date }>(
         `SELECT id, nonce_prefix, difficulty_bits, expires_at FROM challenges
@@ -63,7 +76,7 @@ export async function challengeRoutes(app: FastifyInstance) {
          ORDER BY claimed_at DESC LIMIT 1`,
         [s.email],
       );
-      if (lastClaimed[0]) {
+      if (lastClaimed[0] && !isOperator) {
         const elapsedMs = Date.now() - lastClaimed[0].claimed_at.getTime();
         if (elapsedMs < 5000) {
           const wait = Math.ceil((5000 - elapsedMs) / 1000);
@@ -98,6 +111,9 @@ export async function challengeRoutes(app: FastifyInstance) {
       };
     });
 
+    if ('_busy' in result) {
+      return reply.code(429).send({ error: 'BUSY', message: 'another challenge is in flight for this account', retry_after: 1 });
+    }
     if ('_cooldown' in result) {
       return reply.code(429).send({ error: 'COOLDOWN', message: `wait ${result.wait}s before next challenge`, retry_after: result.wait });
     }

@@ -42,6 +42,8 @@ export interface AppConfig {
    * (dev/test environments).
    */
   turnstileSecret?: string;
+  /** Lowercased emails that bypass per-user rate limits (operator/admin). */
+  operatorEmails: Set<string>;
 }
 
 export interface BuildAppOptions {

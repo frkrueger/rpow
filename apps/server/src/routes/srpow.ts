@@ -176,7 +176,7 @@ export async function srpowRoutes(app: FastifyInstance) {
 
       const result = await app.bridgeClient.mintTo(
         { recipientWallet: wallet, amountBaseUnits: target },
-        async (signature) => {
+        async (signature: string) => {
           // Persist signature BEFORE the bridge client awaits confirmation. If
           // the server crashes between here and the confirmation result, the
           // reconcile worker on next boot will see this row's solana_signature

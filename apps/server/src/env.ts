@@ -34,6 +34,9 @@ const Schema = z.object({
   LONGSHOT_MIN_BASE_UNITS: z.coerce.number().int().positive().default(10_000_000),
   LONGSHOT_MAX_BASE_UNITS: z.coerce.number().int().positive().default(1_000_000_000),
   LONGSHOT_ALLOWED_EMAILS: z.string().default('frkrueger@mac.com'),
+  // CSV of emails treated as trusted operators. Bypasses /auth/request
+  // cooldown+caps and /challenge per-user lock+cooldown.
+  OPERATOR_EMAILS: z.string().default(''),
 }).superRefine((v, ctx) => {
   if (v.MAILER === 'resend' && !v.RESEND_API_KEY) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['RESEND_API_KEY'], message: 'required when MAILER=resend' });
