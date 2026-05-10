@@ -37,6 +37,7 @@ export function SendPage() {
       setPending(r.pending === true);
       setSentTo(r.recipient_email);
       setSentAmt(formatRpow(r.transferred_base_units));
+      window.gtag?.('event', 'send_tokens', { value: r.transferred_base_units });
       await refresh();
     } catch (err: any) {
       setStatus('error');

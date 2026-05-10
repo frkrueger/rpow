@@ -1,15 +1,92 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
-  <rect width="1200" height="630" fill="#0a0a0a"/>
-  <rect x="40" y="40" width="1120" height="550" rx="12" fill="none" stroke="#00ff41" stroke-width="2" opacity="0.3"/>
-  <text x="100" y="200" font-family="monospace" font-weight="bold" font-size="80" fill="#00ff41">RPOW2</text>
-  <text x="100" y="280" font-family="monospace" font-size="32" fill="#aaaaaa">Proof-of-Work Token Network</text>
-  <text x="100" y="340" font-family="monospace" font-size="24" fill="#666666">A tribute to Hal Finney's original RPOW (2004)</text>
-  <line x1="100" y1="380" x2="500" y2="380" stroke="#00ff41" stroke-width="1" opacity="0.5"/>
-  <text x="100" y="430" font-family="monospace" font-size="22" fill="#00ff41">21M Fixed Supply</text>
-  <text x="100" y="470" font-family="monospace" font-size="22" fill="#00ff41">Browser Mining</text>
-  <text x="100" y="510" font-family="monospace" font-size="22" fill="#00ff41">Solana Bridge (SRPOW)</text>
-  <text x="1060" y="570" font-family="monospace" font-size="18" fill="#333333">rpow2.com</text>
-  <circle cx="85" cy="422" r="4" fill="#00ff41"/>
-  <circle cx="85" cy="462" r="4" fill="#00ff41"/>
-  <circle cx="85" cy="502" r="4" fill="#00ff41"/>
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="30%" r="60%">
+      <stop offset="0%" stop-color="#6ee7b7" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#6ee7b7" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="vignette" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="transparent"/>
+      <stop offset="100%" stop-color="#000" stop-opacity="0.4"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="#08080a"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+
+  <!-- Scanlines (subtle) -->
+  <pattern id="scan" width="1" height="3" patternUnits="userSpaceOnUse">
+    <rect width="1" height="1" fill="white" opacity="0.015"/>
+  </pattern>
+  <rect width="1200" height="630" fill="url(#scan)"/>
+
+  <!-- Panel border -->
+  <rect x="60" y="40" width="1080" height="550" rx="0" fill="none" stroke="#6ee7b7" stroke-width="1" opacity="0.2"/>
+
+  <!-- Title bar -->
+  <rect x="60" y="40" width="1080" height="44" fill="#6ee7b7" fill-opacity="0.03"/>
+  <line x1="60" y1="84" x2="1140" y2="84" stroke="#6ee7b7" stroke-width="1" opacity="0.2"/>
+
+  <!-- Corner marks -->
+  <text x="56" y="37" font-family="monospace" font-size="10" fill="#6ee7b7" opacity="0.4">+</text>
+  <text x="1136" y="597" font-family="monospace" font-size="10" fill="#6ee7b7" opacity="0.4">+</text>
+
+  <!-- Title bar text -->
+  <text x="80" y="68" font-family="'IBM Plex Mono', monospace" font-size="12" fill="#6ee7b7" letter-spacing="3" font-weight="500">RPOW2</text>
+  <text x="1040" y="68" font-family="'IBM Plex Mono', monospace" font-size="10" fill="#6b6b6b" letter-spacing="1" text-anchor="end">rpow2.com</text>
+
+  <!-- Main title -->
+  <text x="100" y="150" font-family="'IBM Plex Mono', monospace" font-weight="700" font-size="52" fill="#6ee7b7">RPOW2</text>
+  <text x="100" y="195" font-family="'IBM Plex Mono', monospace" font-size="22" fill="#e8e3d3" opacity="0.8">Reusable Proofs of Work</text>
+  <text x="100" y="230" font-family="'IBM Plex Mono', monospace" font-size="14" fill="#6b6b6b">A tribute to Hal Finney's original RPOW (2004)</text>
+
+  <!-- Divider -->
+  <line x1="100" y1="260" x2="400" y2="260" stroke="#6ee7b7" stroke-width="1" opacity="0.3"/>
+
+  <!-- Stats grid -->
+  <!-- Row 1 -->
+  <rect x="100" y="285" width="240" height="80" fill="#0d0d10" stroke="#6ee7b7" stroke-width="1" stroke-opacity="0.15"/>
+  <rect x="341" y="285" width="240" height="80" fill="#0d0d10" stroke="#6ee7b7" stroke-width="1" stroke-opacity="0.15"/>
+  <rect x="582" y="285" width="240" height="80" fill="#0d0d10" stroke="#6ee7b7" stroke-width="1" stroke-opacity="0.15"/>
+
+  <text x="120" y="308" font-family="'IBM Plex Mono', monospace" font-size="10" fill="#6b6b6b" letter-spacing="2">MINERS</text>
+  <text x="120" y="345" font-family="'IBM Plex Mono', monospace" font-size="28" fill="#fbbf24" font-weight="600">40,000+</text>
+
+  <text x="361" y="308" font-family="'IBM Plex Mono', monospace" font-size="10" fill="#6b6b6b" letter-spacing="2">MINTED</text>
+  <text x="361" y="345" font-family="'IBM Plex Mono', monospace" font-size="28" fill="#6ee7b7" font-weight="600">9.9M</text>
+
+  <text x="602" y="308" font-family="'IBM Plex Mono', monospace" font-size="10" fill="#6b6b6b" letter-spacing="2">MAX SUPPLY</text>
+  <text x="602" y="345" font-family="'IBM Plex Mono', monospace" font-size="28" fill="#e8e3d3" font-weight="600">19M</text>
+
+  <!-- Row 2 -->
+  <rect x="100" y="366" width="240" height="80" fill="#0d0d10" stroke="#6ee7b7" stroke-width="1" stroke-opacity="0.15"/>
+  <rect x="341" y="366" width="240" height="80" fill="#0d0d10" stroke="#6ee7b7" stroke-width="1" stroke-opacity="0.15"/>
+  <rect x="582" y="366" width="240" height="80" fill="#0d0d10" stroke="#6ee7b7" stroke-width="1" stroke-opacity="0.15"/>
+
+  <text x="120" y="389" font-family="'IBM Plex Mono', monospace" font-size="10" fill="#6b6b6b" letter-spacing="2">DIFFICULTY</text>
+  <text x="120" y="426" font-family="'IBM Plex Mono', monospace" font-size="28" fill="#fbbf24" font-weight="600">25 bits</text>
+
+  <text x="361" y="389" font-family="'IBM Plex Mono', monospace" font-size="10" fill="#6b6b6b" letter-spacing="2">REWARD</text>
+  <text x="361" y="426" font-family="'IBM Plex Mono', monospace" font-size="28" fill="#6ee7b7" font-weight="600">0.01</text>
+
+  <text x="602" y="389" font-family="'IBM Plex Mono', monospace" font-size="10" fill="#6b6b6b" letter-spacing="2">BRIDGE</text>
+  <text x="602" y="426" font-family="'IBM Plex Mono', monospace" font-size="28" fill="#e8e3d3" font-weight="600">SRPOW</text>
+
+  <!-- Supply progress -->
+  <text x="100" y="490" font-family="'IBM Plex Mono', monospace" font-size="10" fill="#6b6b6b" letter-spacing="2">SUPPLY 52.2%</text>
+  <rect x="100" y="500" width="720" height="4" fill="#3a3a3a"/>
+  <rect x="100" y="500" width="376" height="4" fill="#6ee7b7"/>
+
+  <!-- Features -->
+  <circle cx="112" cy="545" r="3" fill="#6ee7b7"/>
+  <text x="124" y="549" font-family="'IBM Plex Mono', monospace" font-size="13" fill="#e8e3d3" opacity="0.7">Browser Mining</text>
+
+  <circle cx="312" cy="545" r="3" fill="#6ee7b7"/>
+  <text x="324" y="549" font-family="'IBM Plex Mono', monospace" font-size="13" fill="#e8e3d3" opacity="0.7">Solana Bridge</text>
+
+  <circle cx="512" cy="545" r="3" fill="#6ee7b7"/>
+  <text x="524" y="549" font-family="'IBM Plex Mono', monospace" font-size="13" fill="#e8e3d3" opacity="0.7">Halving Schedule</text>
+
+  <!-- Vignette -->
+  <rect width="1200" height="630" fill="url(#vignette)"/>
 </svg>

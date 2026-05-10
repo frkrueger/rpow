@@ -88,6 +88,7 @@ export function LoginPage() {
       setStatus('cooldown');
       setCooldown((res as any).cooldown_seconds ?? 30);
       setTurnstileToken(null);
+      window.gtag?.('event', 'sign_up', { method: 'magic_link' });
       if (widgetIdRef.current && window.turnstile) {
         window.turnstile.reset(widgetIdRef.current);
       }
