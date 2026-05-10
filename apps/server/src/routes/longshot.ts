@@ -38,7 +38,15 @@ export async function longshotRoutes(app: FastifyInstance) {
     return { access };
   });
 
-  app.post('/api/longshot/spin', async (req, reply) => {
+  app.post('/api/longshot/spin', {
+    config: {
+      rateLimit: {
+        max: 10,
+        timeWindow: '1 minute',
+        keyGenerator: (req: any) => req.headers['x-forwarded-for'] ?? req.ip,
+      },
+    },
+  }, async (req, reply) => {
     const s = readSession(req as any, app.config.sessionSecret);
     if (!s) return reply.code(401).send({ error: 'UNAUTHORIZED', message: 'login required' });
 

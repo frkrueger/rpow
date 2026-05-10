@@ -225,3 +225,27 @@ describe('GET /api/longshot/stats', () => {
     expect(body.total_spins).toBe(0);
   });
 });
+
+describe('POST /api/longshot/spin rate limit', () => {
+  let cleanup: (() => Promise<void>) | null = null;
+  afterEach(async () => { if (cleanup) await cleanup(); cleanup = null; });
+
+  it('429 after 10 spins from the same IP in a minute', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    const cookie = await login(ctx, 'a@b.com');
+    await seedToken(ctx.pool, 'a@b.com', 100_000n);
+    await ctx.pool.query(`UPDATE app_counters SET value = 100000 WHERE name = 'minted_supply'`);
+    vi.spyOn(randomness, 'rollSpin').mockReturnValue(false);
+
+    let lastStatus = 0;
+    for (let i = 0; i < 12; i++) {
+      const res = await ctx.app.inject({
+        method: 'POST', url: '/api/longshot/spin',
+        headers: { cookie, 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.1' },
+        payload: { stake_base_units: '50', odds_choice: '1:1' },
+      });
+      lastStatus = res.statusCode;
+    }
+    expect(lastStatus).toBe(429);
+  });
+});
