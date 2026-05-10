@@ -8,7 +8,7 @@ import { loadBridgeKeypair } from './bridge-keys.js';
 import { reconcilePendingWraps } from './srpow-reconcile.js';
 
 const env = parseEnv();
-const pool = createPool(env.DATABASE_URL);
+const pool = createPool(env.DATABASE_URL, env.PG_POOL_MAX);
 
 let bridgeClient: BridgeClient;
 if (env.SOLANA_RPC_URL && env.SRPOW_MINT_ADDRESS && env.BRIDGE_KEYPAIR_BASE58) {

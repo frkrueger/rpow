@@ -37,6 +37,10 @@ const Schema = z.object({
   // CSV of emails treated as trusted operators. Bypasses /auth/request
   // cooldown+caps and /challenge per-user lock+cooldown.
   OPERATOR_EMAILS: z.string().default(''),
+  // Per-process pg connection pool size. Total app capacity must stay under
+  // postgres max_connections (200 by default) — sum across all workers and
+  // the rpow-auth service. e.g. 10 cluster workers × 16 + 1 auth × 10 = 170.
+  PG_POOL_MAX: z.coerce.number().int().positive().default(10),
 }).superRefine((v, ctx) => {
   if (v.MAILER === 'resend' && !v.RESEND_API_KEY) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['RESEND_API_KEY'], message: 'required when MAILER=resend' });
