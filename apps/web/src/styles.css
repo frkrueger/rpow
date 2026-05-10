@@ -282,3 +282,31 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .dim { color: var(--dim); }
 .accent { color: var(--accent); }
 main { margin-top: 4px; }
+
+/* The 70-char ASCII header would otherwise force the page wider than a
+   phone viewport. Keep it pre-formatted but contain overflow inside the
+   header so it scrolls locally instead of expanding the layout. */
+.app-header pre { max-width: 100%; overflow-x: auto; overflow-y: hidden; }
+
+@media (max-width: 640px) {
+  .app-shell { margin: 16px auto 48px; padding: 0 12px; }
+  .app-header pre { font-size: 8.5px; line-height: 1.15; }
+  .app-header .tagline { font-size: 11px; }
+  .nav { gap: 1px; }
+  .nav a, .nav button { padding: 4px 7px; font-size: 12px; }
+  .panel-title { padding: 6px 12px; letter-spacing: 2px; }
+  .panel-body { padding: 12px; }
+  .stat-value { font-size: 16px; }
+  .activity-item {
+    grid-template-columns: auto auto 1fr;
+    grid-template-areas:
+      "time badge amount"
+      "party party party";
+    column-gap: 8px;
+    row-gap: 2px;
+  }
+  .activity-time { grid-area: time; }
+  .activity-badge { grid-area: badge; justify-self: start; }
+  .activity-amount { grid-area: amount; justify-self: end; }
+  .activity-item > span:nth-child(3) { grid-area: party; overflow-wrap: anywhere; }
+}

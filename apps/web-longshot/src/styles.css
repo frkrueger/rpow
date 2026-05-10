@@ -180,3 +180,25 @@ input[type="range"] {
 .history li.lose .delta { color: var(--warn); }
 .history .delta { text-align: right; }
 .history .stake { color: var(--dim); }
+
+@media (max-width: 640px) {
+  main { margin: 16px auto 48px; padding: 0 12px; }
+  h1 { font-size: 16px; letter-spacing: 2px; }
+  .card { padding: 14px; }
+  .mute { top: 12px; right: 12px; }
+  .pills { flex-wrap: wrap; }
+  .pill { flex: 1 0 calc(33.333% - 6px); }
+  .history li {
+    grid-template-columns: auto auto 1fr auto;
+    grid-template-areas:
+      "when odds outcome delta"
+      "stake stake stake delta";
+    column-gap: 8px;
+    row-gap: 2px;
+  }
+  .history .when { grid-area: when; }
+  .history .odds { grid-area: odds; }
+  .history .outcome { grid-area: outcome; justify-self: end; }
+  .history .stake { grid-area: stake; text-align: left; }
+  .history .delta { grid-area: delta; align-self: center; }
+}

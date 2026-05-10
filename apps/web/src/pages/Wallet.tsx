@@ -45,7 +45,7 @@ export function WalletPage() {
           <div className="stat-value">{me.daily_remaining_base_units ? formatRpow(me.daily_remaining_base_units) : '—'}</div>
         </div>
       </div>
-      <div style={{ marginTop: 12, display: 'flex', gap: 6 }}>
+      <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         <Link to="/mine"><button className="primary">[ MINE ]</button></Link>
         <Link to="/send"><button>[ SEND ]</button></Link>
         <Link to="/activity"><button>[ ACTIVITY ]</button></Link>
