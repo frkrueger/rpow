@@ -34,22 +34,22 @@ export default function App() {
         <header>
           <pre style={{ margin: 0 }}>{HEADER}</pre>
           <div className="tagline">a modern tribute to a tribute to the original rpow by hal finney</div>
-          <nav style={{ marginTop: 8 }}>
-            <NavLink to="/">[ wallet ]</NavLink>{' '}
-            <NavLink to="/mine">[ mine ]</NavLink>{' '}
-            <NavLink to="/send">[ send ]</NavLink>{' '}
-            <NavLink to="/activity">[ activity ]</NavLink>{' '}
-            <NavLink to="/ledger">[ ledger ]</NavLink>{' '}
-            {me?.wrap_allowed && (<><NavLink to="/wrap">[ wrap ]</NavLink>{' '}</>)}
+          <nav className="nav">
+            <NavLink to="/">wallet</NavLink>
+            <NavLink to="/mine">mine</NavLink>
+            <NavLink to="/send">send</NavLink>
+            <NavLink to="/activity">activity</NavLink>
+            <NavLink to="/ledger">ledger</NavLink>
+            {me?.wrap_allowed && <NavLink to="/wrap">wrap</NavLink>}
+            <NavLink to="/apps">apps</NavLink>
+            <a href="https://stats.rpow2.com/" target="_blank" rel="noreferrer" className="external">stats &nearr;</a>
+            <span className="sep">|</span>
             {me ? (
-              <button onClick={logout} title="end session">[ logout ]</button>
+              <button onClick={logout} title="end session">logout</button>
             ) : (
-              <NavLink to="/login">[ login ]</NavLink>
+              <NavLink to="/login">login</NavLink>
             )}
-            <NavLink to="/apps">[ apps ]</NavLink>{' '}
-            <a href="https://stats.rpow2.com/" target="_blank" rel="noreferrer">[ stats ]</a>{' '}
-            {' · '}
-            <button onClick={() => setTheme(nextTheme(theme))} title="cycle theme">[ theme: {theme} ]</button>
+            <button onClick={() => setTheme(nextTheme(theme))} title="cycle theme">{theme}</button>
           </nav>
         </header>
         <main>

@@ -22,19 +22,33 @@ export function WalletPage() {
   }
 
   return (
-    <Panel title="WALLET">
-      <pre style={{ margin: 0 }}>
-{`  > LOGGED IN AS: ${me.email}
-  > BALANCE     : ${formatRpow(me.balance_base_units)} RPOW
-  > MINTED      : ${formatRpow(me.minted_base_units)}
-  > SENT        : ${formatRpow(me.sent_base_units)}
-  > RECEIVED    : ${formatRpow(me.received_base_units)}
-`}
-      </pre>
-      <div style={{ marginTop: 8 }}>
-        <Link to="/mine">[ MINE ]</Link>{' '}
-        <Link to="/send">[ SEND ]</Link>{' '}
-        <Link to="/activity">[ ACTIVITY ]</Link>{' '}
+    <Panel title="WALLET" status={me.email}>
+      <div className="stat-grid">
+        <div className="stat-cell full">
+          <div className="stat-label">BALANCE</div>
+          <div className="stat-value highlight">{formatRpow(me.balance_base_units)} RPOW</div>
+        </div>
+        <div className="stat-cell">
+          <div className="stat-label">MINTED</div>
+          <div className="stat-value">{formatRpow(me.minted_base_units)}</div>
+        </div>
+        <div className="stat-cell">
+          <div className="stat-label">RECEIVED</div>
+          <div className="stat-value">{formatRpow(me.received_base_units)}</div>
+        </div>
+        <div className="stat-cell">
+          <div className="stat-label">SENT</div>
+          <div className="stat-value">{formatRpow(me.sent_base_units)}</div>
+        </div>
+        <div className="stat-cell">
+          <div className="stat-label">DAILY REMAINING</div>
+          <div className="stat-value">{me.daily_remaining_base_units ? formatRpow(me.daily_remaining_base_units) : '—'}</div>
+        </div>
+      </div>
+      <div style={{ marginTop: 12, display: 'flex', gap: 6 }}>
+        <Link to="/mine"><button className="primary">[ MINE ]</button></Link>
+        <Link to="/send"><button>[ SEND ]</button></Link>
+        <Link to="/activity"><button>[ ACTIVITY ]</button></Link>
         <button onClick={logout}>[ LOGOUT ]</button>
       </div>
     </Panel>

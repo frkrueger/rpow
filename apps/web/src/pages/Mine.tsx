@@ -126,44 +126,36 @@ export function MinePage() {
   if (!me) return <Panel title="MINE"><div>not signed in.</div></Panel>;
 
   const running = status === 'mining' || status === 'submitting';
-
-  // Halving / reward block (when ledger has loaded). Shown above the per-run
-  // mining stats so users see what they're actually mining for.
-  let rewardBlock = '';
-  if (ledger) {
-    const currentReward = formatRpow(ledger.current_reward_base_units);
-    const nextReward = formatRpow(ledger.next_reward_base_units);
-    const nextHalvingAt = formatRpow(ledger.next_halving_at_base_units);
-    const toGo = formatRpow(ledger.base_units_to_next_halving);
-    // Reward fraction expressed as 1/N. Base reward at halving_index 0 is
-    // 1/128 RPOW (= 7,812,500 base units), and halves each tier.
-    const baseDenom = 128;
-    const rewardFrac = `1/${baseDenom * 2 ** ledger.halving_index}`;
-    const nextRewardFrac = ledger.is_capped ? '—' : `1/${baseDenom * 2 ** (ledger.halving_index + 1)}`;
-    rewardBlock = `  CURRENT REWARD   : ${currentReward} RPOW (${rewardFrac}) per solution
-  CURRENT DIFFICULTY: ${ledger.current_difficulty_bits} trailing zero bits
-  NEXT HALVING AT  : ${nextHalvingAt} RPOW total minted (${toGo} RPOW to go)
-  NEXT REWARD      : ${ledger.is_capped ? 'CAPPED' : `${nextReward} RPOW (${nextRewardFrac})`}
-
-`;
-  }
+  const statusLabel = running
+    ? <><span className="status-dot active" />ACTIVE</>
+    : <><span className="status-dot idle" />{status.toUpperCase()}</>;
 
   return (
-    <Panel title="MINE">
-      <pre style={{ margin: 0 }}>
-{`${rewardBlock}  TARGET           : ${target ?? '--'} trailing zero bits
-  HASHES (current) : ${Number(hashes).toLocaleString()}
-  RATE             : ${fmtRate()}
-  ELAPSED          : ${fmtElapsed()}
-  STATUS           : ${status.toUpperCase()}
-  MINED THIS RUN   : ${sessionMinted}${lastTokenId ? `\n  LAST TOKEN       : ${lastTokenId}` : ''}${error ? `\n  ERROR            : ${error}` : ''}
-`}
-      </pre>
-      <div style={{ marginTop: 8 }}>
+    <Panel title="MINING" status={statusLabel}>
+      <div className="mine-grid">
+        {ledger && <>
+          <span className="key">REWARD</span><span className="val">{formatRpow(ledger.current_reward_base_units)} RPOW / solution</span>
+          <span className="key">DIFFICULTY</span><span className="val">{ledger.current_difficulty_bits} bits</span>
+        </>}
+        <span className="key">HASHES</span><span className="val active">{Number(hashes).toLocaleString()}</span>
+        <span className="key">RATE</span><span className="val active">{fmtRate()}</span>
+        <span className="key">ELAPSED</span><span className="val">{fmtElapsed()}</span>
+        <span className="key">MINED</span><span className="val active">{sessionMinted} this session</span>
+        {lastTokenId && <><span className="key">LAST TOKEN</span><span className="val" style={{ fontSize: 11 }}>{lastTokenId}</span></>}
+        {error && <><span className="key">ERROR</span><span className="val" style={{ color: 'var(--error)' }}>{error}</span></>}
+      </div>
+      {running && <div className="hash-bar"><div className="hash-bar-fill" /></div>}
+      {ledger && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--dim)', marginTop: running ? 0 : 12 }}>
+          <span>next halving: {formatRpow(ledger.base_units_to_next_halving)} RPOW to go</span>
+          {me.daily_remaining_base_units && <span>daily remaining: {formatRpow(me.daily_remaining_base_units)}</span>}
+        </div>
+      )}
+      <div style={{ marginTop: 12 }}>
         {running ? (
-          <button onClick={stop}>[ STOP ]</button>
+          <button className="danger" onClick={stop}>[ STOP ]</button>
         ) : (
-          <button onClick={start}>[ MINE ]</button>
+          <button className="primary" onClick={start}>[ MINE ]</button>
         )}
       </div>
     </Panel>
