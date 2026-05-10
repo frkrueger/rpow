@@ -1,0 +1,63 @@
+# RPOW2 — Reusable Proofs of Work
+
+> A modern tribute to Hal Finney's original RPOW (2004). Browser-based proof-of-work token mining with a 19M fixed supply and Solana bridge.
+
+## Overview
+
+RPOW2 is a proof-of-work token network where users mine tokens in their browser by solving SHA-256 hash challenges. The system uses a halving schedule similar to Bitcoin, with difficulty adjustments and decreasing rewards over time.
+
+## Key Facts
+
+- **Total Supply**: 19,000,000 RPOW (fixed cap)
+- **Mining**: Browser-based SHA-256 proof-of-work
+- **Current Reward**: 0.01 RPOW per solution
+- **Current Difficulty**: 25 trailing zero bits
+- **Halving Schedule**: Reward halves every 1M RPOW minted after 9M offset
+- **Bridge**: SRPOW token on Solana (SPL token)
+- **Authentication**: Email magic links with Cloudflare Turnstile
+- **Base Units**: 1 RPOW = 1,000,000,000 base units (9 decimals, matching Solana)
+
+## URLs
+
+- Main app: https://rpow2.com
+- Live stats: https://stats.rpow2.com
+- API: https://api.rpow2.com
+- SRPOW on Solana: mint address 8HBryhguUBG7APYAKAANiEMCw6zo1UYP7Xuj1ndvcPJH
+
+## API Endpoints
+
+- `GET /ledger` — network stats (minted supply, user count, difficulty, reward)
+- `POST /auth/request` — request magic link login (requires Turnstile token)
+- `GET /auth/verify?token=...` — verify magic link and create session
+- `GET /me` — current user balance, minted, sent, received
+- `POST /challenge` — get a mining challenge (requires auth)
+- `POST /mint` — submit proof-of-work solution (requires auth)
+- `POST /send` — transfer tokens to another user
+- `GET /activity` — user transaction history
+- `POST /srpow/wrap` — bridge RPOW to Solana SRPOW
+
+## How Mining Works
+
+1. User requests a challenge (`POST /challenge`) — receives a nonce prefix and difficulty target
+2. Browser web worker hashes (SHA-256) the nonce prefix + incrementing nonce until the hash has N leading zero bits
+3. User submits the solution (`POST /mint`) — server verifies and issues token
+4. One challenge at a time per account, 5-second cooldown between challenges
+5. Daily mint cap per account to prevent GPU farming
+
+## Technology
+
+- **Backend**: Node.js, Fastify, PostgreSQL 17, clustered (8 workers)
+- **Frontend**: React, Vite, TypeScript
+- **Email**: Self-hosted Postfix with DKIM/SPF/DMARC + Resend fallback
+- **Infrastructure**: OVH VPS, Cloudflare proxy, nginx reverse proxy
+- **Bridge**: Solana Web3.js, SPL Token program
+
+## Community
+
+- Community-built mining clients exist in Go, Rust, Python
+- Third-party apps: rpow2swap.com (swap), rpowmarket.com (marketplace)
+- 40,000+ registered miners as of May 2026
+
+## Origin
+
+Named after Hal Finney's 2004 RPOW (Reusable Proofs of Work) system, which was one of the earliest implementations of a transferable proof-of-work token — a precursor concept to Bitcoin.
