@@ -110,7 +110,10 @@ export async function flipRoutes(app: FastifyInstance) {
           `SELECT x_handle FROM users WHERE email = $1`,
           [offererEmail],
         );
-        const offererHandle = offererRes.rows[0]?.x_handle ?? offererEmail;
+        const offererHandle = offererRes.rows[0]?.x_handle;
+        if (!offererHandle) {
+          return { error: 'INTERNAL_ERROR', message: 'offerer has no verified handle', status: 500 };
+        }
 
         await burnFromUser(c, challengerEmail, bet, app.config.signingPrivateKeyHex);
 
