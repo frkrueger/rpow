@@ -49,7 +49,7 @@ export async function makeTestApp(opts: {
       difficultyFloor: 4,
       mintMaxSupply: 21,
       signingPrivateKeyHex: '11'.repeat(32),
-      signingPublicKeyHex: '22'.repeat(32),
+      signingPublicKeyHex: 'd04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737',
       webOrigin: 'http://web.test',
       longShotWebOrigin: 'http://longshot.test',
       longShotMinBaseUnits: 10,
