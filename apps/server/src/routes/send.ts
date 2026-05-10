@@ -57,13 +57,15 @@ export async function sendRoutes(app: FastifyInstance) {
         max: 10,
         timeWindow: '1 second',
         hook: 'preHandler',
+        // keyGenerator runs before allowList(), so we must return a non-null key
+        // even when allowList will discard the limit check. __skip__ prefix is
+        // a non-colliding bucket Fastify never reads.
         keyGenerator: (req: any) => req.apiKeyHash ?? `__skip__:${req.ip}`,
         allowList: (req: any) => !req.viaApiKey,
-        errorResponseBuilder: (_req: any, ctx: any) => {
+        errorResponseBuilder: () => {
           const err: any = new Error('API key burst limit (10/sec) exceeded');
-          err.statusCode = ctx.statusCode ?? 429;
+          err.statusCode = 429;
           err.error = 'RATE_LIMITED';
-          err.message = 'API key burst limit (10/sec) exceeded';
           return err;
         },
       },
@@ -76,6 +78,9 @@ export async function sendRoutes(app: FastifyInstance) {
     if (!parsed.success) return reply.code(400).send({ error: 'BAD_REQUEST', message: 'invalid body' });
 
     if (s.viaApiKey) {
+      // Per-account, not per-key: counts ALL transfers (including session-authed)
+      // from this email in the last hour. Equivalent to per-key under the
+      // one-key-per-account spec.
       const { rows } = await app.pool.query<{ n: string }>(
         `SELECT count(*)::text AS n FROM transfers
          WHERE sender_email = $1 AND created_at > now() - interval '1 hour'`,
