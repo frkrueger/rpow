@@ -12,12 +12,6 @@ import { LedgerPage } from './pages/Ledger.js';
 import { WrapPage } from './pages/WrapPage.js';
 import { AppsPage } from './pages/Apps.js';
 
-const HEADER = [
-  '+======================================================================+',
-  '|                   RPOW2 - Reusable Proofs of Work                    |',
-  '+======================================================================+',
-].join('\n');
-
 export default function App() {
   const [theme, setTheme] = useState<Theme>(loadTheme());
   useEffect(() => { applyTheme(theme); }, [theme]);
@@ -32,7 +26,7 @@ export default function App() {
     <HashRouter>
       <div className="app-shell">
         <header>
-          <pre style={{ margin: 0 }}>{HEADER}</pre>
+          <pre style={{ margin: 0 }}>{'+======================================================================+\n|                   RPOW2 - Reusable Proofs of Work                  '}<span onClick={() => setTheme(nextTheme(theme))} title="cycle theme" style={{ cursor: 'pointer', fontSize: 13 }}>{'\u25cf'}</span>{' |\n+======================================================================+'}</pre>
           <div className="tagline">a modern tribute to a tribute to the original rpow by hal finney</div>
           <nav className="nav">
             <NavLink to="/">wallet</NavLink>
@@ -42,14 +36,11 @@ export default function App() {
             <NavLink to="/ledger">ledger</NavLink>
             {me?.wrap_allowed && <NavLink to="/wrap">wrap</NavLink>}
             <NavLink to="/apps">apps</NavLink>
-            <a href="https://stats.rpow2.com/" target="_blank" rel="noreferrer" className="external">stats {'\u2197'}</a>
-            <span className="sep">|</span>
-            {me ? (
-              <button onClick={logout} title="end session">logout</button>
-            ) : (
-              <NavLink to="/login">login</NavLink>
-            )}
-            <button onClick={() => setTheme(nextTheme(theme))} title="cycle theme" style={{ fontSize: 11 }}>{'\u25cf'}</button>
+            <a href="https://stats.rpow2.com/" target="_blank" rel="noreferrer" className="external">stats{'\u2197'}</a>
+            {me
+              ? <button onClick={logout} title="end session">out</button>
+              : <NavLink to="/login">login</NavLink>
+            }
           </nav>
         </header>
         <main>
