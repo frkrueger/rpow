@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { hashToken, issueMagicLink } from '../magic.js';
 import { signSession, SESSION_COOKIE, SESSION_TTL_SECONDS, verifySession } from '../session.js';
 import { makeUnsubToken } from '../unsub.js';
+import { magicLinkEmail } from '../email-template.js';
 
 const RequestBody = z.object({
   email: z.string().email(),
@@ -96,7 +97,7 @@ export async function authRoutes(app: FastifyInstance) {
       to: email,
       subject: 'rpow2 — your magic link',
       text: `Click to sign in:\n${link}\n\nLink expires in 15 minutes.`,
-      html: `<p>Click to sign in to <a href="${link}">rpow2</a>.</p><p><a href="${link}">${link}</a></p><p>Link expires in 15 minutes.</p>`,
+      html: magicLinkEmail(link),
       headers: {
         'List-Unsubscribe': `<${unsubUrl}>`,
         'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
