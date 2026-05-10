@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Panel } from '../components/Panel.js';
 import { api } from '../api.js';
 import { useMe } from '../hooks/useMe.js';
@@ -51,7 +52,12 @@ export function SendPage() {
     }
   }
 
-  if (!me) return <Panel title="SEND"><div>not signed in.</div></Panel>;
+  if (!me) return (
+    <Panel title="SEND">
+      <div>not signed in.</div>
+      <div style={{ marginTop: 8 }}><Link to="/login">[ go to login ]</Link></div>
+    </Panel>
+  );
 
   return (
     <Panel title="SEND">
