@@ -6,6 +6,7 @@ import { verifySolution } from '../pow.js';
 import { signTokenPayload } from '../signing.js';
 import { withTx } from '../db.js';
 import { currentRewardBaseUnits, BASE_UNITS_PER_RPOW } from '../schedule.js';
+import { creditValidBalance } from '../balances.js';
 
 const Body = z.object({ challenge_id: z.string().uuid(), solution_nonce: z.string().regex(/^\d{1,20}$/) });
 
@@ -110,6 +111,7 @@ export async function mintRoutes(app: FastifyInstance) {
          VALUES($1, $2, $3, 'VALID', $4, $5)`,
         [tokenId, s.email, reward.toString(), issuedAt, sig],
       );
+      await creditValidBalance(c, s.email, reward);
       return { token: { id: tokenId, value_base_units: reward.toString(), issued_at: issuedAt.toISOString() } };
     });
 

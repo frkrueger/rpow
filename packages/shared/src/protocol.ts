@@ -35,7 +35,7 @@ export interface MintResponse { token: TokenSummary }
 
 export interface TokenSummary {
   id: string;
-  value: number;
+  value_base_units: string;
   issued_at: string;
 }
 
@@ -89,6 +89,73 @@ export interface LedgerResponse {
   halving_index: number;
   is_capped: boolean;
   user_count: number;
+}
+
+export type StatsHistoryWindow = '24h' | '7d' | '30d' | 'all';
+
+export interface StatsBalanceHistogramBucket {
+  bucket: string;
+  min_balance_base_units: string;
+  max_balance_base_units: string | null;
+  holder_count: number;
+  total_balance_base_units: string;
+}
+
+export interface StatsTopBalance {
+  rank: number;
+  balance_base_units: string;
+}
+
+export interface StatsSummaryResponse {
+  sampled_at: string;
+  ledger: LedgerResponse;
+  activity: {
+    mint_count_1h: number;
+    mint_count_24h: number;
+    minted_base_units_1h: string;
+    minted_base_units_24h: string;
+    transfer_count_1h: number;
+    transfer_count_24h: number;
+    transferred_base_units_1h: string;
+    transferred_base_units_24h: string;
+    active_challengers_15m: number;
+    /** SRPOW wraps confirmed in the last 24h. */
+    wrap_count_24h: number;
+    /** Base-unit total of confirmed SRPOW wraps in the last 24h. */
+    wrapped_base_units_24h: string;
+    /** Users that have bound a Solana wallet via /phantom/bind. */
+    bound_wallet_count: number;
+  };
+  holders: {
+    holder_count: number;
+    zero_balance_user_count: number;
+    average_balance_base_units: string;
+    balance_histogram: StatsBalanceHistogramBucket[];
+    top_balances: StatsTopBalance[];
+  };
+}
+
+export interface StatsHistoryPoint {
+  bucket_start: string;
+  total_minted_base_units: string;
+  mint_count: number;
+  minted_base_units: string;
+  total_transferred_base_units: string;
+  transfer_count: number;
+  transferred_base_units: string;
+  circulating_supply_base_units: string;
+  user_count: number;
+  new_users: number;
+  current_difficulty_bits: number;
+  current_reward_base_units: string;
+  challenges: number;
+  active_challengers: number;
+}
+
+export interface StatsHistoryResponse {
+  window: StatsHistoryWindow;
+  bucket_seconds: number;
+  rows: StatsHistoryPoint[];
 }
 
 export interface PhantomChallengeResponse {

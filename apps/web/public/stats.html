@@ -163,6 +163,21 @@ a:hover { border-bottom-color: var(--accent); }
     </div>
   </div>
 
+  <div class="panel d2" style="animation: panel-in 400ms ease-out" id="activity-panel" hidden>
+    <div class="panel-title"><span>ACTIVITY</span><span class="status">LAST 24h</span></div>
+    <div class="panel-body" style="padding:0"><div id="activity"></div></div>
+  </div>
+
+  <div class="panel d3" style="animation: panel-in 400ms ease-out" id="holders-panel" hidden>
+    <div class="panel-title"><span>HOLDERS</span><span class="status">CURRENT</span></div>
+    <div class="panel-body" style="padding:0"><div id="holders"></div></div>
+  </div>
+
+  <div class="panel d4" style="animation: panel-in 400ms ease-out" id="histogram-panel" hidden>
+    <div class="panel-title"><span>BALANCE DISTRIBUTION</span><span class="status">RPOW</span></div>
+    <div class="panel-body"><div id="histogram"></div></div>
+  </div>
+
   <div class="footer">
     <span>rpow2.com</span>
     <a href="https://rpow2.com/#/mine">start mining</a>
@@ -174,25 +189,58 @@ const API = (window.location.hostname === 'localhost' && window.location.port ==
   ? 'http://localhost:8080'
   : '/api';
 
-const BAKED = {"total_minted":9915521,"total_transferred":2429448,"circulating_supply":4175787,"current_difficulty_bits":25,"user_count":39965,"max_supply":19000000,"epoch":0,"epoch_size":10000000,"next_milestone_at":10000000,"coins_until_next_milestone":84479,"next_difficulty_bits":26,"is_capped":false};
+// Halving interval is fixed at 1M RPOW (constant in the schedule); difficulty is constant too.
+const HALVING_INTERVAL_RPOW = 1_000_000;
+
+// Pre-baked first-paint values; replaced on first /stats/summary fetch.
+const BAKED = {
+  total_minted: 9915521,
+  total_transferred: 2429448,
+  circulating_supply: 4175787,
+  current_difficulty_bits: 25,
+  user_count: 39965,
+  max_supply: 19000000,
+  epoch: 0,
+  next_milestone_at: 10000000,
+  coins_until_next_milestone: 84479,
+  is_capped: false,
+  current_reward: 0.01,
+  next_reward: 0.005,
+  mint_count_24h: 0,
+  transfer_count_24h: 0,
+  active_challengers_15m: 0,
+  wrap_count_24h: 0,
+  wrapped_supply: 0,
+  bound_wallet_count: 0,
+  holder_count: 0,
+  zero_balance_user_count: 0,
+  average_balance: 0,
+  top_balances: [],
+  histogram: [],
+};
 const BAKED_AT = "2026-05-10T03:10:00Z";
 
 const $ = (id) => document.getElementById(id);
 let prev = {};
 let lastUpdated = null;
 
-function fmt(n) { return n.toLocaleString('en-US'); }
-function pct(n, d) { return ((n / d) * 100).toFixed(1); }
+function fmt(n) { return Number(n).toLocaleString('en-US'); }
+function fmtRpow(n) {
+  // Format with up to 6 decimals, trimming trailing zeros.
+  return Number(n).toLocaleString('en-US', { maximumFractionDigits: 6 });
+}
+function pct(n, d) { return d > 0 ? ((n / d) * 100).toFixed(1) : '0'; }
 
 function render(d) {
   const mintedPct = pct(d.total_minted, d.max_supply);
-  const epochProgress = pct(d.total_minted - (d.epoch * d.epoch_size), d.epoch_size);
+  const epochStartedAt = d.epoch * HALVING_INTERVAL_RPOW;
+  const epochProgress = pct(d.total_minted - epochStartedAt, HALVING_INTERVAL_RPOW);
   const remaining = d.max_supply - d.total_minted;
-  const burned = d.total_minted - d.circulating_supply;
-  const burnPct = d.total_minted > 0 ? pct(burned, d.total_minted) : '0';
+  const wrapped = d.wrapped_supply || (d.total_minted - d.circulating_supply);
+  const wrapPct = d.total_minted > 0 ? pct(wrapped, d.total_minted) : '0';
   const xferPct = d.total_minted > 0 ? pct(d.total_transferred, d.total_minted) : '0';
-  const reward = d.current_reward || (d.epoch === 0 ? 0.01 : 0.01 / Math.pow(2, d.epoch));
-  const nextReward = reward / 2;
+  const reward = d.current_reward;
+  const nextReward = d.next_reward != null ? d.next_reward : reward / 2;
 
   const html = `
     <div class="stat-grid">
@@ -202,15 +250,15 @@ function render(d) {
       </div>
       <div class="stat-cell">
         <div class="stat-label">MINTED</div>
-        <div class="stat-value accent" id="v-minted">${fmt(d.total_minted)}</div>
+        <div class="stat-value accent" id="v-minted">${fmtRpow(d.total_minted)}</div>
       </div>
       <div class="stat-cell">
         <div class="stat-label">CIRCULATING</div>
-        <div class="stat-value accent" id="v-circ">${fmt(d.circulating_supply)}</div>
+        <div class="stat-value accent" id="v-circ">${fmtRpow(d.circulating_supply)}</div>
       </div>
       <div class="stat-cell">
         <div class="stat-label">TRANSFERRED</div>
-        <div class="stat-value" id="v-xfer">${fmt(d.total_transferred)}</div>
+        <div class="stat-value" id="v-xfer">${fmtRpow(d.total_transferred)}</div>
       </div>
     </div>
 
@@ -223,8 +271,8 @@ function render(d) {
         <div class="progress-fill" style="width:${mintedPct}%"></div>
       </div>
       <div style="display:flex; justify-content:space-between; font-size:11px; color:#6b6b6b; margin-top:6px;">
-        <span>${fmt(d.total_minted)} minted</span>
-        <span>${fmt(remaining)} remaining</span>
+        <span>${fmtRpow(d.total_minted)} minted</span>
+        <span>${fmtRpow(remaining)} remaining</span>
       </div>
     </div>
 
@@ -235,7 +283,7 @@ function render(d) {
       </div>
       <div class="stat-cell">
         <div class="stat-label">REWARD</div>
-        <div class="stat-value accent">${reward} RPOW</div>
+        <div class="stat-value accent">${fmtRpow(reward)} RPOW</div>
       </div>
       <div class="stat-cell">
         <div class="stat-label">HALVING</div>
@@ -246,25 +294,25 @@ function render(d) {
     <div style="padding:16px; border-top:1px solid rgba(110,231,183,0.18);">
       <div style="display:flex; justify-content:space-between; font-size:11px; color:#6b6b6b; margin-bottom:4px;">
         <span>NEXT HALVING</span>
-        <span>${fmt(d.coins_until_next_milestone)} RPOW to go</span>
+        <span>${fmtRpow(d.coins_until_next_milestone)} RPOW to go</span>
       </div>
       <div class="progress-track">
         <div class="progress-fill" style="width:${epochProgress}%"></div>
       </div>
       <div style="display:flex; justify-content:space-between; font-size:11px; color:#6b6b6b; margin-top:6px;">
-        <span>next reward: ${nextReward} RPOW</span>
-        <span>next difficulty: ${d.next_difficulty_bits} bits</span>
+        <span>next reward: ${fmtRpow(nextReward)} RPOW</span>
+        <span>next milestone: ${fmt(d.next_milestone_at)}</span>
       </div>
     </div>
 
     <div class="stat-grid" style="border-top:1px solid rgba(110,231,183,0.18)">
       <div class="stat-cell">
         <div class="stat-label">WRAPPED (SRPOW)</div>
-        <div class="stat-value">${fmt(burned)}</div>
+        <div class="stat-value">${fmtRpow(wrapped)}</div>
       </div>
       <div class="stat-cell">
         <div class="stat-label">WRAP RATE</div>
-        <div class="stat-value">${burnPct}%</div>
+        <div class="stat-value">${wrapPct}%</div>
       </div>
       <div class="stat-cell">
         <div class="stat-label">VELOCITY</div>
@@ -272,14 +320,106 @@ function render(d) {
       </div>
       <div class="stat-cell">
         <div class="stat-label">AVG / MINER</div>
-        <div class="stat-value">${d.user_count > 0 ? fmt(Math.round(d.total_minted / d.user_count)) : '0'}</div>
+        <div class="stat-value">${d.user_count > 0 ? fmtRpow(d.total_minted / d.user_count) : '0'}</div>
       </div>
     </div>
 
     ${d.is_capped ? '<div style="padding:16px;text-align:center;border-top:1px solid rgba(110,231,183,0.18);"><div class="stat-value amber">MAX SUPPLY REACHED</div><div style="font-size:12px;color:#6b6b6b;margin-top:4px;">No more tokens can be minted.</div></div>' : ''}
   `;
-
   $('dashboard').innerHTML = html;
+
+  // Activity panel: recent counts and volumes from /stats/summary.
+  if (d.mint_count_24h != null || d.transfer_count_24h != null) {
+    $('activity-panel').hidden = false;
+    $('activity').innerHTML = `
+      <div class="stat-grid cols-3">
+        <div class="stat-cell">
+          <div class="stat-label">MINTS / 24h</div>
+          <div class="stat-value accent">${fmt(d.mint_count_24h)}</div>
+          <div style="font-size:11px;color:var(--dim);margin-top:2px;">${fmtRpow(d.minted_24h || 0)} RPOW</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-label">TRANSFERS / 24h</div>
+          <div class="stat-value">${fmt(d.transfer_count_24h)}</div>
+          <div style="font-size:11px;color:var(--dim);margin-top:2px;">${fmtRpow(d.transferred_24h || 0)} RPOW</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-label">MINERS / 15m</div>
+          <div class="stat-value amber">${fmt(d.active_challengers_15m)}</div>
+        </div>
+      </div>
+      <div class="stat-grid cols-3" style="border-top:1px solid var(--accent-dim)">
+        <div class="stat-cell">
+          <div class="stat-label">WRAPS / 24h</div>
+          <div class="stat-value">${fmt(d.wrap_count_24h)}</div>
+          <div style="font-size:11px;color:var(--dim);margin-top:2px;">${fmtRpow(d.wrapped_24h || 0)} RPOW</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-label">BOUND WALLETS</div>
+          <div class="stat-value">${fmt(d.bound_wallet_count)}</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-label">MINTS / 1h</div>
+          <div class="stat-value">${fmt(d.mint_count_1h || 0)}</div>
+          <div style="font-size:11px;color:var(--dim);margin-top:2px;">${fmtRpow(d.minted_1h || 0)} RPOW</div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Holders panel: holder counts and average balance.
+  if (d.holder_count != null) {
+    $('holders-panel').hidden = false;
+    const inactive = d.zero_balance_user_count;
+    $('holders').innerHTML = `
+      <div class="stat-grid cols-3">
+        <div class="stat-cell">
+          <div class="stat-label">HOLDERS</div>
+          <div class="stat-value accent">${fmt(d.holder_count)}</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-label">ZERO BALANCE</div>
+          <div class="stat-value">${fmt(inactive)}</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-label">AVG / HOLDER</div>
+          <div class="stat-value">${fmtRpow(d.average_balance)}</div>
+        </div>
+      </div>
+      ${(d.top_balances && d.top_balances.length > 0) ? `
+        <div style="padding:14px 16px; border-top:1px solid var(--accent-dim);">
+          <div style="font-size:10px;letter-spacing:2px;color:var(--dim);margin-bottom:8px;">TOP HOLDERS</div>
+          ${d.top_balances.slice(0, 10).map(b => `
+            <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;">
+              <span style="color:var(--dim);width:32px;">#${b.rank}</span>
+              <span style="color:var(--accent);text-align:right;">${fmtRpow(b.balance)} RPOW</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+    `;
+  }
+
+  // Balance histogram: per-bucket holder counts.
+  if (d.histogram && d.histogram.length > 0) {
+    $('histogram-panel').hidden = false;
+    const maxCount = Math.max(...d.histogram.map(b => b.holder_count), 1);
+    $('histogram').innerHTML = d.histogram.map(b => {
+      const widthPct = (b.holder_count / maxCount) * 100;
+      return `
+        <div style="margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--dim);margin-bottom:3px;">
+            <span style="color:var(--fg);">${b.bucket} RPOW</span>
+            <span>${fmt(b.holder_count)} holder${b.holder_count === 1 ? '' : 's'} · ${fmtRpow(b.total)} RPOW</span>
+          </div>
+          <div class="progress-track" style="height:6px;">
+            <div class="progress-fill" style="width:${widthPct}%"></div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
   if (lastUpdated) {
     const ago = Math.round((Date.now() - lastUpdated) / 1000);
     const label = ago < 60 ? 'just now' : ago < 3600 ? Math.round(ago/60) + 'm ago' : Math.round(ago/3600) + 'h ago';
@@ -325,7 +465,7 @@ function renderWithTimestamp(d, ts) {
   if (!prev.user_count) {
     render(d);
   } else {
-    const changed = Object.keys(d).some(k => d[k] !== prev[k]);
+    const changed = Object.keys(d).some(k => JSON.stringify(d[k]) !== JSON.stringify(prev[k]));
     if (changed) {
       render(d);
       requestAnimationFrame(() => flashChanged(d));
@@ -334,26 +474,60 @@ function renderWithTimestamp(d, ts) {
   prev = d;
 }
 
-function normalizeLedger(raw) {
-  const BU = BigInt(raw.base_units_per_rpow || '1000000000');
-  const toRpow = (s) => Number(BigInt(s || '0') / BU);
-  if (raw.total_minted_base_units !== undefined) {
-    return {
-      total_minted: toRpow(raw.minted_supply_counter_base_units || raw.total_minted_base_units),
-      total_transferred: toRpow(raw.total_transferred_base_units),
-      circulating_supply: toRpow(raw.circulating_supply_base_units),
-      current_difficulty_bits: raw.current_difficulty_bits,
-      user_count: raw.user_count,
-      max_supply: Number(BigInt(raw.max_supply_base_units) / BU),
-      epoch: raw.halving_index || 0,
-      epoch_size: Number(BigInt(raw.next_halving_at_base_units || '10000000000000000') / BU) / Math.max(raw.halving_index + 1, 1),
-      next_milestone_at: toRpow(raw.next_halving_at_base_units),
-      coins_until_next_milestone: toRpow(raw.base_units_to_next_halving),
-      next_difficulty_bits: raw.current_difficulty_bits + 1,
-      is_capped: raw.is_capped,
-    };
-  }
-  return raw;
+// Convert a base-unit string to a Number-of-RPOW with 9-decimal precision.
+function buToRpow(s, denom) {
+  if (s == null) return 0;
+  const n = BigInt(s);
+  const whole = Number(n / denom);
+  const frac = Number(n % denom) / Number(denom);
+  return whole + frac;
+}
+
+function normalizeSummary(raw) {
+  const BU = BigInt(raw.ledger.base_units_per_rpow || '1000000000');
+  const toRpow = (s) => buToRpow(s, BU);
+  const ledger = raw.ledger;
+  const activity = raw.activity || {};
+  const holders = raw.holders || {};
+  return {
+    total_minted: toRpow(ledger.minted_supply_counter_base_units || ledger.total_minted_base_units),
+    total_transferred: toRpow(ledger.total_transferred_base_units),
+    circulating_supply: toRpow(ledger.circulating_supply_base_units),
+    current_difficulty_bits: ledger.current_difficulty_bits,
+    user_count: ledger.user_count,
+    max_supply: toRpow(ledger.max_supply_base_units),
+    epoch: ledger.halving_index || 0,
+    next_milestone_at: toRpow(ledger.next_halving_at_base_units),
+    coins_until_next_milestone: toRpow(ledger.base_units_to_next_halving),
+    is_capped: ledger.is_capped,
+    current_reward: toRpow(ledger.current_reward_base_units),
+    next_reward: toRpow(ledger.next_reward_base_units),
+    mint_count_1h: activity.mint_count_1h || 0,
+    mint_count_24h: activity.mint_count_24h || 0,
+    minted_1h: toRpow(activity.minted_base_units_1h),
+    minted_24h: toRpow(activity.minted_base_units_24h),
+    transfer_count_1h: activity.transfer_count_1h || 0,
+    transfer_count_24h: activity.transfer_count_24h || 0,
+    transferred_1h: toRpow(activity.transferred_base_units_1h),
+    transferred_24h: toRpow(activity.transferred_base_units_24h),
+    active_challengers_15m: activity.active_challengers_15m || 0,
+    wrap_count_24h: activity.wrap_count_24h || 0,
+    wrapped_24h: toRpow(activity.wrapped_base_units_24h),
+    bound_wallet_count: activity.bound_wallet_count || 0,
+    holder_count: holders.holder_count || 0,
+    zero_balance_user_count: holders.zero_balance_user_count || 0,
+    average_balance: toRpow(holders.average_balance_base_units),
+    top_balances: (holders.top_balances || []).map(b => ({
+      rank: b.rank,
+      balance: toRpow(b.balance_base_units),
+    })),
+    histogram: (holders.balance_histogram || []).map(h => ({
+      bucket: h.bucket,
+      holder_count: h.holder_count,
+      total: toRpow(h.total_balance_base_units),
+    })),
+    wrapped_supply: undefined,  // derived from total_minted - circulating in render()
+  };
 }
 
 async function fetchStats(force) {
@@ -365,10 +539,10 @@ async function fetchStats(force) {
     }
   }
   try {
-    const res = await fetch(API + '/ledger');
+    const res = await fetch(API + '/stats/summary');
     if (!res.ok) throw new Error(res.statusText);
     const raw = await res.json();
-    const d = normalizeLedger(raw);
+    const d = normalizeSummary(raw);
     const now = Date.now();
     saveCache(d);
     renderWithTimestamp(d, now);

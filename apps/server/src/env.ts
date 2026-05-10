@@ -21,6 +21,7 @@ const Schema = z.object({
   DIFFICULTY_FLOOR: z.coerce.number().int().min(4).max(40).default(20),
   MINT_MAX_SUPPLY: z.coerce.number().int().positive().default(19_000_000),
   WEB_ORIGIN: z.string().url().default('http://localhost:5173'),
+  PUBLIC_STATS_ORIGINS: z.string().default('').transform(v => v.split(',').map(origin => origin.trim()).filter(Boolean)),
   TURNSTILE_SECRET: z.string().optional(),
   MAIL_THROTTLE_RPS: z.coerce.number().positive().default(4),
   MAIL_THROTTLE_MAX_QUEUE: z.coerce.number().int().positive().default(200),
