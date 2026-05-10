@@ -338,3 +338,29 @@ describe('rate limit on /send via API key', () => {
     expect(res.json().error).toBe('RATE_LIMITED');
   });
 });
+
+describe('API keys do NOT work outside the allowlist', () => {
+  let cleanup: (() => Promise<void>) | null = null;
+  afterEach(async () => { if (cleanup) await cleanup(); cleanup = null; });
+
+  it('401 on /api/longshot/spin even with a valid API key', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    const { plaintext } = await seedUserAndKey(ctx.pool, 'spin@example.com');
+    const res = await ctx.app.inject({
+      method: 'POST', url: '/api/longshot/spin',
+      headers: { authorization: `Bearer ${plaintext}`, 'content-type': 'application/json' },
+      payload: { stake_base_units: '100', odds_choice: '1:1' },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('401 on /api/longshot/access with API key only', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    const { plaintext } = await seedUserAndKey(ctx.pool, 'spin@example.com');
+    const res = await ctx.app.inject({
+      method: 'GET', url: '/api/longshot/access',
+      headers: { authorization: `Bearer ${plaintext}` },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+});
