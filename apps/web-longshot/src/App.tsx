@@ -44,7 +44,7 @@ export function App() {
       if (r.outcome === 'WIN') playWin(); else playLose();
     } catch (e: any) {
       if (e.message === 'Too Many Requests' || e.message === 'TOO_MANY') {
-        setCooldown(6);
+        setCooldown(60);
       } else {
         setError(e.message);
       }
