@@ -180,6 +180,29 @@ describe('POST /api/gladiator/flip', () => {
     expect(res.json().error).toBe('SELF_CHALLENGE');
   });
 
+  it('500 INTERNAL_ERROR when offerer has no x_handle at flip time (defensive)', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    await login(ctx, 'alice@a.com');
+    await markVerified(ctx.pool, 'alice@a.com', 'alice');
+    const cookie = await login(ctx, 'bob@b.com');
+    await markVerified(ctx.pool, 'bob@b.com', 'bob');
+    await seedToken(ctx.pool, 'bob@b.com', 1000n);
+    const sessionId = await openSession(ctx.pool, 'alice@a.com', 10n, 100n);
+    // Clear alice's x_handle AFTER session was opened
+    await ctx.pool.query(
+      `UPDATE users SET x_handle = NULL WHERE email = 'alice@a.com'`,
+    );
+
+    const res = await ctx.app.inject({
+      method: 'POST',
+      url: '/api/gladiator/flip',
+      headers: { cookie, 'content-type': 'application/json' },
+      payload: { session_id: sessionId },
+    });
+    expect(res.statusCode).toBe(500);
+    expect(res.json().error).toBe('INTERNAL_ERROR');
+  });
+
   it('409 INSUFFICIENT_BALANCE when challenger has no tokens', async () => {
     const ctx = await makeTestApp(); cleanup = ctx.cleanup;
     await login(ctx, 'alice@a.com');

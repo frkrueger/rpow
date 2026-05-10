@@ -145,7 +145,7 @@ export async function flipRoutes(app: FastifyInstance) {
             [payout.toString(), capBaseUnits.toString()],
           );
           if ((supplyResult.rowCount ?? 0) === 0) {
-            return { error: 'SUPPLY_CAP_REACHED', message: 'minted supply cap reached', status: 503 };
+            throw new Error('SUPPLY_CAP_REACHED');
           }
 
           const tokenId = randomUUID();
@@ -183,7 +183,7 @@ export async function flipRoutes(app: FastifyInstance) {
               [newBankroll.toString(), capBaseUnits.toString()],
             );
             if ((supplyResult.rowCount ?? 0) === 0) {
-              return { error: 'SUPPLY_CAP_REACHED', message: 'minted supply cap reached', status: 503 };
+              throw new Error('SUPPLY_CAP_REACHED');
             }
             const tokenId = randomUUID();
             const issuedAt = new Date();
@@ -259,6 +259,9 @@ export async function flipRoutes(app: FastifyInstance) {
         };
       });
     } catch (e: any) {
+      if (e?.message === 'SUPPLY_CAP_REACHED') {
+        return reply.code(503).send({ error: 'SUPPLY_CAP_REACHED', message: 'minted supply cap reached' });
+      }
       if (e?.message === 'INSUFFICIENT_BALANCE') {
         return reply.code(409).send({ error: 'INSUFFICIENT_BALANCE', message: 'not enough tokens' });
       }
