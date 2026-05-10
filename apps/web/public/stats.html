@@ -4,477 +4,169 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>RPOW2 — Live Network Stats</title>
-<meta name="description" content="Real-time proof-of-work token network statistics. 21M fixed supply, community-mined.">
+<meta name="description" content="Real-time proof-of-work token network statistics. 19M fixed supply, community-mined.">
 <meta property="og:title" content="RPOW2 — Live Network Stats">
-<meta property="og:description" content="15K+ miners. 8M+ tokens minted. 13 community-built mining clients. Real-time proof-of-work stats.">
+<meta property="og:description" content="Live proof-of-work stats. Community-mined tokens with halving schedule.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://stats.rpow2.com">
-<meta property="og:image" content="https://stats.rpow2.com/og.png">
+<meta property="og:image" content="https://stats.rpow2.com/og-stats.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="RPOW2 — Live Network Stats">
-<meta name="twitter:description" content="15K+ miners. 8M+ tokens minted. 13 community-built mining clients. Real-time proof-of-work stats.">
-<meta name="twitter:image" content="https://stats.rpow2.com/og.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&display=swap" rel="stylesheet">
+<meta name="twitter:description" content="Live proof-of-work stats. Community-mined tokens with halving schedule.">
+<meta name="twitter:image" content="https://stats.rpow2.com/og-stats.png">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root {
-  --bg: #0a0b10;
-  --card: #15162a;
-  --border: #252648;
-  --text: #f0eeea;
-  --dim: #c5c2d4;
-  --muted: #9e9ab5;
-  --amber: #e8a825;
-  --teal: #2ec4b6;
-  --red: #e8444a;
-  --green: #34d399;
-  --blue: #6366f1;
-  --purple: #a78bfa;
+  --bg: #08080a;
+  --bg-2: #0d0d10;
+  --fg: #e8e3d3;
+  --accent: #6ee7b7;
+  --accent-dim: rgba(110,231,183,0.18);
+  --dim: #6b6b6b;
+  --dimmer: #3a3a3a;
+  --amber: #fbbf24;
+  --glow: rgba(110,231,183,0.06);
 }
-html { font-size: 18px; }
+*,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
 body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: 'Fira Code', monospace;
-  font-weight: 500;
-  line-height: 1.8;
+  background: radial-gradient(ellipse at top, rgba(110,231,183,0.04), transparent 60%), var(--bg);
+  color: var(--fg);
+  font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
 }
 body::before {
   content: '';
-  position: fixed;
-  inset: 0;
-  background:
-    radial-gradient(ellipse at 20% 0%, rgba(99,102,241,0.06) 0%, transparent 60%),
-    radial-gradient(ellipse at 80% 100%, rgba(232,168,37,0.04) 0%, transparent 60%);
+  position: fixed; inset: 0;
   pointer-events: none;
+  background-image: repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px);
+  z-index: 100;
 }
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 65%, rgba(0,0,0,0.35) 100%);
+  z-index: 99;
+}
+a { color: var(--accent); text-decoration: none; border-bottom: 1px dotted var(--accent-dim); }
+a:hover { border-bottom-color: var(--accent); }
 
-.wrap { max-width: 720px; margin: 0 auto; padding: 2rem 1.5rem; position: relative; z-index: 1; }
-
-/* HEADER */
-header { padding: 2.5rem 0 2rem; border-bottom: 1px solid var(--border); margin-bottom: 2rem; }
-.tag {
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.2em;
-  color: var(--amber);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.6rem;
-}
-.pulse {
-  width: 8px; height: 8px;
-  background: var(--green);
-  border-radius: 50%;
-  animation: pulse 2s infinite;
-}
-@keyframes pulse {
-  0%,100% { box-shadow: 0 0 0 0 rgba(52,211,153,0.4); }
-  50% { box-shadow: 0 0 0 6px rgba(52,211,153,0); }
-}
-h1 {
-  font-size: 2.4rem;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  line-height: 1.15;
-  background: linear-gradient(135deg, #fff 30%, var(--amber));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-.subtitle { font-size: 0.9rem; color: var(--dim); margin-top: 0.4rem; }
-
-/* LIVE BADGE */
-.live-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.15em;
-  color: var(--green);
-  margin-top: 0.6rem;
-}
-
-/* CARDS */
-.card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 1.75rem 2rem;
-  margin-bottom: 1.25rem;
-}
-.card-label {
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.15em;
-  color: var(--muted);
-  margin-bottom: 0.5rem;
-}
-.card-value {
-  font-size: 2.4rem;
-  font-weight: 700;
-  color: #fff;
-  line-height: 1.1;
-  transition: color 0.3s;
-}
-.card-value.amber { color: var(--amber); }
-.card-value.teal { color: var(--teal); }
-.card-value.green { color: var(--green); }
-.card-value.blue { color: var(--blue); }
-.card-sub { font-size: 0.9rem; color: var(--dim); margin-top: 0.4rem; }
-
-/* STAT ROW (two side by side) */
-.row { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1.25rem; }
-.row .card { margin-bottom: 0; }
-
-/* SUPPLY GAUGE */
-.gauge-wrap { display: flex; flex-direction: column; align-items: center; padding: 1rem 0 0.5rem; }
-.gauge {
-  width: 220px; height: 220px;
-  border-radius: 50%;
+.shell {
+  max-width: 78ch;
+  margin: 32px auto 64px;
+  padding: 0 16px;
   position: relative;
-  display: flex; align-items: center; justify-content: center;
+  z-index: 2;
 }
-.gauge-ring {
-  position: absolute; inset: 0;
-  border-radius: 50%;
-  transition: background 1s;
-  mask: radial-gradient(circle, transparent 68%, #000 69%);
-  -webkit-mask: radial-gradient(circle, transparent 68%, #000 69%);
+.header-pre { margin: 0; color: var(--accent); line-height: 1.2; }
+.tagline { color: var(--dim); font-size: 12px; letter-spacing: 0.05em; margin: 6px 0 0 4px; }
+.nav-row {
+  margin: 12px 0 16px;
+  display: flex; gap: 2px; align-items: center; flex-wrap: wrap;
 }
-.gauge-inner { text-align: center; z-index: 1; }
-.gauge-pct { font-size: 2.4rem; font-weight: 700; color: var(--amber); }
-.gauge-label { font-size: 0.85rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.12em; }
-.gauge-stats {
-  display: flex; gap: 2.5rem; margin-top: 1.25rem;
+.nav-row a {
+  border-bottom: none; color: var(--fg); opacity: 0.55;
+  padding: 4px 10px; font-size: 13px;
+  border: 1px solid transparent; transition: all 150ms;
 }
-.gauge-stat { text-align: center; }
-.gauge-stat strong { display: block; color: #fff; font-size: 1.1rem; }
-.gauge-stat span { color: var(--dim); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.1em; }
+.nav-row a:hover { opacity: 1; color: var(--accent); border-color: var(--accent-dim); background: rgba(110,231,183,0.04); }
+.nav-row a.active { opacity: 1; color: var(--accent); border-color: var(--accent); background: rgba(110,231,183,0.06); }
 
-/* PROGRESS BAR */
-.progress-wrap { margin-top: 0.75rem; }
-.progress-label {
-  display: flex; justify-content: space-between;
-  font-size: 0.85rem; color: var(--dim); margin-bottom: 0.4rem;
+/* Panel */
+.panel {
+  margin: 16px 0;
+  border: 1px solid var(--accent-dim);
+  background: rgba(110,231,183,0.01);
+  position: relative;
+  animation: panel-in 400ms ease-out;
 }
-.progress-track {
-  height: 28px;
-  background: rgba(255,255,255,0.04);
-  border-radius: 6px;
-  overflow: hidden;
+@keyframes panel-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+.panel::before, .panel::after {
+  content: '+'; position: absolute; color: var(--accent); font-size: 10px; opacity: 0.3; line-height: 1;
 }
-.progress-fill {
-  height: 100%;
-  border-radius: 6px;
-  background: linear-gradient(90deg, var(--teal), var(--blue));
-  transition: width 1s cubic-bezier(0.22,1,0.36,1);
-  display: flex; align-items: center; justify-content: flex-end; padding-right: 0.75rem;
-  font-size: 0.8rem; font-weight: 600; color: #fff;
-  min-width: 60px;
-}
-
-/* DIFFICULTY TABLE */
-.diff-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 0;
-}
-.diff-cell {
-  padding: 1rem;
-  text-align: center;
-  border-right: 1px solid var(--border);
-}
-.diff-cell:last-child { border-right: none; }
-.diff-num { font-size: 1.6rem; font-weight: 700; color: #fff; }
-.diff-label { font-size: 0.8rem; color: var(--muted); margin-top: 0.2rem; text-transform: uppercase; letter-spacing: 0.1em; }
-
-/* SECTION */
-.section-label {
-  font-size: 0.8rem;
+.panel::before { top: -6px; left: -1px; }
+.panel::after { bottom: -6px; right: -1px; }
+.panel-title {
+  font-size: 11px; letter-spacing: 3px; color: var(--accent);
+  padding: 8px 16px; border-bottom: 1px solid var(--accent-dim);
+  background: rgba(110,231,183,0.03);
+  display: flex; justify-content: space-between; align-items: center;
   text-transform: uppercase;
-  letter-spacing: 0.25em;
-  color: var(--muted);
-  margin: 2.5rem 0 0.4rem;
 }
-h2 {
-  font-size: 1.4rem;
-  font-weight: 700;
-  color: #fff;
-  margin-bottom: 1.25rem;
+.panel-title .status { font-size: 10px; color: var(--dim); letter-spacing: 1px; }
+.panel-body { padding: 16px; }
+
+/* Stat grid */
+.stat-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--accent-dim);
 }
+.stat-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+.stat-cell { background: var(--bg-2); padding: 10px 14px; }
+.stat-cell.full { grid-column: 1 / -1; }
+.stat-label { font-size: 10px; letter-spacing: 2px; color: var(--dim); text-transform: uppercase; }
+.stat-value { font-size: 18px; font-weight: 600; color: var(--fg); margin-top: 2px; transition: color 0.3s; }
+.stat-value.accent { color: var(--accent); }
+.stat-value.amber { color: var(--amber); }
 
-/* SNAPSHOT BADGE */
-.snapshot-tag {
-  display: inline-flex; align-items: center; gap: 0.4rem;
-  font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.12em;
-  color: var(--muted); margin-bottom: 1.5rem;
-}
-.snapshot-tag::before {
-  content: ''; width: 6px; height: 6px; background: var(--muted); border-radius: 50%;
-}
+/* Progress bar */
+.progress-track { height: 4px; background: var(--dimmer); margin: 8px 0; overflow: hidden; }
+.progress-fill { height: 100%; background: var(--accent); transition: width 1s ease; }
 
-/* BAR CHART */
-.bar-chart { display: flex; flex-direction: column; gap: 0.7rem; }
-.bar-row { display: grid; grid-template-columns: 120px 1fr 65px; align-items: center; gap: 0.75rem; }
-.bar-row .label { font-size: 0.9rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.bar-track { height: 24px; background: rgba(255,255,255,0.04); border-radius: 4px; overflow: hidden; }
-.bar-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--amber), #d4942a); }
-.bar-fill.teal { background: linear-gradient(90deg, var(--teal), #1a9e92); }
-.bar-fill.blue { background: linear-gradient(90deg, var(--blue), #4f46e5); }
-.bar-fill.purple { background: linear-gradient(90deg, var(--purple), #8b5cf6); }
-.bar-fill.green { background: linear-gradient(90deg, var(--green), #22c55e); }
-.bar-row .val { font-size: 0.85rem; color: var(--dim); text-align: right; }
+/* Flash animation */
+.flash { animation: flash-anim 0.6s ease; }
+@keyframes flash-anim { 0% { color: #fff; } 100% {} }
 
-/* REGION BAR */
-.region-bar { display: flex; height: 36px; border-radius: 6px; overflow: hidden; margin: 0.75rem 0; }
-.region-seg { display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 600; color: #fff; }
-.region-legend { display: flex; gap: 1.25rem; flex-wrap: wrap; margin-top: 0.5rem; }
-.region-legend-item { display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; color: var(--text); }
-.region-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+/* Status dot */
+.pulse { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-right: 4px; box-shadow: 0 0 6px var(--accent); animation: pulse-glow 2s infinite; }
+@keyframes pulse-glow { 0%,100% { box-shadow: 0 0 4px var(--accent); } 50% { box-shadow: 0 0 12px var(--accent); } }
 
-/* DATA TABLE */
-.dtable { width: 100%; border-collapse: collapse; }
-.dtable th { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); text-align: left; padding: 0.6rem 0.5rem; border-bottom: 1px solid var(--border); font-weight: 500; }
-.dtable th:last-child, .dtable td:last-child { text-align: right; }
-.dtable td { padding: 0.6rem 0.5rem; border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 0.9rem; color: var(--text); }
-.dtable .rk { color: var(--muted); font-size: 0.8rem; width: 30px; }
-.dtable .mono { font-weight: 600; color: #fff; }
-.dtable .dim { color: var(--dim); font-size: 0.85rem; }
-
-/* MINER GRID */
-.miner-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
-.miner-item { display: flex; align-items: center; justify-content: space-between; padding: 0.7rem 1rem; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px solid rgba(255,255,255,0.04); }
-.miner-name { font-size: 0.85rem; color: var(--text); }
-.miner-tag { display: inline-block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; padding: 0.15rem 0.45rem; border-radius: 3px; font-weight: 600; }
-.mt-amber { background: rgba(232,168,37,0.15); color: var(--amber); }
-.mt-teal { background: rgba(46,196,182,0.12); color: var(--teal); }
-.mt-dim { background: rgba(255,255,255,0.04); color: var(--dim); }
-
-/* CONCENTRATION BARS */
-.conc-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.6rem; }
-.conc-label { font-size: 0.85rem; color: var(--dim); width: 80px; flex-shrink: 0; }
-.conc-track { flex: 1; height: 28px; background: rgba(255,255,255,0.03); border-radius: 4px; overflow: hidden; }
-.conc-fill { height: 100%; border-radius: 4px; display: flex; align-items: center; padding-left: 0.6rem; font-size: 0.8rem; font-weight: 600; color: #fff; }
-
-/* FOOTER */
-footer {
-  padding: 2rem 0 1rem;
-  border-top: 1px solid var(--border);
-  margin-top: 2rem;
-  font-size: 0.8rem;
-  color: var(--muted);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-footer a { color: var(--teal); text-decoration: none; }
-footer a:hover { text-decoration: underline; }
-
-/* LOADING */
-.loading { opacity: 0.4; }
-.error-msg {
-  text-align: center;
-  padding: 3rem;
-  color: var(--red);
-  font-size: 1rem;
+/* Footer */
+.footer {
+  margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--dimmer);
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 12px; color: var(--dim);
 }
 
-/* ANIMATION */
-@keyframes fadeUp {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.anim { animation: fadeUp 0.5s cubic-bezier(0.22,1,0.36,1) both; }
-.d1{animation-delay:.05s}.d2{animation-delay:.1s}.d3{animation-delay:.15s}
-.d4{animation-delay:.2s}.d5{animation-delay:.25s}.d6{animation-delay:.3s}
-
-/* FLASH on update */
-@keyframes flash {
-  0% { color: var(--green); }
-  100% { color: #fff; }
-}
-.flash { animation: flash 0.8s ease-out; }
-
-/* RESPONSIVE */
-@media (max-width: 550px) {
-  html { font-size: 16px; }
-  .row { grid-template-columns: 1fr; }
-  .diff-grid { grid-template-columns: 1fr; }
-  .diff-cell { border-right: none; border-bottom: 1px solid var(--border); }
-  .diff-cell:last-child { border-bottom: none; }
-  .gauge-stats { gap: 1.5rem; }
-  h1 { font-size: 1.8rem; }
-  .miner-grid { grid-template-columns: 1fr; }
-  .bar-row { grid-template-columns: 90px 1fr 55px; }
-}
+/* Stagger animations */
+.d1 { animation-delay: 0ms; }
+.d2 { animation-delay: 80ms; }
+.d3 { animation-delay: 160ms; }
+.d4 { animation-delay: 240ms; }
 </style>
 </head>
 <body>
 
-<div class="wrap">
+<div class="shell">
+  <pre class="header-pre">+======================================================================+
+|                   RPOW2 - Reusable Proofs of Work                    |
++======================================================================+</pre>
+  <div class="tagline">a modern tribute to the original rpow by hal finney</div>
+  <nav class="nav-row">
+    <a href="https://rpow2.com/#/">wallet</a>
+    <a href="https://rpow2.com/#/mine">mine</a>
+    <a href="https://rpow2.com/#/apps">apps</a>
+    <a class="active">stats</a>
+  </nav>
 
-  <header class="anim">
-    <div class="tag"><span class="pulse"></span> Live Network Stats</div>
-    <h1>RPOW2</h1>
-    <div class="subtitle">Proof-of-work token network. 21M fixed supply.</div>
-    <div class="live-badge"><span class="pulse"></span> Auto-updating every 2 min</div>
-  </header>
-
-  <div id="dashboard"></div>
-  <div id="ts" style="font-size:0.75rem;color:var(--muted);text-align:right;margin-top:-0.5rem;margin-bottom:1rem;"></div>
-
-  <!-- SNAPSHOT DATA -->
-  <div class="section-label">Network Snapshot</div>
-  <div class="snapshot-tag">Data from May 8, 2026</div>
-
-  <!-- TOP MINERS -->
-  <h2>Top Miners</h2>
-  <div class="card">
-    <table class="dtable">
-      <thead><tr><th class="rk">#</th><th>Miner</th><th>Tokens</th><th>%</th></tr></thead>
-      <tbody>
-        <tr><td class="rk">1</td><td>ryo***@gmail.com</td><td class="mono">232,914</td><td class="dim">3.1%</td></tr>
-        <tr><td class="rk">2</td><td>qua***@gmail.com</td><td class="mono">203,450</td><td class="dim">2.7%</td></tr>
-        <tr><td class="rk">3</td><td>mer***@gmail.com</td><td class="mono">199,231</td><td class="dim">2.6%</td></tr>
-        <tr><td class="rk">4</td><td>tho***@gmail.com</td><td class="mono">172,802</td><td class="dim">2.3%</td></tr>
-        <tr><td class="rk">5</td><td>dev***@gmail.com</td><td class="mono">125,520</td><td class="dim">1.7%</td></tr>
-        <tr><td class="rk">6</td><td>fsn***@gmail.com</td><td class="mono">102,834</td><td class="dim">1.4%</td></tr>
-        <tr><td class="rk">7</td><td>ppa***@gmail.com</td><td class="mono">97,067</td><td class="dim">1.3%</td></tr>
-        <tr><td class="rk">8</td><td>231***@qq.com</td><td class="mono">86,679</td><td class="dim">1.1%</td></tr>
-        <tr><td class="rk">9</td><td>mem***@***.fun</td><td class="mono">83,216</td><td class="dim">1.1%</td></tr>
-        <tr><td class="rk">10</td><td>ame***@***.org</td><td class="mono">82,300</td><td class="dim">1.1%</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <!-- SUPPLY CONCENTRATION -->
-  <h2>Supply Concentration</h2>
-  <div class="card">
-    <div class="conc-row">
-      <span class="conc-label">Top 10</span>
-      <div class="conc-track"><div class="conc-fill" style="width:18.4%;background:linear-gradient(90deg,var(--amber),#d4942a)">18.4%</div></div>
+  <div class="panel d1" style="animation: panel-in 400ms ease-out">
+    <div class="panel-title">
+      <span>NETWORK</span>
+      <span class="status"><span class="pulse"></span> LIVE <span id="ts"></span></span>
     </div>
-    <div class="conc-row">
-      <span class="conc-label">Top 30</span>
-      <div class="conc-track"><div class="conc-fill" style="width:35.5%;background:linear-gradient(90deg,var(--amber),#d4942a)">35.5%</div></div>
-    </div>
-    <div class="conc-row">
-      <span class="conc-label">Others</span>
-      <div class="conc-track"><div class="conc-fill" style="width:64.5%;background:linear-gradient(90deg,var(--teal),#1a9e92)">64.5%</div></div>
-    </div>
-    <div style="margin-top:1rem;font-size:0.9rem;color:var(--dim);line-height:1.7;">
-      Top 10 hold 1.39M tokens (18.4%). 14,650+ miners share 64.5% &mdash; healthy distribution.
+    <div class="panel-body" style="padding:0">
+      <div id="dashboard"></div>
     </div>
   </div>
 
-  <!-- EMAIL DOMAIN DISTRIBUTION -->
-  <h2>Email Provider Distribution</h2>
-  <div class="card">
-    <div class="bar-chart">
-      <div class="bar-row"><span class="label">Gmail</span><div class="bar-track"><div class="bar-fill" style="width:100%"></div></div><span class="val">9,463</span></div>
-      <div class="bar-row"><span class="label">QQ Mail</span><div class="bar-track"><div class="bar-fill teal" style="width:12.3%"></div></div><span class="val">1,163</span></div>
-      <div class="bar-row"><span class="label">Outlook</span><div class="bar-track"><div class="bar-fill blue" style="width:4%"></div></div><span class="val">380</span></div>
-      <div class="bar-row"><span class="label">163 Mail</span><div class="bar-track"><div class="bar-fill teal" style="width:3.7%"></div></div><span class="val">350</span></div>
-      <div class="bar-row"><span class="label">Hotmail</span><div class="bar-track"><div class="bar-fill blue" style="width:3.1%"></div></div><span class="val">292</span></div>
-      <div class="bar-row"><span class="label">iCloud</span><div class="bar-track"><div class="bar-fill purple" style="width:1.7%"></div></div><span class="val">165</span></div>
-      <div class="bar-row"><span class="label">Yahoo</span><div class="bar-track"><div class="bar-fill green" style="width:0.6%"></div></div><span class="val">56</span></div>
-      <div class="bar-row"><span class="label">Other</span><div class="bar-track"><div class="bar-fill" style="width:18%;opacity:0.5"></div></div><span class="val">2,811</span></div>
-    </div>
-  </div>
-
-  <!-- MINING BY REGION -->
-  <h2>Miners by Region</h2>
-  <div class="card">
-    <div class="region-bar">
-      <div class="region-seg" style="flex:70.7;background:var(--blue);">70.7%</div>
-      <div class="region-seg" style="flex:10.8;background:var(--teal);">10.8%</div>
-      <div class="region-seg" style="flex:8.4;background:var(--amber);">8.4%</div>
-      <div class="region-seg" style="flex:10.1;background:var(--purple);">10.1%</div>
-    </div>
-    <div class="region-legend">
-      <div class="region-legend-item"><span class="region-dot" style="background:var(--blue)"></span> Global (10,356)</div>
-      <div class="region-legend-item"><span class="region-dot" style="background:var(--teal)"></span> China (1,587)</div>
-      <div class="region-legend-item"><span class="region-dot" style="background:var(--amber)"></span> Other Asia (1,234)</div>
-      <div class="region-legend-item"><span class="region-dot" style="background:var(--purple)"></span> Europe / Russia</div>
-    </div>
-    <div style="margin-top:1rem;font-size:0.9rem;color:var(--dim);">
-      Based on email domain analysis. True geographic data requires IP geolocation.
-    </div>
-  </div>
-
-  <!-- MINING ECOSYSTEM -->
-  <h2>Community Mining Clients</h2>
-  <div class="card">
-    <div class="miner-grid">
-      <div class="miner-item"><span class="miner-name">Google Colab GPU</span><span class="miner-tag mt-amber">12+</span></div>
-      <div class="miner-item"><span class="miner-name">Node.js</span><span class="miner-tag mt-dim">6+</span></div>
-      <div class="miner-item"><span class="miner-name">Go client</span><span class="miner-tag mt-dim">5+</span></div>
-      <div class="miner-item"><span class="miner-name">Python</span><span class="miner-tag mt-dim">5+</span></div>
-      <div class="miner-item"><span class="miner-name">GPU miner</span><span class="miner-tag mt-teal">3+</span></div>
-      <div class="miner-item"><span class="miner-name">Max miner</span><span class="miner-tag mt-dim">2+</span></div>
-      <div class="miner-item"><span class="miner-name">Local GPU</span><span class="miner-tag mt-dim">2+</span></div>
-      <div class="miner-item"><span class="miner-name">Native pool</span><span class="miner-tag mt-dim">1+</span></div>
-      <div class="miner-item"><span class="miner-name">Rust miner</span><span class="miner-tag mt-dim">1+</span></div>
-      <div class="miner-item"><span class="miner-name">Go miner</span><span class="miner-tag mt-dim">1+</span></div>
-      <div class="miner-item"><span class="miner-name">CLI miner</span><span class="miner-tag mt-dim">1+</span></div>
-      <div class="miner-item"><span class="miner-name">Auth miner</span><span class="miner-tag mt-dim">1+</span></div>
-    </div>
-    <div style="margin-top:1rem;font-size:0.9rem;color:var(--dim);line-height:1.7;">
-      <strong style="color:var(--teal)">13 distinct mining clients</strong> built by the community in under 48 hours. Go, Python, Rust, GPU, and pooled miners.
-    </div>
-  </div>
-
-  <!-- TOP TRAFFIC SOURCES -->
-  <h2>Top Traffic Sources</h2>
-  <div class="card">
-    <table class="dtable">
-      <thead><tr><th class="rk">#</th><th>Source</th><th>Client</th><th>Requests</th></tr></thead>
-      <tbody>
-        <tr><td class="rk">1</td><td>108.***.***.160</td><td class="dim">node</td><td class="mono">654,320</td></tr>
-        <tr><td class="rk">2</td><td>27.***.***.145</td><td class="dim">miner-max</td><td class="mono">415,604</td></tr>
-        <tr><td class="rk">3</td><td>240e:***:5f1c</td><td class="dim">Go client</td><td class="mono">354,636</td></tr>
-        <tr><td class="rk">4</td><td>202.***.***.47</td><td class="dim" style="color:var(--muted)">(unknown)</td><td class="mono">334,832</td></tr>
-        <tr><td class="rk">5</td><td>103.***.***.152</td><td class="dim">node</td><td class="mono">330,600</td></tr>
-        <tr><td class="rk">6</td><td>35.***.***.165</td><td class="dim" style="color:var(--amber)">Colab GPU</td><td class="mono">295,661</td></tr>
-        <tr><td class="rk">7</td><td>103.***.***.10</td><td class="dim">Python</td><td class="mono">262,693</td></tr>
-        <tr><td class="rk">8</td><td>47.***.***.197</td><td class="dim" style="color:var(--green)">Safari</td><td class="mono">260,077</td></tr>
-        <tr><td class="rk">9</td><td>116.***.***.162</td><td class="dim">GPU miner</td><td class="mono">242,366</td></tr>
-        <tr><td class="rk">10</td><td>74.***.***.222</td><td class="dim">Go client</td><td class="mono">189,322</td></tr>
-      </tbody>
-    </table>
-    <div style="margin-top:0.75rem;font-size:0.9rem;color:var(--dim);">
-      Top 10 sources account for <strong style="color:#fff">~3.3M requests</strong> (15% of 21.9M total).
-    </div>
-  </div>
-
-  <!-- ENDPOINT TRAFFIC -->
-  <h2>API Endpoint Traffic</h2>
-  <div class="card">
-    <div class="bar-chart">
-      <div class="bar-row"><span class="label" style="color:var(--teal)">/challenge</span><div class="bar-track"><div class="bar-fill teal" style="width:100%"></div></div><span class="val">11.1M</span></div>
-      <div class="bar-row"><span class="label" style="color:var(--teal)">/mint</span><div class="bar-track"><div class="bar-fill teal" style="width:78.5%"></div></div><span class="val">8.7M</span></div>
-      <div class="bar-row"><span class="label" style="color:var(--teal)">/me</span><div class="bar-track"><div class="bar-fill blue" style="width:12.8%"></div></div><span class="val">1.4M</span></div>
-      <div class="bar-row"><span class="label" style="color:var(--teal)">/auth</span><div class="bar-track"><div class="bar-fill purple" style="width:5%"></div></div><span class="val">560K</span></div>
-      <div class="bar-row"><span class="label" style="color:var(--teal)">/ledger</span><div class="bar-track"><div class="bar-fill" style="width:0.34%;opacity:0.5"></div></div><span class="val">37.8K</span></div>
-      <div class="bar-row"><span class="label" style="color:var(--teal)">/activity</span><div class="bar-track"><div class="bar-fill" style="width:0.21%;opacity:0.5"></div></div><span class="val">23.2K</span></div>
-    </div>
-    <div style="margin-top:1rem;font-size:0.9rem;color:var(--dim);">
-      Mining (/challenge + /mint) = <strong style="color:var(--teal)">90.5%</strong> of all 21.9M requests.
-    </div>
-  </div>
-
-  <footer>
+  <div class="footer">
     <span>rpow2.com</span>
-    <a href="/#/mine">Start Mining</a>
-  </footer>
-
+    <a href="https://rpow2.com/#/mine">start mining</a>
+  </div>
 </div>
 
 <script>
@@ -482,123 +174,88 @@ const API = (window.location.hostname === 'localhost' && window.location.port ==
   ? 'http://localhost:8080'
   : '/api';
 
-const BAKED = {"total_minted":9890403,"total_transferred":2429448,"circulating_supply":4175787,"current_difficulty_bits":25,"user_count":37721,"max_supply":19000000,"epoch":0,"epoch_size":10000000,"next_milestone_at":10000000,"coins_until_next_milestone":109597,"next_difficulty_bits":26,"is_capped":false};
-const BAKED_AT = "2026-05-09T22:40:00Z";
+const BAKED = {"total_minted":9915521,"total_transferred":2429448,"circulating_supply":4175787,"current_difficulty_bits":25,"user_count":39965,"max_supply":19000000,"epoch":0,"epoch_size":10000000,"next_milestone_at":10000000,"coins_until_next_milestone":84479,"next_difficulty_bits":26,"is_capped":false};
+const BAKED_AT = "2026-05-10T03:10:00Z";
 
 const $ = (id) => document.getElementById(id);
 let prev = {};
 let lastUpdated = null;
 
-function fmt(n) {
-  return n.toLocaleString('en-US');
-}
-
-function pct(n, d) {
-  return ((n / d) * 100).toFixed(1);
-}
+function fmt(n) { return n.toLocaleString('en-US'); }
+function pct(n, d) { return ((n / d) * 100).toFixed(1); }
 
 function render(d) {
   const mintedPct = pct(d.total_minted, d.max_supply);
   const epochProgress = pct(d.total_minted - (d.epoch * d.epoch_size), d.epoch_size);
-  const conicDeg = (d.total_minted / d.max_supply) * 360;
+  const remaining = d.max_supply - d.total_minted;
 
   const html = `
-    <div class="row anim d1">
-      <div class="card">
-        <div class="card-label">Miners</div>
-        <div class="card-value amber" id="v-users">${fmt(d.user_count)}</div>
-        <div class="card-sub">registered accounts</div>
+    <div class="stat-grid">
+      <div class="stat-cell">
+        <div class="stat-label">MINERS</div>
+        <div class="stat-value amber" id="v-users">${fmt(d.user_count)}</div>
       </div>
-      <div class="card">
-        <div class="card-label">Circulating</div>
-        <div class="card-value teal" id="v-circ">${fmt(d.circulating_supply)}</div>
-        <div class="card-sub">valid tokens</div>
+      <div class="stat-cell">
+        <div class="stat-label">CIRCULATING</div>
+        <div class="stat-value accent" id="v-circ">${fmt(d.circulating_supply)}</div>
       </div>
-    </div>
-
-    <div class="row anim d2">
-      <div class="card">
-        <div class="card-label">Transferred</div>
-        <div class="card-value blue" id="v-xfer">${fmt(d.total_transferred)}</div>
-        <div class="card-sub">tokens moved between users</div>
+      <div class="stat-cell">
+        <div class="stat-label">TRANSFERRED</div>
+        <div class="stat-value" id="v-xfer">${fmt(d.total_transferred)}</div>
       </div>
-      <div class="card">
-        <div class="card-label">Minted</div>
-        <div class="card-value green" id="v-minted">${fmt(d.total_minted)}</div>
-        <div class="card-sub">${mintedPct}% of max supply</div>
+      <div class="stat-cell">
+        <div class="stat-label">MINTED</div>
+        <div class="stat-value accent" id="v-minted">${fmt(d.total_minted)}</div>
       </div>
     </div>
 
-    <div class="section-label anim d3">Supply</div>
-    <h2 class="anim d3">Token Supply Progress</h2>
-
-    <div class="card anim d3">
-      <div class="gauge-wrap">
-        <div class="gauge">
-          <div class="gauge-ring" style="background:conic-gradient(var(--amber) 0deg, #d4942a ${conicDeg}deg, rgba(255,255,255,0.04) ${conicDeg}deg)"></div>
-          <div class="gauge-inner">
-            <div class="gauge-pct" id="v-pct">${mintedPct}%</div>
-            <div class="gauge-label">Minted</div>
-          </div>
-        </div>
-        <div class="gauge-stats">
-          <div class="gauge-stat">
-            <strong id="v-minted2">${fmt(d.total_minted)}</strong>
-            <span>Minted</span>
-          </div>
-          <div class="gauge-stat">
-            <strong>${fmt(d.max_supply)}</strong>
-            <span>Max Supply</span>
-          </div>
-          <div class="gauge-stat">
-            <strong id="v-remain">${fmt(d.max_supply - d.total_minted)}</strong>
-            <span>Remaining</span>
-          </div>
-        </div>
+    <div style="padding:16px">
+      <div style="display:flex; justify-content:space-between; font-size:11px; color:#6b6b6b; margin-bottom:4px;">
+        <span>SUPPLY PROGRESS</span>
+        <span id="v-pct">${mintedPct}%</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" style="width:${mintedPct}%"></div>
+      </div>
+      <div style="display:flex; justify-content:space-between; font-size:11px; color:#6b6b6b; margin-top:6px;">
+        <span>${fmt(d.total_minted)} minted</span>
+        <span>${fmt(remaining)} remaining</span>
       </div>
     </div>
 
-    <div class="section-label anim d4">Difficulty</div>
-    <h2 class="anim d4">Mining Difficulty</h2>
-
-    <div class="card anim d4">
-      <div class="diff-grid">
-        <div class="diff-cell">
-          <div class="diff-num" id="v-diff" style="color:var(--amber)">${d.current_difficulty_bits}</div>
-          <div class="diff-label">Current Bits</div>
-        </div>
-        <div class="diff-cell">
-          <div class="diff-num" style="color:var(--teal)">${d.next_difficulty_bits}</div>
-          <div class="diff-label">Next Bits</div>
-        </div>
-        <div class="diff-cell">
-          <div class="diff-num">${d.epoch}</div>
-          <div class="diff-label">Epoch</div>
-        </div>
+    <div class="stat-grid cols-3" style="border-top:1px solid rgba(110,231,183,0.18)">
+      <div class="stat-cell">
+        <div class="stat-label">DIFFICULTY</div>
+        <div class="stat-value amber" id="v-diff">${d.current_difficulty_bits} bits</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-label">NEXT DIFF</div>
+        <div class="stat-value">${d.next_difficulty_bits} bits</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-label">HALVING</div>
+        <div class="stat-value">#${d.epoch}</div>
       </div>
     </div>
 
-    <div class="card anim d5">
-      <div class="card-label">Next Difficulty Increase</div>
-      <div class="progress-wrap">
-        <div class="progress-label">
-          <span>${fmt(d.total_minted - (d.epoch * d.epoch_size))} / ${fmt(d.epoch_size)} tokens this epoch</span>
-          <span>${fmt(d.coins_until_next_milestone)} to go</span>
-        </div>
-        <div class="progress-track">
-          <div class="progress-fill" style="width:${epochProgress}%">${epochProgress}%</div>
-        </div>
+    <div style="padding:16px; border-top:1px solid rgba(110,231,183,0.18);">
+      <div style="display:flex; justify-content:space-between; font-size:11px; color:#6b6b6b; margin-bottom:4px;">
+        <span>NEXT HALVING</span>
+        <span>${fmt(d.coins_until_next_milestone)} RPOW to go</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" style="width:${epochProgress}%"></div>
       </div>
     </div>
 
-    ${d.is_capped ? '<div class="card anim d6" style="border-color:var(--amber);text-align:center;"><div class="card-value amber" style="font-size:1.4rem;">MAX SUPPLY REACHED</div><div class="card-sub">No more tokens can be minted.</div></div>' : ''}
+    ${d.is_capped ? '<div style="padding:16px;text-align:center;border-top:1px solid rgba(110,231,183,0.18);"><div class="stat-value amber">MAX SUPPLY REACHED</div><div style="font-size:12px;color:#6b6b6b;margin-top:4px;">No more tokens can be minted.</div></div>' : ''}
   `;
 
   $('dashboard').innerHTML = html;
   if (lastUpdated) {
     const ago = Math.round((Date.now() - lastUpdated) / 1000);
     const label = ago < 60 ? 'just now' : ago < 3600 ? Math.round(ago/60) + 'm ago' : Math.round(ago/3600) + 'h ago';
-    $('ts').textContent = 'Updated ' + label;
+    $('ts').textContent = '· ' + label;
   }
 }
 
@@ -619,7 +276,7 @@ function flashChanged(d) {
 }
 
 const CACHE_KEY = 'rpow2_stats';
-const CACHE_TTL = 120000; // 2 minutes
+const CACHE_TTL = 120000;
 
 function loadCache() {
   try {
@@ -649,7 +306,6 @@ function renderWithTimestamp(d, ts) {
   prev = d;
 }
 
-// Convert new base-units API response to the integer format the dashboard expects.
 function normalizeLedger(raw) {
   const BU = BigInt(raw.base_units_per_rpow || '1000000000');
   const toRpow = (s) => Number(BigInt(s || '0') / BU);
@@ -680,7 +336,6 @@ async function fetchStats(force) {
       return;
     }
   }
-
   try {
     const res = await fetch(API + '/ledger');
     if (!res.ok) throw new Error(res.statusText);
@@ -697,7 +352,6 @@ async function fetchStats(force) {
   }
 }
 
-// Render baked data immediately, then try live fetch
 lastUpdated = new Date(BAKED_AT).getTime();
 render(BAKED);
 prev = BAKED;
