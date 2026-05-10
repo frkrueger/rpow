@@ -17,6 +17,13 @@ export function App() {
   const [last, setLast] = useState<SpinResponse | null>(null);
   const [muted, setMuted] = useState(isMuted());
   const [history, setHistory] = useState<HistoryRow[]>([]);
+  const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setInterval(() => setCooldown(c => { if (c <= 1) { clearInterval(t); return 0; } return c - 1; }), 1000);
+    return () => clearInterval(t);
+  }, [cooldown]);
 
   useEffect(() => {
     fetchMe().then(setMe).catch(e => setError(String(e)));
@@ -36,7 +43,11 @@ export function App() {
       fetchHistory().then(setHistory);
       if (r.outcome === 'WIN') playWin(); else playLose();
     } catch (e: any) {
-      setError(e.message);
+      if (e.message === 'Too Many Requests' || e.message === 'TOO_MANY') {
+        setCooldown(6);
+      } else {
+        setError(e.message);
+      }
     } finally {
       setBusy(false);
     }
@@ -99,8 +110,8 @@ export function App() {
           <strong> +{winPayoutRpow} RPOW</strong>
         </p>
 
-        <button className="primary" onClick={takeShot} disabled={busy || stake > BigInt(me.balance_base_units)}>
-          {busy ? 'spinning…' : 'TAKE THE SHOT'}
+        <button className="primary" onClick={takeShot} disabled={busy || cooldown > 0 || stake > BigInt(me.balance_base_units)}>
+          {busy ? 'spinning…' : cooldown > 0 ? `wait ${cooldown}s` : 'TAKE THE SHOT'}
         </button>
 
         {last && (
