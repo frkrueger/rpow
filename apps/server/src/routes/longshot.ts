@@ -241,19 +241,85 @@ export async function longshotRoutes(app: FastifyInstance) {
     return { spins: rows.map(r => ({ ...r, created_at: r.created_at.toISOString() })) };
   });
 
-  app.get('/api/longshot/stats', async () => {
-    const totals = await app.pool.query<{ total_spins: string; total_volume: string }>(
-      `SELECT count(*)::text AS total_spins,
-              COALESCE(SUM(stake_base_units), 0)::text AS total_volume
-       FROM long_shot_bets`,
-    );
-    const pnl = await app.pool.query<{ value: string }>(
-      `SELECT value::text FROM app_counters WHERE name = 'long_shot_house_pnl_base_units'`,
-    );
+  // Aggregated stats are read-heavy (full-table scans on long_shot_bets) and
+  // hit from the public stats page on a 2min poll. Cache server-side so we
+  // don't recompute per request.
+  const STATS_CACHE_MS = 30_000;
+  let statsCache: { ts: number; body: unknown } | null = null;
+  let statsInflight: Promise<unknown> | null = null;
+
+  async function refreshLongshotStats() {
+    const [totals, pnl, windowStats, oddsBreakdown] = await Promise.all([
+      app.pool.query<{ total_spins: string; total_volume: string; unique_users: string }>(
+        `SELECT count(*)::text AS total_spins,
+                COALESCE(SUM(stake_base_units), 0)::text AS total_volume,
+                count(DISTINCT account_email)::text AS unique_users
+         FROM long_shot_bets`,
+      ),
+      app.pool.query<{ value: string }>(
+        `SELECT value::text FROM app_counters WHERE name = 'long_shot_house_pnl_base_units'`,
+      ),
+      app.pool.query<{ window: string; spins: string; users: string; volume: string; net_mint_delta: string }>(
+        `SELECT '24h' AS window,
+                count(*)::text AS spins,
+                count(DISTINCT account_email)::text AS users,
+                COALESCE(SUM(stake_base_units), 0)::text AS volume,
+                COALESCE(SUM(total_minted_delta_base_units), 0)::text AS net_mint_delta
+         FROM long_shot_bets WHERE created_at > now() - interval '24 hours'
+         UNION ALL
+         SELECT '1h',
+                count(*)::text,
+                count(DISTINCT account_email)::text,
+                COALESCE(SUM(stake_base_units), 0)::text,
+                COALESCE(SUM(total_minted_delta_base_units), 0)::text
+         FROM long_shot_bets WHERE created_at > now() - interval '1 hour'`,
+      ),
+      app.pool.query<{ odds_choice: string; spins: string; wins: string }>(
+        `SELECT odds_choice,
+                count(*)::text AS spins,
+                count(*) FILTER (WHERE outcome='WIN')::text AS wins
+         FROM long_shot_bets
+         GROUP BY odds_choice`,
+      ),
+    ]);
+
+    const windows: Record<string, { spins: number; users: number; volume_base_units: string; net_mint_delta_base_units: string }> = {};
+    for (const r of windowStats.rows) {
+      windows[r.window] = {
+        spins: parseInt(r.spins, 10),
+        users: parseInt(r.users, 10),
+        volume_base_units: r.volume,
+        net_mint_delta_base_units: r.net_mint_delta,
+      };
+    }
+
     return {
       total_spins: parseInt(totals.rows[0].total_spins, 10),
       total_volume_base_units: totals.rows[0].total_volume,
+      unique_users: parseInt(totals.rows[0].unique_users, 10),
       house_pnl_base_units: pnl.rows[0]?.value ?? '0',
+      window_24h: windows['24h'] ?? { spins: 0, users: 0, volume_base_units: '0', net_mint_delta_base_units: '0' },
+      window_1h: windows['1h'] ?? { spins: 0, users: 0, volume_base_units: '0', net_mint_delta_base_units: '0' },
+      odds_breakdown: oddsBreakdown.rows.map(r => ({
+        odds_choice: r.odds_choice,
+        spins: parseInt(r.spins, 10),
+        wins: parseInt(r.wins, 10),
+      })),
     };
+  }
+
+  app.get('/api/longshot/stats', async () => {
+    if (statsCache && Date.now() - statsCache.ts < STATS_CACHE_MS) return statsCache.body;
+    if (statsInflight) return statsInflight;
+    statsInflight = (async () => {
+      try {
+        const body = await refreshLongshotStats();
+        statsCache = { ts: Date.now(), body };
+        return body;
+      } finally {
+        statsInflight = null;
+      }
+    })();
+    return statsInflight;
   });
 }

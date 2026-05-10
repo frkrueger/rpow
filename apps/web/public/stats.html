@@ -163,6 +163,16 @@ a:hover { border-bottom-color: var(--accent); }
     </div>
   </div>
 
+  <div class="panel d2" id="longshot-panel" style="display:none">
+    <div class="panel-title">
+      <span>LONG SHOT</span>
+      <span class="status"><a href="https://longshot.rpow2.com" style="border:none;color:var(--dim);font-size:10px;letter-spacing:1px">PLAY &#x2197;</a></span>
+    </div>
+    <div class="panel-body" style="padding:0">
+      <div id="longshot-dashboard"></div>
+    </div>
+  </div>
+
   <div class="footer">
     <span>rpow2.com</span>
     <a href="https://rpow2.com/#/mine">start mining</a>
@@ -385,6 +395,94 @@ render(BAKED);
 prev = BAKED;
 fetchStats(true);
 setInterval(() => fetchStats(true), CACHE_TTL);
+
+// LONGSHOT panel
+const BU = 1_000_000_000n;
+const toRpow = (s) => Number(BigInt(s || '0') / BU);
+
+function renderLongshot(d) {
+  const win24h = d.window_24h, win1h = d.window_1h;
+  const netMint24h = toRpow(win24h.net_mint_delta_base_units);
+  const netMintAll = -toRpow(d.house_pnl_base_units); // house_pnl positive => supply down
+  const oddsRows = (d.odds_breakdown || [])
+    .sort((a,b) => a.odds_choice.localeCompare(b.odds_choice))
+    .map(r => {
+      const pct = r.spins > 0 ? ((r.wins / r.spins) * 100).toFixed(1) : '0.0';
+      return `<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0">
+        <span style="color:var(--dim)">${r.odds_choice}</span>
+        <span>${fmt(r.wins)}/${fmt(r.spins)} <span style="color:var(--accent)">${pct}%</span></span>
+      </div>`;
+    }).join('');
+
+  const html = `
+    <div class="stat-grid cols-3">
+      <div class="stat-cell">
+        <div class="stat-label">PLAYERS</div>
+        <div class="stat-value amber">${fmt(d.unique_users)}</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-label">TOTAL SPINS</div>
+        <div class="stat-value accent">${fmt(d.total_spins)}</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-label">VOLUME (RPOW)</div>
+        <div class="stat-value">${fmt(toRpow(d.total_volume_base_units))}</div>
+      </div>
+    </div>
+    <div class="stat-grid" style="border-top:1px solid rgba(110,231,183,0.18)">
+      <div class="stat-cell">
+        <div class="stat-label">SPINS / 24H</div>
+        <div class="stat-value">${fmt(win24h.spins)}</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-label">PLAYERS / 24H</div>
+        <div class="stat-value">${fmt(win24h.users)}</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-label">SPINS / 1H</div>
+        <div class="stat-value">${fmt(win1h.spins)}</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-label">PLAYERS / 1H</div>
+        <div class="stat-value">${fmt(win1h.users)}</div>
+      </div>
+    </div>
+    <div class="stat-grid" style="border-top:1px solid rgba(110,231,183,0.18)">
+      <div class="stat-cell">
+        <div class="stat-label">NET MINT &#x394; / 24H</div>
+        <div class="stat-value ${netMint24h < 0 ? 'accent' : 'amber'}">${netMint24h >= 0 ? '+' : ''}${fmt(netMint24h)}</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-label">NET MINT &#x394; / ALL</div>
+        <div class="stat-value ${netMintAll < 0 ? 'accent' : 'amber'}">${netMintAll >= 0 ? '+' : ''}${fmt(netMintAll)}</div>
+      </div>
+    </div>
+    <div style="padding:12px 16px; border-top:1px solid rgba(110,231,183,0.18)">
+      <div class="stat-label" style="margin-bottom:6px">WIN RATE BY ODDS</div>
+      ${oddsRows || '<div style="color:var(--dim);font-size:12px">no plays yet</div>'}
+    </div>
+  `;
+  $('longshot-dashboard').innerHTML = html;
+  $('longshot-panel').style.display = '';
+}
+
+// Netlify proxy strips the /api prefix, so /api/longshot/stats can't go through
+// it. Hit api.rpow2.com directly — CORS already permits this origin.
+const LONGSHOT_API = (window.location.hostname === 'localhost' && window.location.port === '5173')
+  ? 'http://localhost:8080/api/longshot/stats'
+  : 'https://api.rpow2.com/api/longshot/stats';
+
+async function fetchLongshot() {
+  try {
+    const res = await fetch(LONGSHOT_API);
+    if (!res.ok) return;
+    const d = await res.json();
+    renderLongshot(d);
+  } catch {}
+}
+
+fetchLongshot();
+setInterval(fetchLongshot, CACHE_TTL);
 </script>
 
 </body>
