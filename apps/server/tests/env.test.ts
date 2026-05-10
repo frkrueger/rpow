@@ -12,8 +12,10 @@ describe('parseEnv', () => {
       RPOW_SIGNING_PRIVATE_KEY_HEX: '00'.repeat(32),
       RPOW_SIGNING_PUBLIC_KEY_HEX: '00'.repeat(32),
       DIFFICULTY_BITS: '8',
+      PUBLIC_STATS_ORIGINS: 'https://stats.example, http://localhost:5179',
     });
     expect(env.DIFFICULTY_BITS).toBe(8);
+    expect(env.PUBLIC_STATS_ORIGINS).toEqual(['https://stats.example', 'http://localhost:5179']);
   });
   it('rejects when DATABASE_URL missing', () => {
     expect(() => parseEnv({})).toThrow(/DATABASE_URL/);

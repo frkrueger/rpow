@@ -99,6 +99,7 @@ const app = await buildApp({
     signingPrivateKeyHex: env.RPOW_SIGNING_PRIVATE_KEY_HEX,
     signingPublicKeyHex: env.RPOW_SIGNING_PUBLIC_KEY_HEX,
     webOrigin: env.WEB_ORIGIN,
+    publicStatsOrigins: env.PUBLIC_STATS_ORIGINS,
     secureCookies: env.NODE_ENV === 'production',
     turnstileSecret: env.TURNSTILE_SECRET,
   },

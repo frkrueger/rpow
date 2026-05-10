@@ -5,6 +5,7 @@ import { readSession } from './auth.js';
 import { withTx } from '../db.js';
 import { isAllowed } from '../wrap-allowlist.js';
 import { signTokenPayload } from '../signing.js';
+import { creditValidBalance, debitValidBalance } from '../balances.js';
 
 const WrapBody = z.object({
   amount_base_units: z
@@ -108,6 +109,9 @@ export async function srpowRoutes(app: FastifyInstance) {
       }
       const change = total - target;
 
+      const debited = await debitValidBalance(c, s.email, total);
+      if (!debited) return { error: 'INSUFFICIENT_BALANCE' as const };
+
       const eventId = randomUUID();
       await c.query(
         `INSERT INTO srpow_wrap_events
@@ -140,7 +144,7 @@ export async function srpowRoutes(app: FastifyInstance) {
         );
       }
 
-      return { fresh: { eventId, wallet, ids, changeId, change } };
+      return { fresh: { eventId, wallet, ids, changeId, change, total } };
     });
 
     if ('error' in phase1) {
@@ -172,11 +176,11 @@ export async function srpowRoutes(app: FastifyInstance) {
     }
 
     if ('fresh' in phase1) {
-      const { eventId, wallet, ids, changeId, change } = phase1.fresh;
+      const { eventId, wallet, ids, changeId, change, total } = phase1.fresh;
 
       const result = await app.bridgeClient.mintTo(
         { recipientWallet: wallet, amountBaseUnits: target },
-        async (signature) => {
+        async (signature: string) => {
           // Persist signature BEFORE the bridge client awaits confirmation. If
           // the server crashes between here and the confirmation result, the
           // reconcile worker on next boot will see this row's solana_signature
@@ -207,6 +211,7 @@ export async function srpowRoutes(app: FastifyInstance) {
               `UPDATE tokens SET state='VALID' WHERE id=$1`,
               [changeId],
             );
+            await creditValidBalance(c, s.email, change);
           }
         });
         return {
@@ -235,6 +240,7 @@ export async function srpowRoutes(app: FastifyInstance) {
         if (changeId) {
           await c.query(`DELETE FROM tokens WHERE id=$1`, [changeId]);
         }
+        await creditValidBalance(c, s.email, total);
       });
       return reply.code(503).send({
         error: 'BRIDGE_FAILED', event_id: eventId, status: 'REFUNDED',

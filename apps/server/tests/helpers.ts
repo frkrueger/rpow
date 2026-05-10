@@ -51,6 +51,7 @@ export async function makeTestApp(opts: {
       signingPrivateKeyHex: '11'.repeat(32),
       signingPublicKeyHex: '22'.repeat(32),
       webOrigin: 'http://web.test',
+      publicStatsOrigins: ['https://stats.example'],
       secureCookies: false,
     },
   });
