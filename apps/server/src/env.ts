@@ -41,6 +41,14 @@ const Schema = z.object({
   // postgres max_connections (200 by default) — sum across all workers and
   // the rpow-auth service. e.g. 10 cluster workers × 16 + 1 auth × 10 = 170.
   PG_POOL_MAX: z.coerce.number().int().positive().default(10),
+  GLADIATOR_MIN_BET_BASE_UNITS: z.coerce.number().int().positive().default(10_000_000),
+  GLADIATOR_MAX_BET_BASE_UNITS: z.coerce.number().int().positive().default(10_000_000_000),
+  GLADIATOR_MAX_BANKROLL_BASE_UNITS: z.coerce.number().int().positive().default(100_000_000_000),
+  GLADIATOR_SESSION_TTL_HOURS: z.coerce.number().int().positive().default(48),
+  GLADIATOR_CHAT_RETENTION_DAYS: z.coerce.number().int().positive().default(30),
+  GLADIATOR_ALLOWED_EMAILS: z.string().default('*'),
+  GLADIATOR_WEB_ORIGIN: z.string().url().default('https://gladiator.rpow2.com'),
+  GLADIATOR_ADMIN_TOKEN: z.string().min(1).optional(),
 }).superRefine((v, ctx) => {
   if (v.MAILER === 'resend' && !v.RESEND_API_KEY) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['RESEND_API_KEY'], message: 'required when MAILER=resend' });
@@ -56,6 +64,12 @@ const Schema = z.object({
   }
   if (v.LONGSHOT_MAX_BASE_UNITS < v.LONGSHOT_MIN_BASE_UNITS) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['LONGSHOT_MAX_BASE_UNITS'], message: 'LONGSHOT_MAX_BASE_UNITS must be >= LONGSHOT_MIN_BASE_UNITS' });
+  }
+  if (v.GLADIATOR_MAX_BET_BASE_UNITS < v.GLADIATOR_MIN_BET_BASE_UNITS) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['GLADIATOR_MAX_BET_BASE_UNITS'], message: 'GLADIATOR_MAX_BET_BASE_UNITS must be >= GLADIATOR_MIN_BET_BASE_UNITS' });
+  }
+  if (v.GLADIATOR_MAX_BANKROLL_BASE_UNITS < v.GLADIATOR_MAX_BET_BASE_UNITS) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['GLADIATOR_MAX_BANKROLL_BASE_UNITS'], message: 'GLADIATOR_MAX_BANKROLL_BASE_UNITS must be >= GLADIATOR_MAX_BET_BASE_UNITS' });
   }
 });
 

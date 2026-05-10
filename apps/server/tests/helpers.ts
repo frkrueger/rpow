@@ -55,6 +55,13 @@ export async function makeTestApp(opts: {
       longShotMinBaseUnits: 10,
       longShotMaxBaseUnits: 1_000_000_000,
       longShotAllowedEmails: '*',
+      gladiatorMinBetBaseUnits: 10,
+      gladiatorMaxBetBaseUnits: 1_000_000_000,
+      gladiatorMaxBankrollBaseUnits: 10_000_000_000,
+      gladiatorSessionTtlHours: 48,
+      gladiatorChatRetentionDays: 30,
+      gladiatorAllowedEmails: '*',
+      gladiatorWebOrigin: 'http://gladiator.test',
       secureCookies: false,
     },
   });
