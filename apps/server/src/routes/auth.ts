@@ -131,7 +131,7 @@ export async function authRoutes(app: FastifyInstance) {
       httpOnly: true, secure: app.config.secureCookies,
       sameSite: 'lax', path: '/', maxAge: SESSION_TTL_SECONDS,
     });
-    return reply.redirect(`${app.config.webOrigin}/#/wallet`, 302);
+    return reply.redirect(`${app.config.webOrigin}/#/`, 302);
   });
 
   app.post('/auth/logout', async (req, reply) => {
