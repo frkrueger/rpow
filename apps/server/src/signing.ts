@@ -42,3 +42,37 @@ export function signTokenPayload(payload: TokenPayload, privHex: string): Buffer
 export function verifyTokenPayload(payload: TokenPayload, sig: Buffer, pubHex: string): boolean {
   return verify(null, canonical(payload), pubKeyFromHex(pubHex), sig);
 }
+
+export interface FlipPayload {
+  id: string;
+  offerer_email_hash: string;
+  challenger_email_hash: string;
+  bet_base_units: bigint;
+  winner_email_hash: string;
+  random_value_hex: string;
+  created_at: string;
+}
+
+function canonicalFlip(payload: FlipPayload): Buffer {
+  const ordered = JSON.stringify(
+    {
+      id: payload.id,
+      offerer_email_hash: payload.offerer_email_hash,
+      challenger_email_hash: payload.challenger_email_hash,
+      bet_base_units: payload.bet_base_units,
+      winner_email_hash: payload.winner_email_hash,
+      random_value_hex: payload.random_value_hex,
+      created_at: payload.created_at,
+    },
+    (_, v) => (typeof v === 'bigint' ? v.toString() : v),
+  );
+  return Buffer.from(ordered, 'utf8');
+}
+
+export function signFlipPayload(payload: FlipPayload, privHex: string): Buffer {
+  return sign(null, canonicalFlip(payload), privKeyFromHex(privHex));
+}
+
+export function verifyFlipPayload(payload: FlipPayload, sig: Buffer, pubHex: string): boolean {
+  return verify(null, canonicalFlip(payload), pubKeyFromHex(pubHex), sig);
+}
