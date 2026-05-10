@@ -128,20 +128,12 @@ export async function authRoutes(app: FastifyInstance) {
     );
 
     const sessionToken = signSession({ email: match.email }, app.config.sessionSecret, SESSION_TTL_SECONDS);
-
-    // Return an HTML page that sets the cookie via JS and redirects.
-    // This avoids cross-domain Set-Cookie issues with browser extensions.
-    const maxAge = SESSION_TTL_SECONDS;
-    const domain = app.config.secureCookies ? '; Domain=.rpow2.com; Secure' : '';
-    const redirectUrl = `${app.config.webOrigin}/#/`;
-    reply.type('text/html');
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>
-<script>
-document.cookie="${SESSION_COOKIE}=${sessionToken}; Path=/; Max-Age=${maxAge}; SameSite=Lax${domain}";
-window.location.replace("${redirectUrl}");
-</script>
-<noscript><a href="${redirectUrl}">Continue to rpow2</a></noscript>
-</body></html>`;
+    reply.setCookie(SESSION_COOKIE, sessionToken, {
+      httpOnly: true, secure: app.config.secureCookies,
+      sameSite: 'none', path: '/', maxAge: SESSION_TTL_SECONDS,
+      domain: app.config.secureCookies ? '.rpow2.com' : undefined,
+    });
+    return reply.redirect(`${app.config.webOrigin}/#/`, 302);
   });
 
   app.post('/auth/logout', async (req, reply) => {
