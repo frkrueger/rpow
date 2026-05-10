@@ -11,17 +11,15 @@
   --amber: #fbbf24;
 }
 :root[data-theme="amber"] {
-  --fg: #ffb000;
   --accent: #ffb000;
   --accent-dim: rgba(255, 176, 0, 0.18);
   --glow: rgba(255, 176, 0, 0.08);
   --amber: #ffb000;
 }
-:root[data-theme="green"] {
-  --fg: #5be09a;
-  --accent: #5be09a;
-  --accent-dim: rgba(91, 224, 154, 0.18);
-  --glow: rgba(91, 224, 154, 0.08);
+:root[data-theme="blue"] {
+  --accent: #60a5fa;
+  --accent-dim: rgba(96, 165, 250, 0.18);
+  --glow: rgba(96, 165, 250, 0.08);
 }
 
 * { box-sizing: border-box; }
