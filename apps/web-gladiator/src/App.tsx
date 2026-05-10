@@ -22,12 +22,14 @@ export function App() {
   const [authState, setAuthState] = useState<'loading' | 'spectator' | 'unverified' | 'verified'>('loading');
 
   async function refreshAll() {
+    // Each fetch is independent — failure of one (e.g. /me 401, or backend
+    // unreachable) must not block the others or trap the UI in 'loading'.
     const [u, p, l, r, c] = await Promise.all([
-      fetchMe(),
-      fetchGladiatorMe(),
-      fetchLobby(),
-      fetchRecentFlips(),
-      fetchChat(),
+      fetchMe().catch(() => null),
+      fetchGladiatorMe().catch(() => null),
+      fetchLobby().catch(() => []),
+      fetchRecentFlips().catch(() => []),
+      fetchChat().catch(() => []),
     ]);
     setMe(u);
     setProfile(p);
@@ -41,10 +43,13 @@ export function App() {
 
   useEffect(() => { refreshAll(); }, []);
 
-  // 5s polling for lobby + chat + recent flips
   useEffect(() => {
     const t = setInterval(async () => {
-      const [l, r, c] = await Promise.all([fetchLobby(), fetchRecentFlips(), fetchChat()]);
+      const [l, r, c] = await Promise.all([
+        fetchLobby().catch(() => []),
+        fetchRecentFlips().catch(() => []),
+        fetchChat().catch(() => []),
+      ]);
       setLobby(l); setRecentFlips(r); setChat(c);
     }, 5000);
     return () => clearInterval(t);
