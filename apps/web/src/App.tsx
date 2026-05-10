@@ -26,7 +26,7 @@ export default function App() {
     <HashRouter>
       <div className="app-shell">
         <header>
-          <pre style={{ margin: 0 }}>{'+======================================================================+\n|                   RPOW2 - Reusable Proofs of Work                  '}<span onClick={() => setTheme(nextTheme(theme))} title="cycle theme" style={{ cursor: 'pointer', fontSize: 13 }}>{'\u25cf'}</span>{' |\n+======================================================================+'}</pre>
+          <pre style={{ margin: 0 }}>{'+======================================================================+\n|                   RPOW2 - Reusable Proofs of Work                  '}<span onClick={() => setTheme(nextTheme(theme))} title="cycle theme" style={{ cursor: 'pointer', fontSize: 13, color: 'var(--accent)' }}>{'\u25cf'}</span>{' |\n+======================================================================+'}</pre>
           <div className="tagline">a modern tribute to a tribute to the original rpow by hal finney</div>
           <nav className="nav">
             <NavLink to="/">wallet</NavLink>
