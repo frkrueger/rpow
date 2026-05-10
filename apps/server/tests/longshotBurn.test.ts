@@ -22,7 +22,7 @@ describe('burnFromUser', () => {
     const client = await ctx.pool.connect();
     try {
       await client.query(`BEGIN`);
-      await burnFromUser(client, 'a@b.com', 100n, () => Buffer.from([0x01]));
+      await burnFromUser(client, 'a@b.com', 100n, '11'.repeat(32));
       await client.query(`COMMIT`);
     } finally {
       client.release();
@@ -40,7 +40,7 @@ describe('burnFromUser', () => {
     const client = await ctx.pool.connect();
     try {
       await client.query(`BEGIN`);
-      await burnFromUser(client, 'a@b.com', 30n, () => Buffer.from([0x01]));
+      await burnFromUser(client, 'a@b.com', 30n, '11'.repeat(32));
       await client.query(`COMMIT`);
     } finally {
       client.release();
@@ -60,7 +60,7 @@ describe('burnFromUser', () => {
     const client = await ctx.pool.connect();
     try {
       await client.query(`BEGIN`);
-      await burnFromUser(client, 'a@b.com', 75n, () => Buffer.from([0x01]));
+      await burnFromUser(client, 'a@b.com', 75n, '11'.repeat(32));
       await client.query(`COMMIT`);
     } finally {
       client.release();
@@ -79,7 +79,7 @@ describe('burnFromUser', () => {
     try {
       await client.query(`BEGIN`);
       await expect(
-        burnFromUser(client, 'a@b.com', 100n, () => Buffer.from([0x01])),
+        burnFromUser(client, 'a@b.com', 100n, '11'.repeat(32)),
       ).rejects.toThrow(/INSUFFICIENT_BALANCE/);
       await client.query(`ROLLBACK`);
     } finally {

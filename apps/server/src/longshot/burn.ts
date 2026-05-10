@@ -1,5 +1,6 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import type { PoolClient } from 'pg';
+import { signTokenPayload } from '../signing.js';
 
 /**
  * Invalidate VALID tokens owned by `email` summing to >= amount.
@@ -9,19 +10,21 @@ import type { PoolClient } from 'pg';
  * on the passed PoolClient). Uses SELECT ... FOR UPDATE on tokens to
  * lock against concurrent /send.
  *
- * @param signFn called with the change-token's payload bytes; returns
- *               the signature bytes. The caller's real Ed25519 signer
- *               wraps signTokenPayload(privKey, payload).
+ * @param privateKeyHex  Ed25519 private key (hex) used to sign the
+ *                       change token via signTokenPayload — same key
+ *                       that signs all other RPOW tokens.
  */
 export async function burnFromUser(
   client: PoolClient,
   email: string,
   amount: bigint,
-  signFn: (payload: Buffer) => Buffer,
+  privateKeyHex: string,
 ): Promise<void> {
   if (amount <= 0n) throw new Error('amount must be positive');
 
-  // Pick tokens largest-first to minimize the number of rows we invalidate.
+  // Plain FOR UPDATE (not SKIP LOCKED): if a concurrent /send is mid-flight,
+  // wait for it rather than seeing a partial balance and falsely throwing
+  // INSUFFICIENT_BALANCE. Brief lock contention is acceptable on a lose-spin.
   const { rows } = await client.query<{ id: string; value: string }>(
     `SELECT id, value::text FROM tokens
      WHERE owner_email = $1 AND state = 'VALID'
@@ -52,13 +55,17 @@ export async function burnFromUser(
   // how /send change tokens are linked to their parents).
   const overage = collected - amount;
   if (overage > 0n) {
+    const issuedAt = new Date();
     const changeId = randomUUID();
-    const payload = Buffer.from(`${changeId}|${email}|${overage.toString()}|change`);
-    const sig = signFn(payload);
+    const ownerEmailHash = createHash('sha256').update(email).digest('hex');
+    const sig = signTokenPayload(
+      { id: changeId, owner_email_hash: ownerEmailHash, value: overage, issued_at: issuedAt.toISOString() },
+      privateKeyHex,
+    );
     await client.query(
-      `INSERT INTO tokens(id, owner_email, value, state, parent_token_id, server_sig)
-       VALUES ($1, $2, $3::bigint, 'VALID', $4, $5)`,
-      [changeId, email, overage.toString(), toInvalidate[0], sig],
+      `INSERT INTO tokens(id, owner_email, value, state, issued_at, parent_token_id, server_sig)
+       VALUES ($1, $2, $3::bigint, 'VALID', $4, $5, $6)`,
+      [changeId, email, overage.toString(), issuedAt, toInvalidate[0], sig],
     );
   }
 }
