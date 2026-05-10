@@ -31,7 +31,7 @@
   to = "/index.html"
   status = 200
 
-# Production: web client points at the Fly-hosted API
+# Production: web client points at the VPS-hosted API (api.rpow2.com)
 [context.production.environment]
   VITE_API_BASE_URL = "https://api.rpow2.com"
 
