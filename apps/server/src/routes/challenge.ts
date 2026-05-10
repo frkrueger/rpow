@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { readSession } from './auth.js';
 import { difficultyBitsForSupply, BASE_UNITS_PER_RPOW } from '../schedule.js';
+import { withTx } from '../db.js';
 
 // Supply count is checked twice per mining round: here at /challenge
 // (advisory only — used to pick difficulty and fail-fast at cap) and again
@@ -37,65 +38,72 @@ export async function challengeRoutes(app: FastifyInstance) {
     const s = readSession(req as any, app.config.sessionSecret);
     if (!s) return reply.code(401).send({ error: 'UNAUTHORIZED', message: 'login required' });
 
-    // Return existing unsolved challenge instead of issuing a new one.
-    const { rows: pending } = await app.pool.query<{ id: string; nonce_prefix: Buffer; difficulty_bits: number; expires_at: Date }>(
-      `SELECT id, nonce_prefix, difficulty_bits, expires_at FROM challenges
-       WHERE user_email=$1 AND claimed_at IS NULL AND expires_at > now()
-       ORDER BY issued_at DESC LIMIT 1`,
-      [s.email],
-    );
-    if (pending[0]) {
-      return {
-        challenge_id: pending[0].id,
-        nonce_prefix: pending[0].nonce_prefix.toString('hex'),
-        difficulty_bits: pending[0].difficulty_bits,
-        expires_at: pending[0].expires_at.toISOString(),
-      };
-    }
+    // Serialize per-user with advisory lock to prevent concurrent challenge spam.
+    const result = await withTx(app.pool, async (c) => {
+      await c.query(`SELECT pg_advisory_xact_lock(hashtext('rpow_challenge'), hashtext($1))`, [s.email]);
 
-    // Per-account cooldown: 5 seconds between completed challenges.
-    const { rows: lastClaimed } = await app.pool.query<{ claimed_at: Date }>(
-      `SELECT claimed_at FROM challenges
-       WHERE user_email=$1 AND claimed_at IS NOT NULL
-       ORDER BY claimed_at DESC LIMIT 1`,
-      [s.email],
-    );
-    if (lastClaimed[0]) {
-      const elapsedMs = Date.now() - lastClaimed[0].claimed_at.getTime();
-      if (elapsedMs < 5000) {
-        const wait = Math.ceil((5000 - elapsedMs) / 1000);
-        return reply.code(429).send({
-          error: 'COOLDOWN',
-          message: `wait ${wait}s before next challenge`,
-          retry_after: wait,
-        });
+      const { rows: pending } = await c.query<{ id: string; nonce_prefix: Buffer; difficulty_bits: number; expires_at: Date }>(
+        `SELECT id, nonce_prefix, difficulty_bits, expires_at FROM challenges
+         WHERE user_email=$1 AND claimed_at IS NULL AND expires_at > now()
+         ORDER BY issued_at DESC LIMIT 1`,
+        [s.email],
+      );
+      if (pending[0]) {
+        return {
+          challenge_id: pending[0].id,
+          nonce_prefix: pending[0].nonce_prefix.toString('hex'),
+          difficulty_bits: pending[0].difficulty_bits,
+          expires_at: pending[0].expires_at.toISOString(),
+        };
       }
-    }
 
-    const minted = await mintedSupplyBaseUnits();
-    const capBaseUnits = BigInt(app.config.mintMaxSupply) * BASE_UNITS_PER_RPOW;
-    if (minted >= capBaseUnits) {
+      const { rows: lastClaimed } = await c.query<{ claimed_at: Date }>(
+        `SELECT claimed_at FROM challenges
+         WHERE user_email=$1 AND claimed_at IS NOT NULL
+         ORDER BY claimed_at DESC LIMIT 1`,
+        [s.email],
+      );
+      if (lastClaimed[0]) {
+        const elapsedMs = Date.now() - lastClaimed[0].claimed_at.getTime();
+        if (elapsedMs < 5000) {
+          const wait = Math.ceil((5000 - elapsedMs) / 1000);
+          return { _cooldown: true as const, wait };
+        }
+      }
+
+      const minted = await mintedSupplyBaseUnits();
+      const capBaseUnits = BigInt(app.config.mintMaxSupply) * BASE_UNITS_PER_RPOW;
+      if (minted >= capBaseUnits) {
+        return { _exhausted: true as const };
+      }
+
+      const scheduledBits = difficultyBitsForSupply(minted, {
+        difficultyBits: app.config.difficultyBits,
+        maxSupplyRpow: app.config.mintMaxSupply,
+      });
+      const difficulty = Math.max(app.config.difficultyFloor, scheduledBits);
+
+      const id = randomUUID();
+      const noncePrefix = randomBytes(16);
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+      await c.query(
+        'INSERT INTO challenges(id, user_email, nonce_prefix, difficulty_bits, expires_at) VALUES($1,$2,$3,$4,$5)',
+        [id, s.email, noncePrefix, difficulty, expiresAt],
+      );
+      return {
+        challenge_id: id,
+        nonce_prefix: noncePrefix.toString('hex'),
+        difficulty_bits: difficulty,
+        expires_at: expiresAt.toISOString(),
+      };
+    });
+
+    if ('_cooldown' in result) {
+      return reply.code(429).send({ error: 'COOLDOWN', message: `wait ${result.wait}s before next challenge`, retry_after: result.wait });
+    }
+    if ('_exhausted' in result) {
       return reply.code(410).send({ error: 'SUPPLY_EXHAUSTED', message: '21M cap reached' });
     }
-
-    const scheduledBits = difficultyBitsForSupply(minted, {
-      difficultyBits: app.config.difficultyBits,
-      maxSupplyRpow: app.config.mintMaxSupply,
-    });
-    const difficulty = Math.max(app.config.difficultyFloor, scheduledBits);
-
-    const id = randomUUID();
-    const noncePrefix = randomBytes(16);
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-    await app.pool.query(
-      'INSERT INTO challenges(id, user_email, nonce_prefix, difficulty_bits, expires_at) VALUES($1,$2,$3,$4,$5)',
-      [id, s.email, noncePrefix, difficulty, expiresAt],
-    );
-    return {
-      challenge_id: id,
-      nonce_prefix: noncePrefix.toString('hex'),
-      difficulty_bits: difficulty,
-      expires_at: expiresAt.toISOString(),
-    };
+    return result;
   });
 }
