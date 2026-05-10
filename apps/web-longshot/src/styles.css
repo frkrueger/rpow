@@ -58,3 +58,21 @@ input[type="range"] { width: 100%; accent-color: var(--accent); margin: 12px 0 1
   font-size: 1.2rem;
   cursor: pointer;
 }
+
+.history { margin-top: 32px; }
+.history h2 { font-size: 0.9rem; letter-spacing: 0.1em; color: var(--dim); text-transform: uppercase; }
+.history ul { list-style: none; padding: 0; margin: 0; font-family: ui-monospace, monospace; }
+.history li {
+  display: grid;
+  grid-template-columns: 90px 60px 1fr 60px 100px;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid #1a1a1a;
+  font-size: 0.86rem;
+}
+.history .when { color: var(--dim); }
+.history .outcome { font-weight: 700; }
+.history li.win .outcome, .history li.win .delta { color: var(--accent); }
+.history li.lose .outcome, .history li.lose .delta { color: var(--warn); }
+.history .delta { text-align: right; }
+.history .stake { color: var(--dim); }
