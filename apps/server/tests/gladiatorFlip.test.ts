@@ -203,6 +203,25 @@ describe('POST /api/gladiator/flip', () => {
     expect(res.json().error).toBe('INTERNAL_ERROR');
   });
 
+  it('403 NOT_ALLOWED when challenger is not on gladiator allowlist', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    (ctx.app as any).config.gladiatorAllowedEmails = 'someone-else@example.com';
+    await login(ctx, 'alice@a.com');
+    await markVerified(ctx.pool, 'alice@a.com', 'alice');
+    const cookie = await login(ctx, 'bob@b.com');
+    await markVerified(ctx.pool, 'bob@b.com', 'bob');
+    await seedToken(ctx.pool, 'bob@b.com', 1000n);
+    const sessionId = await openSession(ctx.pool, 'alice@a.com', 10n, 100n);
+    const res = await ctx.app.inject({
+      method: 'POST',
+      url: '/api/gladiator/flip',
+      headers: { cookie, 'content-type': 'application/json' },
+      payload: { session_id: sessionId },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toBe('NOT_ALLOWED');
+  });
+
   it('409 INSUFFICIENT_BALANCE when challenger has no tokens', async () => {
     const ctx = await makeTestApp(); cleanup = ctx.cleanup;
     await login(ctx, 'alice@a.com');

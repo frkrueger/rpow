@@ -160,6 +160,22 @@ describe('POST /api/gladiator/sessions', () => {
     expect(res.json().error).toBe('BANKROLL_NOT_MULTIPLE');
   });
 
+  it('403 NOT_ALLOWED when user is not on gladiator allowlist', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    (ctx.app as any).config.gladiatorAllowedEmails = 'someone-else@example.com';
+    const cookie = await login(ctx, 'a@b.com');
+    await markVerified(ctx.pool, 'a@b.com', 'alice');
+    await seedToken(ctx.pool, 'a@b.com', 1000n);
+    const res = await ctx.app.inject({
+      method: 'POST',
+      url: '/api/gladiator/sessions',
+      headers: { cookie, 'content-type': 'application/json' },
+      payload: { bankroll_base_units: '100', bet_base_units: '10' },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toBe('NOT_ALLOWED');
+  });
+
   it('409 INSUFFICIENT_BALANCE when user lacks tokens', async () => {
     const ctx = await makeTestApp(); cleanup = ctx.cleanup;
     const cookie = await login(ctx, 'a@b.com');

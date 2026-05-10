@@ -16,6 +16,20 @@ function formatRpow(baseUnits: bigint): string {
   return (Number(baseUnits) / 1e9).toFixed(9).replace(/\.?0+$/, '');
 }
 
+/**
+ * CSV allowlist check. '*' means everyone is allowed. Case-insensitive.
+ * Mirrors apps/server/src/routes/longshot.ts.
+ */
+function isAllowed(allowlistCsv: string, email: string): boolean {
+  const trimmed = allowlistCsv.trim();
+  if (trimmed === '*') return true;
+  const emailLower = email.toLowerCase();
+  return trimmed
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .includes(emailLower);
+}
+
 const FlipBody = z.object({
   session_id: z.string().uuid(),
 });
@@ -36,6 +50,11 @@ export async function flipRoutes(app: FastifyInstance) {
     if (!s) return reply.code(401).send({ error: 'UNAUTHORIZED', message: 'login required' });
 
     const challengerEmail = s.email;
+
+    // Allowlist check
+    if (!isAllowed(app.config.gladiatorAllowedEmails, challengerEmail)) {
+      return reply.code(403).send({ error: 'NOT_ALLOWED', message: 'gladiator access required' });
+    }
 
     const challengerRes = await app.pool.query<{
       x_handle: string | null;

@@ -21,6 +21,20 @@ function formatRpow(baseUnits: bigint): string {
   return (Number(baseUnits) / 1e9).toFixed(9).replace(/\.?0+$/, '');
 }
 
+/**
+ * CSV allowlist check. '*' means everyone is allowed. Case-insensitive.
+ * Mirrors apps/server/src/routes/longshot.ts.
+ */
+function isAllowed(allowlistCsv: string, email: string): boolean {
+  const trimmed = allowlistCsv.trim();
+  if (trimmed === '*') return true;
+  const emailLower = email.toLowerCase();
+  return trimmed
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .includes(emailLower);
+}
+
 // ---------------------------------------------------------------------------
 // Body schemas
 // ---------------------------------------------------------------------------
@@ -52,6 +66,11 @@ export async function sessionsRoutes(app: FastifyInstance) {
     if (!s) return reply.code(401).send({ error: 'UNAUTHORIZED', message: 'login required' });
 
     const email = s.email;
+
+    // 1b. Allowlist check
+    if (!isAllowed(app.config.gladiatorAllowedEmails, email)) {
+      return reply.code(403).send({ error: 'NOT_ALLOWED', message: 'gladiator access required' });
+    }
 
     // 2. Check X handle verified
     const userRes = await app.pool.query<{
@@ -105,8 +124,12 @@ export async function sessionsRoutes(app: FastifyInstance) {
     let result: EnterResult;
     try {
       result = await withTx<EnterResult>(app.pool, async (c) => {
-        // Burn bankroll from user's tokens
+        // Burn bankroll from user's tokens, then mirror minted_supply.
         await burnFromUser(c, email, bankroll, app.config.signingPrivateKeyHex);
+        await c.query(
+          `UPDATE app_counters SET value = value - $1::bigint WHERE name = 'minted_supply'`,
+          [bankroll.toString()],
+        );
 
         // Insert gladiator session
         const insertRes = await c.query<{
@@ -244,7 +267,7 @@ export async function sessionsRoutes(app: FastifyInstance) {
             [remaining.toString(), capBaseUnits.toString()],
           );
           if ((supplyResult.rowCount ?? 0) === 0) {
-            return { error: 'SUPPLY_CAP_REACHED', message: 'minted supply cap reached', status: 503 };
+            throw new Error('SUPPLY_CAP_REACHED');
           }
 
           // Mint the refund token
@@ -285,6 +308,9 @@ export async function sessionsRoutes(app: FastifyInstance) {
         return { ok: true, closed_at: closedAt, refunded_base_units: remaining };
       });
     } catch (e: any) {
+      if (e?.message === 'SUPPLY_CAP_REACHED') {
+        return reply.code(503).send({ error: 'SUPPLY_CAP_REACHED', message: 'minted supply cap reached' });
+      }
       throw e;
     }
 
