@@ -10,7 +10,7 @@ describe('migration 017_user_favorites', () => {
     const colsRes = await ctx.pool.query(
       `SELECT column_name
        FROM information_schema.columns
-       WHERE table_name = 'user_favorites'
+       WHERE table_name = 'user_favorites' AND table_schema = current_schema()
        ORDER BY ordinal_position`,
     );
     const names = colsRes.rows.map((r: any) => r.column_name);
