@@ -21,10 +21,10 @@ export async function ledgerRoutes(app: FastifyInstance) {
         `SELECT coalesce(sum(amount),0)::text AS n FROM transfers`,
       ),
       app.pool.query<{ n: string }>(
-        `SELECT coalesce(sum(value),0)::text AS n FROM tokens WHERE state='VALID'`,
+        `SELECT coalesce(sum(value),0)::text AS n FROM app_counters WHERE name='circulating_supply_base_units'`,
       ),
       app.pool.query<{ n: string }>(
-        `SELECT coalesce(sum(value),0)::text AS n FROM tokens WHERE state='WRAPPED'`,
+        `SELECT coalesce(sum(value),0)::text AS n FROM app_counters WHERE name='wrapped_supply_base_units'`,
       ),
       app.pool.query<{ n: number }>(
         `SELECT count(*)::int AS n FROM users`,
