@@ -8,6 +8,19 @@ import { EnterArenaForm } from './EnterArenaForm.js';
 import { YourSessionPanel } from './YourSessionPanel.js';
 import { FlipModal } from './FlipModal.js';
 
+/** Render a handle as a link to that person's X profile. */
+function XLink({ handle }: { handle: string | null | undefined }) {
+  if (!handle) return <span>—</span>;
+  return (
+    <a
+      href={`https://x.com/${handle}`}
+      target="_blank"
+      rel="noreferrer noopener"
+      className="x-handle"
+    >@{handle}</a>
+  );
+}
+
 export function App() {
   const [me, setMe] = useState<Me | null>(null);
   const [profile, setProfile] = useState<GladiatorProfile | null>(null);
@@ -84,7 +97,7 @@ export function App() {
         <h1>RPOW GLADIATOR</h1>
         <div className="auth-bar">
           {me
-            ? <span>logged in as <strong>{profile?.x_handle ? `@${profile.x_handle}` : me.email}</strong></span>
+            ? <span>logged in as {profile?.x_handle ? <XLink handle={profile.x_handle} /> : <strong>{me.email}</strong>}</span>
             : <a href="https://rpow2.com/#/">[ sign in at rpow2.com ]</a>
           }
         </div>
@@ -123,7 +136,7 @@ export function App() {
                   return (
                     <div key={g.session_id} className="lobby-row">
                       <div>
-                        <strong>@{g.x_handle}</strong>
+                        <XLink handle={g.x_handle} />
                         {' — '}
                         bankroll {formatRpow(g.bankroll_remaining_base_units)} RPOW
                         {' — '}
@@ -155,7 +168,7 @@ export function App() {
                   const payout = (BigInt(f.bet_base_units) * 2n).toString();
                   return (
                     <div key={f.id} className="flip-row">
-                      <strong>@{winnerHandle}</strong> beat <span>@{loserHandle}</span> for {formatRpow(payout)} RPOW
+                      <XLink handle={winnerHandle} /> beat <XLink handle={loserHandle} /> for {formatRpow(payout)} RPOW
                     </div>
                   );
                 })
@@ -170,7 +183,9 @@ export function App() {
               ? <p style={{ color: '#666' }}>no messages yet</p>
               : [...chat].reverse().map(m => (
                   <div key={m.id} className={m.kind === 'SYSTEM' ? 'chat-system' : 'chat-user'}>
-                    {m.kind === 'SYSTEM' ? <em>{m.body}</em> : <><strong>@{m.x_handle}:</strong> {m.body}</>}
+                    {m.kind === 'SYSTEM'
+                      ? <em>{m.body}</em>
+                      : <><XLink handle={m.x_handle} />: {m.body}</>}
                   </div>
                 ))
             }

@@ -472,3 +472,13 @@ label {
   padding: 4px 12px;
   font-size: 11px;
 }
+
+/* X handle links — accent color, subtle underline on hover */
+a.x-handle {
+  color: var(--accent);
+  font-weight: 700;
+  text-decoration: none;
+}
+a.x-handle:hover {
+  text-decoration: underline;
+}

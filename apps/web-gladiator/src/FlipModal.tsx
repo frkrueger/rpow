@@ -30,7 +30,7 @@ export function FlipModal({ target, challengerEmail, challengerHandle, onClose, 
     return (
       <div className="modal-backdrop">
         <div className="modal">
-          <h2>FLIP @{target.x_handle}</h2>
+          <h2>FLIP <a href={`https://x.com/${target.x_handle}`} target="_blank" rel="noreferrer noopener" className="x-handle">@{target.x_handle}</a></h2>
           <p>
             Stake: <strong>{formatRpow(target.bet_base_units)} RPOW</strong>
           </p>
