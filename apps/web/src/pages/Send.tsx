@@ -35,6 +35,37 @@ export function SendPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Post-success bounce: if a validated return_url is set and the send
+  // succeeded (completed or pending), signal the opener and navigate back.
+  useEffect(() => {
+    if (status !== 'sent' || !returnTarget) return;
+
+    const payload = {
+      type: 'rpow:send_complete',
+      transfer_id: transferId,
+      pending,
+      at: new Date().toISOString(),
+    };
+
+    let openerNav = false;
+    try {
+      if (window.opener && !window.opener.closed) {
+        window.opener.postMessage(payload, returnTarget.origin);
+        window.opener.location.href = returnTarget.toString();
+        window.opener.focus?.();
+        openerNav = true;
+      }
+    } catch {
+      // sealed/exotic opener — fall through to current-tab navigation
+    }
+
+    const timer = setTimeout(() => {
+      if (openerNav) window.close();
+      else window.location.href = returnTarget.toString();
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [status, returnTarget, transferId, pending]);
+
   const balanceDisplay = me ? formatRpow(me.balance_base_units) : '0';
 
   async function submit(e: React.FormEvent) {
@@ -92,13 +123,18 @@ export function SendPage() {
           <button type="submit" disabled={status === 'sending'}>[ {status === 'sending' ? '...' : 'SEND'} ]</button>
         </div>
       </form>
-      {status === 'sent' && !pending && (
+      {status === 'sent' && returnTarget && (
+        <pre style={{ margin: '12px 0 0' }}>
+{`  ↩ returning to ${returnTarget.hostname}…`}
+        </pre>
+      )}
+      {status === 'sent' && !returnTarget && !pending && (
         <pre style={{ margin: '12px 0 0' }}>
 {`  + SENT  ${sentAmt} RPOW → ${sentTo}${memo ? `\n  memo: ${memo}` : ''}
   transfer id: ${transferId}`}
         </pre>
       )}
-      {status === 'sent' && pending && (
+      {status === 'sent' && !returnTarget && pending && (
         <pre style={{ margin: '12px 0 0' }}>
 {`  + PENDING CLAIM
   ${sentTo} does not have an rpow2 account yet.
