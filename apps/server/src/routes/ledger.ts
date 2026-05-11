@@ -91,16 +91,14 @@ export async function ledgerRoutes(app: FastifyInstance) {
   // re-summing the tokens table — that makes /ledger O(1). For now, this
   // warmup is the surgical patch.
   if (process.env.NODE_ENV !== 'test') {
-    refresh()
-      .then((body) => { cached = { ts: Date.now(), body }; })
-      .catch(() => { /* swallow — next user request will retry */ });
-    const warmupTimer = setInterval(() => {
-      // Re-entrancy guard: skip this tick if a previous refresh is still
-      // running. Without this, slow SUM(tokens) queries (30M+ rows) under
-      // heavy load pile up — N workers × M unfinished refreshes consumed
-      // 54+ pool connections at peak and starved /send. Reuse the same
-      // `inflight` slot the user-request path uses, so user requests and
-      // warmup ticks dedupe against each other.
+    // Background warmup. Re-entrancy guard: skip if a previous refresh is
+    // still running. Slow SUM(tokens) queries (30M+ rows) under heavy load
+    // can take 30-60s; without this guard the ticks pile up — 9 workers ×
+    // M unfinished refreshes consumed 54+ pool connections at peak and
+    // starved /send. Reuse the same `inflight` slot the user-request path
+    // uses, so user requests, the initial refresh, and warmup ticks all
+    // dedupe against each other.
+    const startRefresh = () => {
       if (inflight) return;
       inflight = (async () => {
         try {
@@ -112,7 +110,9 @@ export async function ledgerRoutes(app: FastifyInstance) {
         }
       })();
       inflight.catch(() => { /* swallow — next user/timer will retry */ });
-    }, 30_000);
+    };
+    startRefresh();
+    const warmupTimer = setInterval(startRefresh, 30_000);
     app.addHook('onClose', async () => { clearInterval(warmupTimer); });
   }
 }
