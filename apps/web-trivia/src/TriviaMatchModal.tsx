@@ -29,6 +29,14 @@ export function TriviaMatchModal({ mode, myEmail, onClose }: Props) {
   const [now, setNow] = useState<number>(Date.now());
 
   const matchIdRef = useRef<string | null>(null);
+  // serverOffset = serverTime - localTime, captured on each poll/start response.
+  // Used to translate the server's deadline_at into our local clock domain,
+  // so countdown is correct even when the user's clock is skewed.
+  const serverOffsetRef = useRef<number>(0);
+
+  function recordServerTime(serverTimeIso: string) {
+    serverOffsetRef.current = new Date(serverTimeIso).getTime() - Date.now();
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -38,11 +46,13 @@ export function TriviaMatchModal({ mode, myEmail, onClose }: Props) {
           const start = await startMatch(mode.target.session_id);
           if (cancelled) return;
           matchIdRef.current = start.match_id;
+          recordServerTime(start.server_time);
           // Try to get the canonical full payload, but fall back to a synthesized
           // one if the GET races the just-committed INSERT or fails. The 1s poll
           // cycle in 'active' mode will replace this with the canonical payload.
           const m = await fetchMatch(start.match_id).catch(() => null);
           if (cancelled) return;
+          if (m) recordServerTime(m.server_time);
           const initial: MatchPollPayload = m ?? {
             id: start.match_id,
             state: 'ACTIVE',
@@ -66,6 +76,7 @@ export function TriviaMatchModal({ mode, myEmail, onClose }: Props) {
             deadline_at: start.deadline_at,
             created_at: new Date().toISOString(),
             resolved_at: null,
+            server_time: start.server_time,
           };
           setMatch(initial);
           setStage(initial.state === 'RESOLVED' ? 'result' : 'active');
@@ -74,6 +85,7 @@ export function TriviaMatchModal({ mode, myEmail, onClose }: Props) {
           const m = await fetchMatch(mode.matchId);
           if (cancelled) return;
           if (m) {
+            recordServerTime(m.server_time);
             setMatch(m);
             setStage(m.state === 'RESOLVED' ? 'result' : 'active');
           } else {
@@ -99,6 +111,7 @@ export function TriviaMatchModal({ mode, myEmail, onClose }: Props) {
     const t = setInterval(async () => {
       const m = await fetchMatch(id).catch(() => null);
       if (!m) return;
+      recordServerTime(m.server_time);
       setMatch(m);
       if (m.state === 'RESOLVED') setStage('result');
     }, POLL_MS);
@@ -107,7 +120,11 @@ export function TriviaMatchModal({ mode, myEmail, onClose }: Props) {
 
   function secondsLeft(): number {
     if (!match) return 0;
-    const ms = new Date(match.deadline_at).getTime() - now;
+    // Translate "now" through serverOffset so we compare against the server's
+    // clock domain — defeats local-clock-skew bugs that previously made the
+    // countdown read 0s immediately for users whose clocks were off.
+    const serverNow = now + serverOffsetRef.current;
+    const ms = new Date(match.deadline_at).getTime() - serverNow;
     return Math.max(0, Math.ceil(ms / 1000));
   }
 

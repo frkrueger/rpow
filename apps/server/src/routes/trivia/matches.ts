@@ -104,6 +104,9 @@ function formatPollMatch(r: PollMatchRow) {
     deadline_at: r.deadline_at.toISOString(),
     created_at: r.created_at.toISOString(),
     resolved_at: r.resolved_at?.toISOString() ?? null,
+    // Server-anchored clock — clients use this to correct for local clock skew
+    // when computing the countdown remaining time.
+    server_time: new Date().toISOString(),
   };
 }
 
@@ -277,6 +280,7 @@ export async function matchesRoutes(app: FastifyInstance) {
       choices: result.choices,
       bet_base_units: result.bet.toString(),
       deadline_at: result.deadlineAt.toISOString(),
+      server_time: new Date().toISOString(),
     });
   });
   app.get('/api/trivia/matches/active', async (req, reply) => {

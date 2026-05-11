@@ -105,6 +105,9 @@ export interface MatchPollPayload {
   deadline_at: string;
   created_at: string;
   resolved_at: string | null;
+  /** Server's wall-clock time when this poll was sent. Use to correct for
+   *  local clock skew when computing countdown remaining time. */
+  server_time: string;
 }
 
 export interface MatchStartResponse {
@@ -114,6 +117,7 @@ export interface MatchStartResponse {
   choices: string[];
   bet_base_units: string;
   deadline_at: string;
+  server_time: string;
 }
 
 export async function fetchMe(): Promise<Me | null> {
