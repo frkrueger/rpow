@@ -22,7 +22,7 @@ export async function challengeRoutes(app: FastifyInstance) {
     supplyInflight = (async () => {
       try {
         const { rows } = await app.pool.query<{ value: string }>(
-          `SELECT value::text FROM app_counters WHERE name='minted_supply'`,
+          `SELECT COALESCE(SUM(value), 0)::text AS value FROM app_counters WHERE name='minted_supply'`,
         );
         const value = rows[0] ? BigInt(rows[0].value) : 0n;
         supplyCache = { ts: Date.now(), value };

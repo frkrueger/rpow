@@ -108,7 +108,7 @@ export async function mintRoutes(app: FastifyInstance) {
       // 19 boundaries total across the 19M supply curve. Max aggregate
       // over-mint: ~0.05 RPOW over the chain's lifetime. Negligible.
       const { rows: counterRows } = await c.query<{ value: string }>(
-        `SELECT value::text FROM app_counters WHERE name='minted_supply'`,
+        `SELECT COALESCE(SUM(value), 0)::text AS value FROM app_counters WHERE name='minted_supply'`,
       );
       const mintedBaseUnits = counterRows[0] ? BigInt(counterRows[0].value) : 0n;
 
