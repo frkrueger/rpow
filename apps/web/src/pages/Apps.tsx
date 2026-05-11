@@ -17,7 +17,6 @@ const protocolApps: ProtocolApp[] = [
     name: 'RPOW Gladiator',
     url: 'https://gladiator.rpow2.com/',
     description: 'PvP coin flips against X-verified opponents. Pure 50/50, zero rake, winner takes both bets. Signed audit per flip.',
-    comingSoon: true,
   },
 ];
 
