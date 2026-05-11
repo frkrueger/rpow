@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
-  fetchMe, fetchGladiatorMe, fetchLobby, fetchRecentFlips, fetchChat, postChat, formatRpow,
-  type Me, type GladiatorProfile, type LobbyEntry, type RecentFlip, type ChatMessage,
+  fetchMe, fetchGladiatorMe, fetchLobby, fetchRecentFlips, fetchChat, fetchGladiatorStats, postChat, formatRpow,
+  type Me, type GladiatorProfile, type LobbyEntry, type RecentFlip, type ChatMessage, type GladiatorStats,
 } from './api.js';
 import { XHandleClaimModal } from './XHandleClaimModal.js';
 import { EnterArenaForm } from './EnterArenaForm.js';
@@ -40,6 +40,7 @@ export function App() {
   const [lobby, setLobby] = useState<LobbyEntry[]>([]);
   const [recentFlips, setRecentFlips] = useState<RecentFlip[]>([]);
   const [chat, setChat] = useState<ChatMessage[]>([]);
+  const [stats, setStats] = useState<GladiatorStats | null>(null);
   const [authState, setAuthState] = useState<'loading' | 'spectator' | 'unverified' | 'verified'>('loading');
   const [flipTarget, setFlipTarget] = useState<LobbyEntry | null>(null);
   const [chatDraft, setChatDraft] = useState('');
@@ -78,14 +79,16 @@ export function App() {
     else if (!p || !p.x_handle_verified_at) setAuthState('unverified');
     else setAuthState('verified');
 
-    const [l, r, c] = await Promise.all([
+    const [l, r, c, s] = await Promise.all([
       fetchLobby().catch(() => []),
       fetchRecentFlips().catch(() => []),
       fetchChat().catch(() => []),
+      fetchGladiatorStats().catch(() => null),
     ]);
     setLobby(l);
     setRecentFlips(r);
     setChat(c);
+    if (s) setStats(s);
   }
 
   useEffect(() => { refreshAll(); }, []);
@@ -115,6 +118,27 @@ export function App() {
           }
         </div>
       </header>
+
+      {stats && (
+        <div className="kpi-strip">
+          <div className="kpi-cell">
+            <div className="kpi-num">{stats.total_flips.toLocaleString()}</div>
+            <div className="kpi-label">total combats</div>
+          </div>
+          <div className="kpi-cell">
+            <div className="kpi-num">{formatRpow(stats.total_volume_base_units)}</div>
+            <div className="kpi-label">RPOW wagered</div>
+          </div>
+          <div className="kpi-cell">
+            <div className="kpi-num">{stats.open_gladiators}</div>
+            <div className="kpi-label">in the arena</div>
+          </div>
+          <div className="kpi-cell">
+            <div className="kpi-num">{stats.total_verified_users.toLocaleString()}</div>
+            <div className="kpi-label">verified players</div>
+          </div>
+        </div>
+      )}
 
       {authState === 'loading' && <p style={{ padding: '20px 24px' }}>loading...</p>}
 
