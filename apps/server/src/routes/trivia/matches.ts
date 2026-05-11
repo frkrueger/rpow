@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { readSession } from '../auth.js';
 import { withTx } from '../../db.js';
 import { burnFromUser } from '../../longshot/burn.js';
+import { resolveMatchTx } from '../../trivia/resolve.js';
 
 const NOT_IMPLEMENTED = { error: 'NOT_IMPLEMENTED', message: 'trivia slice 1' };
 
@@ -55,6 +56,10 @@ function formatMatch(r: MatchRow) {
 
 const StartBody = z.object({
   session_id: z.string().uuid(),
+});
+
+const AnswerBody = z.object({
+  choice_idx: z.number().int().min(0).max(3),
 });
 
 function isAllowed(allowlistCsv: string, email: string): boolean {
@@ -221,8 +226,104 @@ export async function matchesRoutes(app: FastifyInstance) {
     );
     return reply.code(200).send({ matches: res.rows.map(formatMatch) });
   });
-  app.post('/api/trivia/matches/:id/answer', async (_req, reply) => {
-    return reply.code(501).send(NOT_IMPLEMENTED);
+  app.post('/api/trivia/matches/:id/answer', {
+    config: {
+      rateLimit: {
+        max: 30,
+        timeWindow: '1 minute',
+        keyGenerator: (req: any) => req.headers['x-forwarded-for'] ?? req.ip,
+      },
+    },
+  }, async (req, reply) => {
+    const s = readSession(req as any, app.config.sessionSecret);
+    if (!s) return reply.code(401).send({ error: 'UNAUTHORIZED', message: 'login required' });
+    const caller = s.email;
+
+    const parsed = AnswerBody.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BAD_REQUEST', message: 'invalid body' });
+    }
+    const choiceIdx = parsed.data.choice_idx;
+    const { id: matchId } = req.params as { id: string };
+
+    type AnswerResult =
+      | { ok: true; answeredAt: Date; bothAnswered: boolean }
+      | { error: string; message: string; status: number };
+
+    let result: AnswerResult;
+    try {
+      result = await withTx<AnswerResult>(app.pool, async (c) => {
+        const mRes = await c.query<{
+          state: string;
+          offerer_email: string;
+          challenger_email: string;
+          offerer_choice_idx: number | null;
+          challenger_choice_idx: number | null;
+          expired: boolean;
+        }>(
+          `SELECT state, offerer_email, challenger_email,
+                  offerer_choice_idx, challenger_choice_idx,
+                  (now() >= deadline_at) AS expired
+           FROM trivia_matches WHERE id = $1 FOR UPDATE`,
+          [matchId],
+        );
+        if (mRes.rows.length === 0) {
+          return { error: 'MATCH_NOT_FOUND', message: 'match not found', status: 404 };
+        }
+        const m = mRes.rows[0];
+        if (m.state !== 'ACTIVE') {
+          return { error: 'MATCH_EXPIRED', message: 'match is not active', status: 410 };
+        }
+        if (m.expired) {
+          return { error: 'MATCH_EXPIRED', message: 'deadline passed', status: 410 };
+        }
+        const isOfferer = m.offerer_email === caller;
+        const isChallenger = m.challenger_email === caller;
+        if (!isOfferer && !isChallenger) {
+          return { error: 'NOT_A_PLAYER', message: 'not a player of this match', status: 403 };
+        }
+        const alreadyAnswered = isOfferer ? m.offerer_choice_idx !== null : m.challenger_choice_idx !== null;
+        if (alreadyAnswered) {
+          return { error: 'ALREADY_ANSWERED', message: 'you already answered', status: 409 };
+        }
+
+        const col = isOfferer ? 'offerer' : 'challenger';
+        const upd = await c.query<{ answered_at: Date }>(
+          `UPDATE trivia_matches
+           SET ${col}_choice_idx = $1, ${col}_answered_at = now()
+           WHERE id = $2
+           RETURNING ${col}_answered_at AS answered_at`,
+          [choiceIdx, matchId],
+        );
+
+        const both = isOfferer
+          ? m.challenger_choice_idx !== null
+          : m.offerer_choice_idx !== null;
+
+        if (both) {
+          await resolveMatchTx(c, matchId, {
+            signingPrivateKeyHex: app.config.signingPrivateKeyHex,
+            mintMaxSupply: app.config.mintMaxSupply,
+          });
+        }
+
+        return { ok: true, answeredAt: upd.rows[0].answered_at, bothAnswered: both };
+      });
+    } catch (e: any) {
+      if (e?.message === 'SUPPLY_CAP_REACHED') {
+        return reply.code(503).send({ error: 'SUPPLY_CAP_REACHED', message: 'minted supply cap reached' });
+      }
+      throw e;
+    }
+
+    if ('error' in result) {
+      return reply.code(result.status).send({ error: result.error, message: result.message });
+    }
+
+    return reply.code(200).send({
+      answered_at: result.answeredAt.toISOString(),
+      both_answered: result.bothAnswered,
+    });
   });
   // Note: register the parameterized GET LAST so the string-literal routes
   // (start/active/recent/history) match before this catch-all does.
