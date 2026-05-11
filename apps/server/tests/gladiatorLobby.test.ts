@@ -136,3 +136,42 @@ describe('GET /api/gladiator/lobby', () => {
     expect(body.gladiators[1].session_id).toBe(aliceSessionId);
   });
 });
+
+async function seedGladiator(ctx: Awaited<ReturnType<typeof makeTestApp>>, email: string, handle: string) {
+  await ctx.pool.query(`INSERT INTO users(email) VALUES ($1) ON CONFLICT DO NOTHING`, [email]);
+  await markVerified(ctx.pool, email, handle);
+  const id = randomUUID();
+  await ctx.pool.query(
+    `INSERT INTO gladiator_sessions(id, account_email, bet_base_units,
+       bankroll_initial_base_units, bankroll_remaining_base_units, status, opened_at)
+     VALUES($1, $2, 10, 30, 30, 'OPEN', now())`,
+    [id, email],
+  );
+}
+
+describe('GET /api/gladiator/lobby — is_favorite', () => {
+  let cleanup: (() => Promise<void>) | null = null;
+  afterEach(async () => { if (cleanup) await cleanup(); cleanup = null; });
+
+  it('is_favorite is false for spectators on every row', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    await seedGladiator(ctx, 'a@x.com', 'alice');
+    const res = await ctx.app.inject({ method: 'GET', url: '/api/gladiator/lobby' });
+    expect(res.statusCode).toBe(200);
+    const g = res.json().gladiators[0];
+    expect(g.is_favorite).toBe(false);
+  });
+
+  it('is_favorite reflects the caller user_favorites', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    await seedGladiator(ctx, 'a@x.com', 'alice');
+    await seedGladiator(ctx, 'b@x.com', 'bob');
+    const cookie = await login(ctx, 'me@x.com');
+    await ctx.pool.query(`INSERT INTO user_favorites(account_email, favorite_email) VALUES ('me@x.com','a@x.com')`);
+    const res = await ctx.app.inject({ method: 'GET', url: '/api/gladiator/lobby', headers: { cookie } });
+    const byHandle: Record<string, any> = {};
+    for (const g of res.json().gladiators) byHandle[g.x_handle] = g;
+    expect(byHandle.alice.is_favorite).toBe(true);
+    expect(byHandle.bob.is_favorite).toBe(false);
+  });
+});
