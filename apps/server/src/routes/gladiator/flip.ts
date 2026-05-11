@@ -254,13 +254,10 @@ export async function flipRoutes(app: FastifyInstance) {
           [flipId, sessionId, offererEmail, challengerEmail, bet.toString(), winnerEmail, rvHex, signature, createdAt],
         );
 
-        const winnerHandle = challengerWins ? challengerHandle : offererHandle;
-        const loserHandle = challengerWins ? offererHandle : challengerHandle;
-        await c.query(
-          `INSERT INTO gladiator_chat_messages (id, account_email, x_handle, kind, body)
-           VALUES ($1, NULL, NULL, 'SYSTEM', $2)`,
-          [randomUUID(), `@${winnerHandle} beat @${loserHandle} for ${formatRpow(bet * 2n)} RPOW`],
-        );
+        // Note: flip-result rows are NOT inserted into chat anymore — they
+        // were dominating the chat panel and drowning out actual conversation.
+        // The RECENT FLIPS panel already surfaces them. Only enter/leave/drain
+        // SYSTEM messages remain in chat.
 
         return {
           ok: true,
