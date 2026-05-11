@@ -18,21 +18,28 @@ export function App() {
   const [flipTarget, setFlipTarget] = useState<LobbyEntry | null>(null);
 
   async function refreshAll() {
-    const [u, p, l, r, c] = await Promise.all([
+    // Resolve auth state from /me + /api/gladiator/me FIRST so the banner /
+    // modal / arena form appears immediately. Then load lobby/chat/recent
+    // in the background — slow or 5xx-stubby read endpoints must not delay
+    // the spectator banner.
+    const [u, p] = await Promise.all([
       fetchMe().catch(() => null),
       fetchGladiatorMe().catch(() => null),
+    ]);
+    setMe(u);
+    setProfile(p);
+    if (!u) setAuthState('spectator');
+    else if (!p || !p.x_handle_verified_at) setAuthState('unverified');
+    else setAuthState('verified');
+
+    const [l, r, c] = await Promise.all([
       fetchLobby().catch(() => []),
       fetchRecentFlips().catch(() => []),
       fetchChat().catch(() => []),
     ]);
-    setMe(u);
-    setProfile(p);
     setLobby(l);
     setRecentFlips(r);
     setChat(c);
-    if (!u) setAuthState('spectator');
-    else if (!p || !p.x_handle_verified_at) setAuthState('unverified');
-    else setAuthState('verified');
   }
 
   useEffect(() => { refreshAll(); }, []);
