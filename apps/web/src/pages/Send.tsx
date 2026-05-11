@@ -52,8 +52,8 @@ export function SendPage() {
       if (window.opener && !window.opener.closed) {
         window.opener.postMessage(payload, returnTarget.origin);
         window.opener.location.href = returnTarget.toString();
-        window.opener.focus?.();
         openerNav = true;
+        try { window.opener.focus?.(); } catch { /* cosmetic — ignore */ }
       }
     } catch {
       // sealed/exotic opener — fall through to current-tab navigation

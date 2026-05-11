@@ -33,6 +33,15 @@ describe('resolveReturnTarget', () => {
     expect(resolveReturnTarget(null, allow)).toBeNull();
   });
 
+  it('returns null for undefined input', () => {
+    expect(resolveReturnTarget(undefined, allow)).toBeNull();
+  });
+
+  it('rejects userinfo-spoofed URL (halstavern.net@evil.com)', () => {
+    // URL.origin strips userinfo — this parses as https://evil.com
+    expect(resolveReturnTarget('https://halstavern.net@evil.com/x', allow)).toBeNull();
+  });
+
   it('rejects allowlist near-misses (different scheme)', () => {
     // halstavern.net is allowed on https only; http should be rejected.
     expect(resolveReturnTarget('http://halstavern.net/x', allow)).toBeNull();
