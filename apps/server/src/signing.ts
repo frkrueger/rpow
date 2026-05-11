@@ -120,3 +120,43 @@ export function signMatchPayload(payload: MatchPayload, privHex: string): Buffer
 export function verifyMatchPayload(payload: MatchPayload, sig: Buffer, pubHex: string): boolean {
   return verify(null, canonicalMatch(payload), pubKeyFromHex(pubHex), sig);
 }
+
+export interface SwapPayload {
+  id: string;
+  account_email_hash: string;
+  direction: 'BUY' | 'SELL';
+  rpow_delta_base_units: bigint;
+  usdc_delta_base_units: bigint;
+  fee_base_units: bigint;
+  pool_rpow_after: bigint;
+  pool_usdc_after: bigint;
+  created_at: string;
+}
+
+function canonicalSwap(payload: SwapPayload): Buffer {
+  // Field order is part of the contract — never reorder, never add fields
+  // in place; new versions get a new payload type.
+  const ordered = JSON.stringify(
+    {
+      id: payload.id,
+      account_email_hash: payload.account_email_hash,
+      direction: payload.direction,
+      rpow_delta_base_units: payload.rpow_delta_base_units,
+      usdc_delta_base_units: payload.usdc_delta_base_units,
+      fee_base_units: payload.fee_base_units,
+      pool_rpow_after: payload.pool_rpow_after,
+      pool_usdc_after: payload.pool_usdc_after,
+      created_at: payload.created_at,
+    },
+    (_, v) => (typeof v === 'bigint' ? v.toString() : v),
+  );
+  return Buffer.from(ordered, 'utf8');
+}
+
+export function signSwapPayload(payload: SwapPayload, privHex: string): Buffer {
+  return sign(null, canonicalSwap(payload), privKeyFromHex(privHex));
+}
+
+export function verifySwapPayload(payload: SwapPayload, sig: Buffer, pubHex: string): boolean {
+  return verify(null, canonicalSwap(payload), pubKeyFromHex(pubHex), sig);
+}
