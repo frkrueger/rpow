@@ -56,6 +56,11 @@ const Schema = z.object({
   TRIVIA_SESSION_TTL_HOURS: z.coerce.number().int().positive().default(48),
   TRIVIA_ALLOWED_EMAILS: z.string().default('*'),
   TRIVIA_WEB_ORIGIN: z.string().url().default('https://trivia.rpow2.com'),
+  // AMM alpha allowlist — CSV of emails permitted to use any /amm/* endpoint.
+  // Starts locked to a single test account; widened as the AMM is hardened.
+  AMM_ALLOWED_EMAILS: z.string().default('frk314@gmail.com'),
+  // Admin allowlist — subset that can call admin endpoints (USDC credit, pool seed).
+  AMM_ADMIN_EMAILS: z.string().default(''),
 }).superRefine((v, ctx) => {
   if (v.MAILER === 'resend' && !v.RESEND_API_KEY) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['RESEND_API_KEY'], message: 'required when MAILER=resend' });

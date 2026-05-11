@@ -119,6 +119,8 @@ const app = await buildApp({
     triviaSessionTtlHours: env.TRIVIA_SESSION_TTL_HOURS,
     triviaAllowedEmails: env.TRIVIA_ALLOWED_EMAILS,
     triviaWebOrigin: env.TRIVIA_WEB_ORIGIN,
+    ammAllowedEmails: env.AMM_ALLOWED_EMAILS,
+    ammAdminEmails: env.AMM_ADMIN_EMAILS,
     secureCookies: env.NODE_ENV === 'production',
     turnstileSecret: env.TURNSTILE_SECRET,
     operatorEmails: new Set(

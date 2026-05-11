@@ -11,6 +11,8 @@ export async function makeTestApp(opts: {
   bridgeClient?: FakeBridgeClient;
   wrapAllowlistCsv?: string;
   triviaAllowedEmails?: string;
+  ammAllowedEmails?: string;
+  ammAdminEmails?: string;
 } = {}): Promise<{
   app: Awaited<ReturnType<typeof buildApp>>;
   pool: Pool;
@@ -71,6 +73,8 @@ export async function makeTestApp(opts: {
       triviaSessionTtlHours: 48,
       triviaAllowedEmails: opts?.triviaAllowedEmails ?? '*',
       triviaWebOrigin: 'http://trivia.test',
+      ammAllowedEmails: opts?.ammAllowedEmails ?? '*',
+      ammAdminEmails: opts?.ammAdminEmails ?? '',
       secureCookies: false,
       operatorEmails: new Set<string>(),
     },

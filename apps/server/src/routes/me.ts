@@ -58,8 +58,14 @@ export async function meRoutes(app: FastifyInstance) {
         `SELECT coalesce(sum(amount),0)::text AS n FROM transfers WHERE recipient_email=$1`,
         [email],
       ),
-      app.pool.query<{ solana_wallet: string | null; x_handle: string | null; x_avatar_url: string | null }>(
-        'SELECT solana_wallet, x_handle, x_avatar_url FROM users WHERE email=$1', [email],
+      app.pool.query<{
+        solana_wallet: string | null;
+        x_handle: string | null;
+        x_avatar_url: string | null;
+        usdc_base_units: string;
+        amm_terms_accepted_at: Date | null;
+      }>(
+        'SELECT solana_wallet, x_handle, x_avatar_url, usdc_base_units::text AS usdc_base_units, amm_terms_accepted_at FROM users WHERE email=$1', [email],
       ),
       app.pool.query<{ n: string }>(
         `SELECT coalesce(sum(value),0)::text AS n FROM tokens WHERE owner_email=$1 AND state='WRAPPED'`,
@@ -93,6 +99,8 @@ export async function meRoutes(app: FastifyInstance) {
       daily_mint_cap_base_units: dailyCap.toString(),
       daily_minted_base_units: dailyMintedToday.toString(),
       daily_remaining_base_units: (dailyCap > dailyMintedToday ? dailyCap - dailyMintedToday : 0n).toString(),
+      usdc_base_units: userRow[0]?.usdc_base_units ?? '0',
+      amm_terms_accepted_at: userRow[0]?.amm_terms_accepted_at?.toISOString() ?? null,
     };
   });
 }
