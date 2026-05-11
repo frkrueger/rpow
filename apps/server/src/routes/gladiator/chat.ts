@@ -33,8 +33,9 @@ export async function chatRoutes(app: FastifyInstance) {
         `SELECT id, account_email, x_handle, kind, body, created_at
          FROM gladiator_chat_messages
          WHERE created_at < $1
+           AND kind = 'USER'
          ORDER BY created_at DESC
-         LIMIT 50`,
+         LIMIT 100`,
         [before],
       );
     } else {
@@ -48,8 +49,9 @@ export async function chatRoutes(app: FastifyInstance) {
       }>(
         `SELECT id, account_email, x_handle, kind, body, created_at
          FROM gladiator_chat_messages
+         WHERE kind = 'USER'
          ORDER BY created_at DESC
-         LIMIT 50`,
+         LIMIT 100`,
       );
     }
 

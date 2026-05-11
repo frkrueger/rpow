@@ -216,26 +216,16 @@ export function App() {
         <aside className="chat-panel">
           <h2>ARENA CHAT</h2>
           <div className="chat-scroll">
-            {(() => {
-              // Hide flip-result SYSTEM rows from the chat panel — they're
-              // covered by the RECENT FLIPS panel and were drowning real
-              // conversation. The server stopped inserting new ones; this
-              // filter sweeps historical rows out until the rolling window
-              // expires them.
-              const visible = chat.filter(m =>
-                !(m.kind === 'SYSTEM' && /\bbeat\b.*\bfor\b.*RPOW/i.test(m.body)),
-              );
-              if (visible.length === 0) {
-                return <p style={{ color: '#666' }}>no messages yet</p>;
-              }
-              return [...visible].reverse().map(m => (
-                <div key={m.id} className={m.kind === 'SYSTEM' ? 'chat-system' : 'chat-user'}>
-                  {m.kind === 'SYSTEM'
-                    ? <em>{linkifyHandles(m.body)}</em>
-                    : <><XLink handle={m.x_handle} />: {m.body}</>}
-                </div>
-              ));
-            })()}
+            {chat.length === 0
+              ? <p style={{ color: '#666' }}>no messages yet</p>
+              : [...chat].reverse().map(m => (
+                  <div key={m.id} className={m.kind === 'SYSTEM' ? 'chat-system' : 'chat-user'}>
+                    {m.kind === 'SYSTEM'
+                      ? <em>{linkifyHandles(m.body)}</em>
+                      : <><XLink handle={m.x_handle} />: {m.body}</>}
+                  </div>
+                ))
+            }
           </div>
           {authState === 'verified' ? (
             <div className="chat-input-row">
