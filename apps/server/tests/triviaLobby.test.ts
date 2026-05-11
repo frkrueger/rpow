@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { makeTestApp } from './helpers.js';
+import { signSession, SESSION_COOKIE } from '../src/session.js';
 
 async function openSession(pool: any, ownerEmail: string, bet: bigint, bankroll: bigint, handle: string): Promise<string> {
   await pool.query(
@@ -84,5 +85,42 @@ describe('GET /api/trivia/lobby', () => {
     await openSession(ctx.pool, 'a@b.com', 10n, 100n, 'alice');
     const res = await ctx.app.inject({ method: 'GET', url: '/api/trivia/lobby' });
     expect(res.statusCode).toBe(200);
+  });
+});
+
+async function loginForTriviaFavTest(ctx: Awaited<ReturnType<typeof makeTestApp>>, email: string): Promise<string> {
+  await ctx.pool.query(`INSERT INTO users(email) VALUES ($1) ON CONFLICT DO NOTHING`, [email]);
+  const token = signSession({ email }, 'x'.repeat(32), 3600);
+  return `${SESSION_COOKIE}=${token}`;
+}
+
+async function seedTriviaPlayer(ctx: Awaited<ReturnType<typeof makeTestApp>>, email: string, handle: string) {
+  await openSession(ctx.pool, email, 10n, 30n, handle);
+}
+
+describe('GET /api/trivia/lobby — is_favorite', () => {
+  let cleanup: (() => Promise<void>) | null = null;
+  afterEach(async () => { if (cleanup) await cleanup(); cleanup = null; });
+
+  it('is_favorite is false for spectators on every row', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    await seedTriviaPlayer(ctx, 'a@x.com', 'alice');
+    const res = await ctx.app.inject({ method: 'GET', url: '/api/trivia/lobby' });
+    expect(res.statusCode).toBe(200);
+    const p = res.json().players[0];
+    expect(p.is_favorite).toBe(false);
+  });
+
+  it('is_favorite reflects the caller user_favorites', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    await seedTriviaPlayer(ctx, 'a@x.com', 'alice');
+    await seedTriviaPlayer(ctx, 'b@x.com', 'bob');
+    const cookie = await loginForTriviaFavTest(ctx, 'me@x.com');
+    await ctx.pool.query(`INSERT INTO user_favorites(account_email, favorite_email) VALUES ('me@x.com','a@x.com')`);
+    const res = await ctx.app.inject({ method: 'GET', url: '/api/trivia/lobby', headers: { cookie } });
+    const byHandle: Record<string, any> = {};
+    for (const p of res.json().players) byHandle[p.x_handle] = p;
+    expect(byHandle.alice.is_favorite).toBe(true);
+    expect(byHandle.bob.is_favorite).toBe(false);
   });
 });

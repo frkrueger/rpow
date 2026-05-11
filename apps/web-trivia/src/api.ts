@@ -42,6 +42,7 @@ export interface LobbyEntry {
   matches_lost: number;
   opened_at: string;
   last_match_at: string | null;
+  is_favorite: boolean;
 }
 
 export interface RecentMatch {
@@ -278,6 +279,43 @@ export async function fetchMatch(matchId: string): Promise<MatchPollPayload | nu
   if (!res.ok) return null;
   const body = await res.json();
   return body.match ?? null;
+}
+
+export interface FavoriteRow {
+  x_handle: string;
+  x_avatar_url: string | null;
+  created_at: string;
+}
+
+export async function fetchFavorites(): Promise<FavoriteRow[]> {
+  const res = await fetch(`${API_BASE}/api/favorites`, { credentials: 'include' });
+  if (!res.ok) return [];
+  const body = await res.json();
+  return body.favorites ?? [];
+}
+
+export async function addFavorite(xHandle: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/favorites`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ x_handle: xHandle }),
+  });
+  if (!res.ok) {
+    const e = await res.json().catch(() => ({ error: 'UNKNOWN' }));
+    throw new Error(e.error || `favorite ${res.status}`);
+  }
+}
+
+export async function removeFavorite(xHandle: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/favorites/${encodeURIComponent(xHandle)}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+  if (!res.ok) {
+    const e = await res.json().catch(() => ({ error: 'UNKNOWN' }));
+    throw new Error(e.error || `unfavorite ${res.status}`);
+  }
 }
 
 export function formatRpow(baseUnitsStr: string): string {

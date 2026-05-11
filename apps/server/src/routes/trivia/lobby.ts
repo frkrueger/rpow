@@ -1,7 +1,11 @@
 import type { FastifyInstance } from 'fastify';
+import { readSession } from '../auth.js';
 
 export async function lobbyRoutes(app: FastifyInstance) {
-  app.get('/api/trivia/lobby', async (_req, reply) => {
+  app.get('/api/trivia/lobby', async (req, reply) => {
+    const s = readSession(req as any, app.config.sessionSecret);
+    const callerEmail = s?.email ?? null;
+
     const res = await app.pool.query<{
       session_id: string;
       account_email: string;
@@ -13,6 +17,7 @@ export async function lobbyRoutes(app: FastifyInstance) {
       matches_lost: number;
       opened_at: Date;
       last_match_at: Date | null;
+      is_favorite: boolean;
     }>(
       `SELECT
          ts.id AS session_id,
@@ -24,11 +29,15 @@ export async function lobbyRoutes(app: FastifyInstance) {
          ts.matches_won,
          ts.matches_lost,
          ts.opened_at,
-         ts.last_match_at
+         ts.last_match_at,
+         (uf.account_email IS NOT NULL) AS is_favorite
        FROM trivia_sessions ts
        JOIN users u ON u.email = ts.account_email
+       LEFT JOIN user_favorites uf
+         ON uf.account_email = $1::text AND uf.favorite_email = ts.account_email
        WHERE ts.status = 'OPEN'
        ORDER BY ts.opened_at DESC`,
+      [callerEmail],
     );
 
     const players = res.rows.map((row) => ({
@@ -42,6 +51,7 @@ export async function lobbyRoutes(app: FastifyInstance) {
       matches_lost: row.matches_lost,
       opened_at: row.opened_at.toISOString(),
       last_match_at: row.last_match_at ? row.last_match_at.toISOString() : null,
+      is_favorite: row.is_favorite,
     }));
 
     return reply.code(200).send({ players });

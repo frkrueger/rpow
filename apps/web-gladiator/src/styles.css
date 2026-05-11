@@ -568,3 +568,57 @@ a.x-handle:hover {
 @media (max-width: 720px) {
   .kpi-strip { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* === Lobby controls (sort + search) === */
+.lobby-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.lobby-filter {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.lobby-search {
+  background: rgba(110, 231, 183, 0.02);
+  border: 1px solid var(--accent-dim);
+  color: var(--fg);
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 12px;
+  width: 180px;
+}
+.lobby-search:focus { outline: none; border-color: var(--accent); }
+.lobby-sort {
+  background: rgba(110, 231, 183, 0.02);
+  border: 1px solid var(--accent-dim);
+  color: var(--fg);
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 12px;
+}
+
+/* === Favorite star button === */
+.fav-star {
+  background: transparent;
+  border: none;
+  color: var(--dim);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 6px 0 0;
+  transition: color 100ms;
+}
+.fav-star:hover { color: var(--accent); }
+.fav-star.on { color: var(--amber); }
+
+/* === Favorites in arena panel === */
+.favorites-panel {
+  border-color: var(--amber) !important;
+  background: rgba(251, 191, 36, 0.02);
+  margin-bottom: 16px;
+}
+.favorites-panel h2 { color: var(--amber); }
