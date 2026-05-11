@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   fetchMe, fetchGladiatorMe, fetchLobby, fetchRecentFlips, fetchChat, fetchGladiatorStats, postChat, formatRpow,
   type Me, type GladiatorProfile, type LobbyEntry, type RecentFlip, type ChatMessage, type GladiatorStats,
@@ -44,6 +44,15 @@ export function App() {
   const [authState, setAuthState] = useState<'loading' | 'spectator' | 'unverified' | 'verified'>('loading');
   const [flipTarget, setFlipTarget] = useState<LobbyEntry | null>(null);
   const [chatDraft, setChatDraft] = useState('');
+  const chatScrollRef = useRef<HTMLDivElement | null>(null);
+
+  // Auto-scroll the chat panel to its bottom whenever new messages arrive.
+  // Messages render with newest at the bottom (we reverse() the array because
+  // the server returns newest-first), so "bottom" is where new content lands.
+  useEffect(() => {
+    const el = chatScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [chat]);
   const [chatBusy, setChatBusy] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
 
@@ -215,7 +224,7 @@ export function App() {
 
         <aside className="chat-panel">
           <h2>ARENA CHAT</h2>
-          <div className="chat-scroll">
+          <div className="chat-scroll" ref={chatScrollRef}>
             {chat.length === 0
               ? <p style={{ color: '#666' }}>no messages yet</p>
               : [...chat].reverse().map(m => (
