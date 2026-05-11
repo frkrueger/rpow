@@ -33,29 +33,29 @@ export async function meRoutes(app: FastifyInstance) {
     const email = s.email;
     const todayUtc = new Date().toISOString().slice(0, 10);
     const [
-      { rows: bal },
-      { rows: minted },
-      { rows: sent },
-      { rows: recv },
+      { rows: tokensRow },
+      { rows: transfersRow },
       { rows: userRow },
-      { rows: wrappedRow },
       { rows: bucketRow },
       { rows: counterRow },
     ] = await Promise.all([
-      app.pool.query<{ n: string }>(
-        `SELECT coalesce(sum(value),0)::text AS n FROM tokens WHERE owner_email=$1 AND state='VALID'`,
+      // Single scan over the user's tokens with FILTER aggregates (replaces 3 separate queries).
+      app.pool.query<{ balance: string; wrapped: string; minted: string }>(
+        `SELECT
+          COALESCE(SUM(value) FILTER (WHERE state = 'VALID'),  0)::text AS balance,
+          COALESCE(SUM(value) FILTER (WHERE state = 'WRAPPED'), 0)::text AS wrapped,
+          COALESCE(SUM(value) FILTER (WHERE parent_token_id IS NULL), 0)::text AS minted
+        FROM tokens
+        WHERE owner_email = $1`,
         [email],
       ),
-      app.pool.query<{ n: string }>(
-        `SELECT coalesce(sum(value),0)::text AS n FROM tokens WHERE owner_email=$1 AND parent_token_id IS NULL`,
-        [email],
-      ),
-      app.pool.query<{ n: string }>(
-        `SELECT coalesce(sum(amount),0)::text AS n FROM transfers WHERE sender_email=$1`,
-        [email],
-      ),
-      app.pool.query<{ n: string }>(
-        `SELECT coalesce(sum(amount),0)::text AS n FROM transfers WHERE recipient_email=$1`,
+      // Single scan over the user's transfers with FILTER aggregates (replaces 2 separate queries).
+      app.pool.query<{ sent: string; received: string }>(
+        `SELECT
+          COALESCE(SUM(amount) FILTER (WHERE sender_email = $1),    0)::text AS sent,
+          COALESCE(SUM(amount) FILTER (WHERE recipient_email = $1), 0)::text AS received
+        FROM transfers
+        WHERE sender_email = $1 OR recipient_email = $1`,
         [email],
       ),
       app.pool.query<{
@@ -66,10 +66,6 @@ export async function meRoutes(app: FastifyInstance) {
         amm_terms_accepted_at: Date | null;
       }>(
         'SELECT solana_wallet, x_handle, x_avatar_url, usdc_base_units::text AS usdc_base_units, amm_terms_accepted_at FROM users WHERE email=$1', [email],
-      ),
-      app.pool.query<{ n: string }>(
-        `SELECT coalesce(sum(value),0)::text AS n FROM tokens WHERE owner_email=$1 AND state='WRAPPED'`,
-        [email],
       ),
       app.pool.query<{ total_base_units: string }>(
         `SELECT total_base_units::text AS total_base_units FROM daily_mint_buckets WHERE email=$1 AND day_utc=$2`,
@@ -87,15 +83,15 @@ export async function meRoutes(app: FastifyInstance) {
 
     return {
       email,
-      balance_base_units: bal[0]!.n,
-      minted_base_units: minted[0]!.n,
-      sent_base_units: sent[0]!.n,
-      received_base_units: recv[0]!.n,
+      balance_base_units: tokensRow[0]!.balance,
+      minted_base_units: tokensRow[0]!.minted,
+      sent_base_units: transfersRow[0]!.sent,
+      received_base_units: transfersRow[0]!.received,
       wrap_allowed: isAllowed(app.wrapAllowlist, email),
       solana_wallet: userRow[0]?.solana_wallet ?? null,
       x_handle: userRow[0]?.x_handle ?? null,
       x_avatar_url: userRow[0]?.x_avatar_url ?? null,
-      srpow_supply_owned_base_units: wrappedRow[0]?.n ?? '0',
+      srpow_supply_owned_base_units: tokensRow[0]?.wrapped ?? '0',
       daily_mint_cap_base_units: dailyCap.toString(),
       daily_minted_base_units: dailyMintedToday.toString(),
       daily_remaining_base_units: (dailyCap > dailyMintedToday ? dailyCap - dailyMintedToday : 0n).toString(),
