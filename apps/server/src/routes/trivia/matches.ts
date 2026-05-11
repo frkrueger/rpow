@@ -6,7 +6,6 @@ import { withTx } from '../../db.js';
 import { burnFromUser } from '../../longshot/burn.js';
 import { resolveMatchTx } from '../../trivia/resolve.js';
 
-const NOT_IMPLEMENTED = { error: 'NOT_IMPLEMENTED', message: 'trivia slice 1' };
 
 type MatchRow = {
   id: string;
@@ -90,14 +89,16 @@ function formatPollMatch(r: PollMatchRow) {
     question_id: r.question_id,
     question: r.question,
     choices: r.choices,
-    // Don't leak the correct answer while the match is still active.
+    // Don't leak the correct answer or the opponent's choice while the match
+    // is still active — the *_answered booleans below tell the client that
+    // the opponent has answered without revealing what they picked.
     correct_choice_idx: resolved ? r.correct_idx : null,
-    offerer_choice_idx: r.offerer_choice_idx,
+    offerer_choice_idx: resolved ? r.offerer_choice_idx : null,
     offerer_answered: r.offerer_choice_idx !== null,
-    offerer_answered_at: r.offerer_answered_at?.toISOString() ?? null,
-    challenger_choice_idx: r.challenger_choice_idx,
+    offerer_answered_at: resolved ? (r.offerer_answered_at?.toISOString() ?? null) : null,
+    challenger_choice_idx: resolved ? r.challenger_choice_idx : null,
     challenger_answered: r.challenger_choice_idx !== null,
-    challenger_answered_at: r.challenger_answered_at?.toISOString() ?? null,
+    challenger_answered_at: resolved ? (r.challenger_answered_at?.toISOString() ?? null) : null,
     winner_email: r.winner_email,
     signature_hex: r.signature ? Buffer.from(r.signature).toString('hex') : null,
     deadline_at: r.deadline_at.toISOString(),

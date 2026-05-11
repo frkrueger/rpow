@@ -180,6 +180,54 @@ describe('GET /api/trivia/matches/:id', () => {
     expect(m.correct_choice_idx).toBeNull();
   });
 
+  it('does NOT leak opponent choice_idx while match is ACTIVE (game-integrity)', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    const { matchId, offererCookie, challengerCookie } = await setupMatch(ctx);
+    // Offerer answers first.
+    await ctx.app.inject({
+      method: 'POST', url: `/api/trivia/matches/${matchId}/answer`,
+      headers: { cookie: offererCookie, 'content-type': 'application/json' },
+      payload: { choice_idx: 1 },
+    });
+    // Challenger polls before submitting — must not see offerer's pick.
+    const res = await ctx.app.inject({
+      method: 'GET', url: `/api/trivia/matches/${matchId}`,
+      headers: { cookie: challengerCookie },
+    });
+    expect(res.statusCode).toBe(200);
+    const m = res.json().match;
+    expect(m.state).toBe('ACTIVE');
+    expect(m.offerer_choice_idx).toBeNull();      // hidden
+    expect(m.offerer_answered).toBe(true);         // but UI knows opponent has answered
+    expect(m.offerer_answered_at).toBeNull();      // timestamp also hidden
+    expect(m.correct_choice_idx).toBeNull();
+  });
+
+  it('reveals both choice_idx values once RESOLVED', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    const { matchId, offererCookie, challengerCookie } = await setupMatch(ctx);
+    await ctx.app.inject({
+      method: 'POST', url: `/api/trivia/matches/${matchId}/answer`,
+      headers: { cookie: offererCookie, 'content-type': 'application/json' },
+      payload: { choice_idx: 1 },
+    });
+    await ctx.app.inject({
+      method: 'POST', url: `/api/trivia/matches/${matchId}/answer`,
+      headers: { cookie: challengerCookie, 'content-type': 'application/json' },
+      payload: { choice_idx: 3 },
+    });
+    const res = await ctx.app.inject({
+      method: 'GET', url: `/api/trivia/matches/${matchId}`,
+      headers: { cookie: challengerCookie },
+    });
+    const m = res.json().match;
+    expect(m.state).toBe('RESOLVED');
+    expect(m.offerer_choice_idx).toBe(1);
+    expect(m.challenger_choice_idx).toBe(3);
+    expect(typeof m.offerer_answered_at).toBe('string');
+    expect(typeof m.challenger_answered_at).toBe('string');
+  });
+
   it('returns RESOLVED state with winner + signature + correct_choice_idx after both answer', async () => {
     const ctx = await makeTestApp(); cleanup = ctx.cleanup;
     const { matchId, offererCookie, challengerCookie } = await setupMatch(ctx);
