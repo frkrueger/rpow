@@ -25,6 +25,7 @@ export function ActivityPage() {
             <span className={badgeClass}>{e.type.toUpperCase()}</span>
             <span style={{ color: 'var(--dim)', fontSize: 11 }}>
               {e.counterparty_email ? `${e.type === 'send' ? '→' : '←'} ${e.counterparty_email}` : ''}
+              {e.memo ? <> · memo: <code style={{ background: 'rgba(110,231,183,0.06)', padding: '0 4px' }}>{e.memo}</code></> : null}
             </span>
             <span className="activity-amount" style={{ color: amountColor }}>
               {sign}{formatRpow(e.amount_base_units)}

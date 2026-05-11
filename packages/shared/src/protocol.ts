@@ -47,6 +47,10 @@ export interface SendRequestBody {
   recipient_email: string;
   amount_base_units: string;
   idempotency_key: string;
+  /** Optional free-form context (alphanumeric + - _, max 256). Carried through
+   *  to /activity so an integration polling for transfers can match this
+   *  payment to an external event. */
+  memo?: string;
 }
 export interface SendResponse {
   ok: true;
@@ -74,6 +78,9 @@ export interface ActivityEntry {
   type: 'mint' | 'send' | 'receive';
   amount_base_units: string;
   counterparty_email?: string;
+  /** Free-form context provided at /send time. Present on `send` + `receive`
+   *  entries (the sender and recipient see identical memos for one transfer). */
+  memo?: string;
   at: string; // iso8601
 }
 export type ActivityResponse = ActivityEntry[];

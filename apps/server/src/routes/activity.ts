@@ -8,6 +8,7 @@ interface Row {
   type: string;
   amount: string;
   counterparty_email: string | null;
+  memo: string | null;
   at: Date;
 }
 
@@ -16,6 +17,7 @@ function rowToEntry(r: Row) {
     type: r.type,
     amount_base_units: r.amount,
     counterparty_email: r.counterparty_email ?? undefined,
+    memo: r.memo ?? undefined,
     at: r.at.toISOString(),
   };
 }
@@ -35,13 +37,13 @@ export async function activityRoutes(app: FastifyInstance) {
       // ASC order, capped, filter at > since.
       // amount/value columns are BIGINT base units; cast to text for string return.
       const sql = `
-        SELECT 'mint' AS type, value::text AS amount, NULL::text AS counterparty_email, issued_at AS at
+        SELECT 'mint' AS type, value::text AS amount, NULL::text AS counterparty_email, NULL::text AS memo, issued_at AS at
         FROM tokens WHERE owner_email=$1 AND parent_token_id IS NULL AND issued_at > $2
         UNION ALL
-        SELECT 'send' AS type, amount::text AS amount, recipient_email AS counterparty_email, created_at AS at
+        SELECT 'send' AS type, amount::text AS amount, recipient_email AS counterparty_email, memo, created_at AS at
         FROM transfers WHERE sender_email=$1 AND created_at > $2
         UNION ALL
-        SELECT 'receive' AS type, amount::text AS amount, sender_email AS counterparty_email, created_at AS at
+        SELECT 'receive' AS type, amount::text AS amount, sender_email AS counterparty_email, memo, created_at AS at
         FROM transfers WHERE recipient_email=$1 AND created_at > $2
         ORDER BY at ASC LIMIT ${SINCE_LIMIT}`;
       const { rows } = await app.pool.query<Row>(sql, [s.email, sinceDate]);
@@ -52,13 +54,13 @@ export async function activityRoutes(app: FastifyInstance) {
 
     // Existing behavior: bare array, DESC, latest 100
     const sql = `
-      SELECT 'mint' AS type, value::text AS amount, NULL::text AS counterparty_email, issued_at AS at
+      SELECT 'mint' AS type, value::text AS amount, NULL::text AS counterparty_email, NULL::text AS memo, issued_at AS at
       FROM tokens WHERE owner_email=$1 AND parent_token_id IS NULL
       UNION ALL
-      SELECT 'send' AS type, amount::text AS amount, recipient_email AS counterparty_email, created_at AS at
+      SELECT 'send' AS type, amount::text AS amount, recipient_email AS counterparty_email, memo, created_at AS at
       FROM transfers WHERE sender_email=$1
       UNION ALL
-      SELECT 'receive' AS type, amount::text AS amount, sender_email AS counterparty_email, created_at AS at
+      SELECT 'receive' AS type, amount::text AS amount, sender_email AS counterparty_email, memo, created_at AS at
       FROM transfers WHERE recipient_email=$1
       ORDER BY at DESC LIMIT ${DEFAULT_LIMIT}`;
     const { rows } = await app.pool.query<Row>(sql, [s.email]);
