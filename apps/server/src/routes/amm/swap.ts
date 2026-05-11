@@ -5,7 +5,7 @@ import { readSession } from '../auth.js';
 import { withTx } from '../../db.js';
 import { burnFromUser } from '../../longshot/burn.js';
 import { signSwapPayload, signTokenPayload, type SwapPayload } from '../../signing.js';
-import { computeSwapOutput, computeFeeIn } from '../../amm/math.js';
+import { computeSwapOutput, computeFeeIn, computePriceImpactBps } from '../../amm/math.js';
 import { isAllowed, readTermsAcceptedAt } from './allowlist.js';
 
 const BuyBody = z.object({
@@ -25,6 +25,99 @@ export async function swapRoutes(app: FastifyInstance) {
 
   app.post('/amm/sell', async (req, reply) => {
     return handleSwap(req, reply, app, 'SELL');
+  });
+
+  app.get('/amm/quote/buy', async (req, reply) => {
+    return handleQuote(req, reply, app, 'BUY');
+  });
+
+  app.get('/amm/quote/sell', async (req, reply) => {
+    return handleQuote(req, reply, app, 'SELL');
+  });
+
+  app.get('/amm/swaps/recent', async (_req, reply) => {
+    const res = await app.pool.query<{
+      id: string;
+      x_handle: string | null;
+      direction: 'BUY' | 'SELL';
+      rpow_delta_base_units: string;
+      usdc_delta_base_units: string;
+      fee_base_units: string;
+      pool_rpow_after: string;
+      pool_usdc_after: string;
+      created_at: Date;
+    }>(
+      `SELECT s.id, u.x_handle,
+              s.direction,
+              s.rpow_delta_base_units::text AS rpow_delta_base_units,
+              s.usdc_delta_base_units::text AS usdc_delta_base_units,
+              s.fee_base_units::text AS fee_base_units,
+              s.pool_rpow_after::text AS pool_rpow_after,
+              s.pool_usdc_after::text AS pool_usdc_after,
+              s.created_at
+       FROM amm_swaps s
+       LEFT JOIN users u ON u.email = s.account_email
+       ORDER BY s.created_at DESC
+       LIMIT 50`,
+    );
+    return reply.code(200).send({
+      swaps: res.rows.map(r => ({
+        id: r.id,
+        x_handle: r.x_handle ?? null,
+        direction: r.direction,
+        rpow_delta_base_units: r.rpow_delta_base_units,
+        usdc_delta_base_units: r.usdc_delta_base_units,
+        fee_base_units: r.fee_base_units,
+        pool_rpow_after: r.pool_rpow_after,
+        pool_usdc_after: r.pool_usdc_after,
+        created_at: r.created_at.toISOString(),
+      })),
+    });
+  });
+}
+
+async function handleQuote(req: any, reply: any, app: FastifyInstance, direction: 'BUY' | 'SELL') {
+  // Auth + allowlist; SKIP terms check (preview).
+  const s = readSession(req, app.config.sessionSecret);
+  if (!s) return reply.code(401).send({ error: 'UNAUTHORIZED', message: 'login required' });
+  if (!isAllowed(app.config.ammAllowedEmails, s.email)) {
+    return reply.code(403).send({ error: 'NOT_ALLOWED', message: 'AMM access not enabled for your account' });
+  }
+
+  const query = req.query as Record<string, string | undefined>;
+  const raw = direction === 'BUY' ? query['usdc'] : query['rpow'];
+  if (!raw || !/^[1-9][0-9]{0,18}$/.test(raw)) {
+    return reply.code(400).send({ error: 'INVALID_AMOUNT', message: 'positive integer required' });
+  }
+  const amountIn = BigInt(raw);
+
+  const poolRes = await app.pool.query<{
+    rpow_reserve_base_units: string;
+    usdc_reserve_base_units: string;
+  }>(
+    `SELECT rpow_reserve_base_units::text AS rpow_reserve_base_units,
+            usdc_reserve_base_units::text AS usdc_reserve_base_units
+     FROM amm_pool WHERE id = 'main'`,
+  );
+  if (poolRes.rows.length === 0) {
+    return reply.code(503).send({ error: 'POOL_NOT_SEEDED', message: 'pool not seeded' });
+  }
+  const R_rpow = BigInt(poolRes.rows[0].rpow_reserve_base_units);
+  const R_usdc = BigInt(poolRes.rows[0].usdc_reserve_base_units);
+
+  const reserveIn = direction === 'BUY' ? R_usdc : R_rpow;
+  const reserveOut = direction === 'BUY' ? R_rpow : R_usdc;
+  const output = computeSwapOutput({ reserveIn, reserveOut, amountIn });
+  const fee = computeFeeIn(amountIn);
+  const impactBps = computePriceImpactBps(reserveIn, reserveOut, amountIn, output);
+  const RPOW_BASE_PER_RPOW = 1_000_000_000n;
+  const spotE9 = (R_usdc * RPOW_BASE_PER_RPOW) / R_rpow;
+
+  return reply.code(200).send({
+    [direction === 'BUY' ? 'rpow_out' : 'usdc_out']: output.toString(),
+    fee_base_units: fee.toString(),
+    price_impact_bps: impactBps.toString(),
+    spot_price_usdc_per_rpow_e9: spotE9.toString(),
   });
 }
 
