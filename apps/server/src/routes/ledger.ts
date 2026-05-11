@@ -18,7 +18,7 @@ export async function ledgerRoutes(app: FastifyInstance) {
       { rows: counter },
     ] = await Promise.all([
       app.pool.query<{ n: string }>(
-        `SELECT coalesce(sum(amount),0)::text AS n FROM transfers`,
+        `SELECT coalesce(sum(value),0)::text AS n FROM app_counters WHERE name='total_transferred_base_units'`,
       ),
       app.pool.query<{ n: string }>(
         `SELECT coalesce(sum(value),0)::text AS n FROM app_counters WHERE name='circulating_supply_base_units'`,
