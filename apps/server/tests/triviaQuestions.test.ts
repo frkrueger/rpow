@@ -66,7 +66,9 @@ describe('refillTriviaQuestions', () => {
     expect(tarantino.question).toContain('"Pulp Fiction"');
 
     const paris = rows.find(r => r.question.includes('France'))!;
-    expect(paris.choices.sort()).toEqual(['Berlin', 'London', 'Madrid', 'Paris'].sort());
+    // Use a spread so .sort() doesn't mutate the underlying array; the next
+    // assertion needs the original ordering with correct_idx.
+    expect([...paris.choices].sort()).toEqual(['Berlin', 'London', 'Madrid', 'Paris'].sort());
     expect(paris.choices[paris.correct_idx]).toBe('Paris');
   });
 

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 
 /**
@@ -81,19 +81,21 @@ function decodeHtmlEntities(s: string): string {
 
 /**
  * Assemble the 4-element choices array from the correct answer and 3 incorrect
- * answers. Choices are sorted alphabetically so that the stored order is
- * stable and `correct_idx` remains valid after any subsequent sort. Both
- * fields are HTML-decoded before placement so the saved strings are
- * display-ready.
+ * answers. The correct answer is inserted at a random index so its position is
+ * not predictable. Both fields are HTML-decoded before placement so the saved
+ * strings are display-ready.
  */
 function buildChoices(
   correctAnswer: string,
   incorrectAnswers: string[],
 ): { choices: string[]; correctIdx: number } {
-  const correct = decodeHtmlEntities(correctAnswer);
-  const incorrect = incorrectAnswers.map(decodeHtmlEntities);
-  const choices = [correct, ...incorrect].sort((a, b) => a.localeCompare(b));
-  const correctIdx = choices.indexOf(correct);
+  const decoded = {
+    correct: decodeHtmlEntities(correctAnswer),
+    incorrect: incorrectAnswers.map(decodeHtmlEntities),
+  };
+  const correctIdx = randomInt(0, 4);
+  const choices = [...decoded.incorrect];
+  choices.splice(correctIdx, 0, decoded.correct);
   return { choices, correctIdx };
 }
 
