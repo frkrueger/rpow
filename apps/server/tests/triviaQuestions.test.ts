@@ -98,6 +98,8 @@ describe('refillTriviaQuestions', () => {
       expect(_internal.decodeHtmlEntities('a &lt; b')).toBe('a < b');
       expect(_internal.decodeHtmlEntities('a &gt; b')).toBe('a > b');
       expect(_internal.decodeHtmlEntities('it&#039;s')).toBe("it's");
+      expect(_internal.decodeHtmlEntities('it&apos;s')).toBe("it's");
+      expect(_internal.decodeHtmlEntities('non&nbsp;breaking')).toBe('non breaking');
     });
   });
 
