@@ -5,6 +5,7 @@ import { withTx } from '../../db.js';
 import { burnFromUser } from '../../longshot/burn.js';
 import { isqrt } from '../../amm/math.js';
 import { isAmmAdmin } from './allowlist.js';
+import { pickSupplyShard } from '../../supplyShards.js';
 
 const MIN_LIQUIDITY = 1000n;
 
@@ -68,8 +69,9 @@ export async function seedRoutes(app: FastifyInstance) {
         // trivia/gladiator seeding — the RPOW is "escrowed" in the pool
         // and not counted as in-user-balance circulation).
         await c.query(
-          `UPDATE app_counters SET value = value - $1::bigint WHERE name = 'minted_supply'`,
-          [rpow.toString()],
+          `UPDATE app_counters SET value = value - $1::bigint
+           WHERE name = 'minted_supply' AND shard = $2`,
+          [rpow.toString(), pickSupplyShard()],
         );
 
         // Insert pool + LP rows.
