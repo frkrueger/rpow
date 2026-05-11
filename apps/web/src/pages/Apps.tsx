@@ -21,6 +21,12 @@ const protocolApps: ProtocolApp[] = [
     description: 'PvP coin flips against X-verified opponents. Pure 50/50, zero rake, winner takes both bets. Signed audit per flip.',
     forwardSession: true,
   },
+  {
+    name: 'RPOW Trivia',
+    url: 'https://trivia.rpow2.com/',
+    description: 'PvP trivia matches against X-verified opponents. 4 choices, 10 seconds, faster-correct wins. Zero rake, winner takes both bets. Signed audit per match.',
+    forwardSession: true,
+  },
 ];
 
 /** Read the rpow_session cookie value from document.cookie. */
