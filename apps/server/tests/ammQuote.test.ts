@@ -78,6 +78,33 @@ describe('GET /amm/quote/buy', () => {
     expect(typeof body.price_impact_bps).toBe('string');
     expect(typeof body.spot_price_usdc_per_rpow_e9).toBe('string');
   });
+
+  it('fee_bps=0 gives zero-fee output matching constant-product formula', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    // Seed pool with fee_bps=0 (zero fee).
+    const R_rpow = 1n * RPOW_DECIMALS;      // 1 RPOW
+    const R_usdc = 100n * USDC_DECIMALS;    // 100 USDC
+    await ctx.pool.query(
+      `INSERT INTO amm_pool(rpow_reserve_base_units, usdc_reserve_base_units, total_lp_supply, fee_bps)
+       VALUES ($1, $2, $3, 0)`,
+      [R_rpow.toString(), R_usdc.toString(), '10000000'],
+    );
+    const amountIn = 1n * USDC_DECIMALS; // 1 USDC in
+    const cookie = await login(ctx, 'a@x.com');
+    const res = await ctx.app.inject({
+      method: 'GET',
+      url: `/amm/quote/buy?usdc=${amountIn}`,
+      headers: { cookie },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    // With fee_bps=0: feeNum=10000, feeDen=10000 → no fee deducted.
+    // Expected output = R_rpow × amountIn / (R_usdc + amountIn), integer division.
+    const expected = (R_rpow * amountIn) / (R_usdc + amountIn);
+    expect(BigInt(body.rpow_out)).toBe(expected);
+    // Fee should be zero.
+    expect(BigInt(body.fee_base_units)).toBe(0n);
+  });
 });
 
 describe('GET /amm/quote/sell', () => {

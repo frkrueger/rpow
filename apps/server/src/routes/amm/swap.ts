@@ -94,9 +94,11 @@ async function handleQuote(req: any, reply: any, app: FastifyInstance, direction
   const poolRes = await app.pool.query<{
     rpow_reserve_base_units: string;
     usdc_reserve_base_units: string;
+    fee_bps: number;
   }>(
     `SELECT rpow_reserve_base_units::text AS rpow_reserve_base_units,
-            usdc_reserve_base_units::text AS usdc_reserve_base_units
+            usdc_reserve_base_units::text AS usdc_reserve_base_units,
+            fee_bps
      FROM amm_pool WHERE id = 'main'`,
   );
   if (poolRes.rows.length === 0) {
@@ -104,11 +106,13 @@ async function handleQuote(req: any, reply: any, app: FastifyInstance, direction
   }
   const R_rpow = BigInt(poolRes.rows[0].rpow_reserve_base_units);
   const R_usdc = BigInt(poolRes.rows[0].usdc_reserve_base_units);
+  const feeNum = 10000n - BigInt(poolRes.rows[0].fee_bps);
+  const feeDen = 10000n;
 
   const reserveIn = direction === 'BUY' ? R_usdc : R_rpow;
   const reserveOut = direction === 'BUY' ? R_rpow : R_usdc;
-  const output = computeSwapOutput({ reserveIn, reserveOut, amountIn });
-  const fee = computeFeeIn(amountIn);
+  const output = computeSwapOutput({ reserveIn, reserveOut, amountIn, feeNum, feeDen });
+  const fee = computeFeeIn(amountIn, feeNum, feeDen);
   const impactBps = computePriceImpactBps(reserveIn, reserveOut, amountIn, output);
   const RPOW_BASE_PER_RPOW = 1_000_000_000n;
   const spotE9 = (R_usdc * RPOW_BASE_PER_RPOW) / R_rpow;
@@ -171,11 +175,13 @@ async function handleSwap(req: any, reply: any, app: FastifyInstance, direction:
       }
       const oldRpow = BigInt(poolRes.rows[0].rpow_reserve_base_units);
       const oldUsdc = BigInt(poolRes.rows[0].usdc_reserve_base_units);
+      const feeNum = 10000n - BigInt(poolRes.rows[0].fee_bps);
+      const feeDen = 10000n;
 
       // Compute output via constant-product math.
       const reserveIn = direction === 'BUY' ? oldUsdc : oldRpow;
       const reserveOut = direction === 'BUY' ? oldRpow : oldUsdc;
-      const output = computeSwapOutput({ reserveIn, reserveOut, amountIn });
+      const output = computeSwapOutput({ reserveIn, reserveOut, amountIn, feeNum, feeDen });
 
       if (output <= 0n || output < minOut) {
         return { error: 'SLIPPAGE_EXCEEDED', message: `output ${output} < min_out ${minOut}`, status: 400 };
@@ -185,7 +191,7 @@ async function handleSwap(req: any, reply: any, app: FastifyInstance, direction:
         return { error: 'SLIPPAGE_EXCEEDED', message: 'swap would drain output reserve', status: 400 };
       }
 
-      const fee = computeFeeIn(amountIn);
+      const fee = computeFeeIn(amountIn, feeNum, feeDen);
 
       let newRpow: bigint;
       let newUsdc: bigint;

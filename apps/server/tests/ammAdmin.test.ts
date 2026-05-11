@@ -131,6 +131,14 @@ describe('POST /amm/admin/credit-usdc', () => {
     expect(r2.json().error).toBe('USDC_POOL_CAP_EXCEEDED');
   });
 
+  // Concurrent-credit TOCTOU protection: admin.ts wraps the cap check + UPDATE
+  // in withTx + pg_advisory_xact_lock(hashtext('amm_credit')). All concurrent
+  // admin credits serialize on that lock so two requests cannot both read the
+  // same currentTotal, both pass the cap, and both commit. A deterministic unit
+  // test for this race is impractical (Promise.all over inject() is sequential
+  // under the hood in Fastify's light-my-request), but the advisory lock
+  // guarantees correctness at the DB level.
+
   it('cap check sums across all users', async () => {
     const ctx = await makeTestApp({ ammAdminEmails: 'admin@x.com', ammUsdcPoolCapBaseUnits: 5_000_000 }); // 5 USDC cap
     cleanup = ctx.cleanup;
