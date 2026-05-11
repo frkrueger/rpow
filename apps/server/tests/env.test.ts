@@ -197,4 +197,51 @@ describe('parseEnv', () => {
       GLADIATOR_MAX_BANKROLL_BASE_UNITS: '100',
     })).toThrow();
   });
+
+  it('parses TRIVIA defaults', () => {
+    const env = parseEnv({
+      DATABASE_URL: 'postgres://x/y',
+      RESEND_API_KEY: 'rk_test',
+      SESSION_SECRET: 'x'.repeat(32),
+      MAGIC_LINK_BASE_URL: 'http://x/',
+      RPOW_SIGNING_PRIVATE_KEY_HEX: 'a'.repeat(64),
+      RPOW_SIGNING_PUBLIC_KEY_HEX: 'b'.repeat(64),
+      EMAIL_FROM: 'a@b.com',
+    });
+    expect(env.TRIVIA_MIN_BET_BASE_UNITS).toBe(10_000_000);
+    expect(env.TRIVIA_MAX_BET_BASE_UNITS).toBe(10_000_000_000);
+    expect(env.TRIVIA_MAX_BANKROLL_BASE_UNITS).toBe(100_000_000_000);
+    expect(env.TRIVIA_MATCH_DEADLINE_SECONDS).toBe(10);
+    expect(env.TRIVIA_SESSION_TTL_HOURS).toBe(48);
+    expect(env.TRIVIA_ALLOWED_EMAILS).toBe('*');
+    expect(env.TRIVIA_WEB_ORIGIN).toBe('https://trivia.rpow2.com');
+  });
+
+  it('rejects TRIVIA_MAX_BET < TRIVIA_MIN_BET', () => {
+    expect(() => parseEnv({
+      DATABASE_URL: 'postgres://x/y',
+      RESEND_API_KEY: 'rk_test',
+      SESSION_SECRET: 'x'.repeat(32),
+      MAGIC_LINK_BASE_URL: 'http://x/',
+      RPOW_SIGNING_PRIVATE_KEY_HEX: 'a'.repeat(64),
+      RPOW_SIGNING_PUBLIC_KEY_HEX: 'b'.repeat(64),
+      EMAIL_FROM: 'a@b.com',
+      TRIVIA_MIN_BET_BASE_UNITS: '100',
+      TRIVIA_MAX_BET_BASE_UNITS: '50',
+    })).toThrow();
+  });
+
+  it('rejects TRIVIA_MAX_BANKROLL < TRIVIA_MAX_BET', () => {
+    expect(() => parseEnv({
+      DATABASE_URL: 'postgres://x/y',
+      RESEND_API_KEY: 'rk_test',
+      SESSION_SECRET: 'x'.repeat(32),
+      MAGIC_LINK_BASE_URL: 'http://x/',
+      RPOW_SIGNING_PRIVATE_KEY_HEX: 'a'.repeat(64),
+      RPOW_SIGNING_PUBLIC_KEY_HEX: 'b'.repeat(64),
+      EMAIL_FROM: 'a@b.com',
+      TRIVIA_MAX_BET_BASE_UNITS: '1000',
+      TRIVIA_MAX_BANKROLL_BASE_UNITS: '500',
+    })).toThrow();
+  });
 });

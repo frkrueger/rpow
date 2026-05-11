@@ -49,6 +49,13 @@ const Schema = z.object({
   GLADIATOR_ALLOWED_EMAILS: z.string().default('*'),
   GLADIATOR_WEB_ORIGIN: z.string().url().default('https://gladiator.rpow2.com'),
   GLADIATOR_ADMIN_TOKEN: z.string().min(1).optional(),
+  TRIVIA_MIN_BET_BASE_UNITS: z.coerce.number().int().positive().default(10_000_000),
+  TRIVIA_MAX_BET_BASE_UNITS: z.coerce.number().int().positive().default(10_000_000_000),
+  TRIVIA_MAX_BANKROLL_BASE_UNITS: z.coerce.number().int().positive().default(100_000_000_000),
+  TRIVIA_MATCH_DEADLINE_SECONDS: z.coerce.number().int().positive().default(10),
+  TRIVIA_SESSION_TTL_HOURS: z.coerce.number().int().positive().default(48),
+  TRIVIA_ALLOWED_EMAILS: z.string().default('*'),
+  TRIVIA_WEB_ORIGIN: z.string().url().default('https://trivia.rpow2.com'),
 }).superRefine((v, ctx) => {
   if (v.MAILER === 'resend' && !v.RESEND_API_KEY) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['RESEND_API_KEY'], message: 'required when MAILER=resend' });
@@ -70,6 +77,12 @@ const Schema = z.object({
   }
   if (v.GLADIATOR_MAX_BANKROLL_BASE_UNITS < v.GLADIATOR_MAX_BET_BASE_UNITS) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['GLADIATOR_MAX_BANKROLL_BASE_UNITS'], message: 'GLADIATOR_MAX_BANKROLL_BASE_UNITS must be >= GLADIATOR_MAX_BET_BASE_UNITS' });
+  }
+  if (v.TRIVIA_MAX_BET_BASE_UNITS < v.TRIVIA_MIN_BET_BASE_UNITS) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['TRIVIA_MAX_BET_BASE_UNITS'], message: 'TRIVIA_MAX_BET_BASE_UNITS must be >= TRIVIA_MIN_BET_BASE_UNITS' });
+  }
+  if (v.TRIVIA_MAX_BANKROLL_BASE_UNITS < v.TRIVIA_MAX_BET_BASE_UNITS) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['TRIVIA_MAX_BANKROLL_BASE_UNITS'], message: 'TRIVIA_MAX_BANKROLL_BASE_UNITS must be >= TRIVIA_MAX_BET_BASE_UNITS' });
   }
 });
 
