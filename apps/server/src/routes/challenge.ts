@@ -2,7 +2,6 @@ import type { FastifyInstance } from 'fastify';
 import { randomUUID, randomBytes } from 'node:crypto';
 import { readSession } from './auth.js';
 import { difficultyBitsForSupply, BASE_UNITS_PER_RPOW } from '../schedule.js';
-import { withTx } from '../db.js';
 
 // Supply count is checked twice per mining round: here at /challenge
 // (advisory only — used to pick difficulty and fail-fast at cap) and again
@@ -51,89 +50,71 @@ export async function challengeRoutes(app: FastifyInstance) {
       return reply.code(410).send({ error: 'SUPPLY_EXHAUSTED', message: '21M cap reached' });
     }
 
-    // Serialize per-user with advisory lock to prevent concurrent challenge spam.
-    // Use the non-blocking try variant: if a concurrent /challenge from the same
-    // user already holds the lock, fail fast with 429 instead of stalling a
-    // connection. Legit users only ever have one in-flight call so they never
-    // hit this path; bots that fan-out parallel calls per account get rejected
-    // immediately, freeing pg pool slots for everyone else.
-    // Operator accounts bypass the lock entirely.
-    const result = await withTx(app.pool, async (c) => {
-      if (!isOperator) {
-        const { rows: lock } = await c.query<{ ok: boolean }>(
-          `SELECT pg_try_advisory_xact_lock(hashtext('rpow_challenge'), hashtext($1)) AS ok`,
-          [s.email],
-        );
-        if (!lock[0]?.ok) return { _busy: true as const };
-      }
-
-      // Single round-trip for both lookups: pending challenge (kind=1) and
-      // most-recent claimed_at for the cooldown check (kind=2). Halves the
-      // in-tx DB latency vs the previous two separate SELECTs.
-      const { rows: lookup } = await c.query<{
-        kind: number;
-        id: string | null;
-        nonce_prefix: Buffer | null;
-        difficulty_bits: number | null;
-        expires_at: Date | null;
-        claimed_at: Date | null;
-      }>(
-        `(SELECT 1 AS kind, id, nonce_prefix, difficulty_bits, expires_at, NULL::timestamptz AS claimed_at
-            FROM challenges
-            WHERE user_email=$1 AND claimed_at IS NULL AND expires_at > now()
-            ORDER BY issued_at DESC LIMIT 1)
-         UNION ALL
-         (SELECT 2 AS kind, NULL::uuid, NULL::bytea, NULL::int, NULL::timestamptz, claimed_at
-            FROM challenges
-            WHERE user_email=$1 AND claimed_at IS NOT NULL
-            ORDER BY claimed_at DESC LIMIT 1)`,
-        [s.email],
-      );
-      const pending = lookup.find(r => r.kind === 1);
-      const lastClaimed = lookup.find(r => r.kind === 2);
-      if (pending) {
-        return {
-          challenge_id: pending.id!,
-          nonce_prefix: pending.nonce_prefix!.toString('hex'),
-          difficulty_bits: pending.difficulty_bits!,
-          expires_at: pending.expires_at!.toISOString(),
-        };
-      }
-      if (lastClaimed?.claimed_at && !isOperator) {
-        const elapsedMs = Date.now() - lastClaimed.claimed_at.getTime();
-        if (elapsedMs < 5000) {
-          const wait = Math.ceil((5000 - elapsedMs) / 1000);
-          return { _cooldown: true as const, wait };
-        }
-      }
-
-      const scheduledBits = difficultyBitsForSupply(mintedPre, {
-        difficultyBits: app.config.difficultyBits,
-        maxSupplyRpow: app.config.mintMaxSupply,
-      });
-      const difficulty = Math.max(app.config.difficultyFloor, scheduledBits);
-
-      const id = randomUUID();
-      const noncePrefix = randomBytes(16);
-      const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-      await c.query(
-        'INSERT INTO challenges(id, user_email, nonce_prefix, difficulty_bits, expires_at) VALUES($1,$2,$3,$4,$5)',
-        [id, s.email, noncePrefix, difficulty, expiresAt],
-      );
+    // Single round-trip for both lookups: pending challenge (kind=1) and
+    // most-recent claimed_at for the cooldown check (kind=2).
+    //
+    // Previously this whole handler ran inside withTx + pg_try_advisory_xact_lock
+    // for per-user serialization. That cost 5 PG round-trips per /challenge
+    // (BEGIN + lock + lookup + insert + COMMIT) and a global serialization
+    // point. Dropping the lock + transaction is safe: duplicate pending
+    // challenges from a parallel call are harmless because /mint atomically
+    // validates against the daily cap + supply cap, and only one challenge can
+    // be claimed per nonce. Two round-trips total now (lookup + insert).
+    const { rows: lookup } = await app.pool.query<{
+      kind: number;
+      id: string | null;
+      nonce_prefix: Buffer | null;
+      difficulty_bits: number | null;
+      expires_at: Date | null;
+      claimed_at: Date | null;
+    }>(
+      `(SELECT 1 AS kind, id, nonce_prefix, difficulty_bits, expires_at, NULL::timestamptz AS claimed_at
+          FROM challenges
+          WHERE user_email=$1 AND claimed_at IS NULL AND expires_at > now()
+          ORDER BY issued_at DESC LIMIT 1)
+       UNION ALL
+       (SELECT 2 AS kind, NULL::uuid, NULL::bytea, NULL::int, NULL::timestamptz, claimed_at
+          FROM challenges
+          WHERE user_email=$1 AND claimed_at IS NOT NULL
+          ORDER BY claimed_at DESC LIMIT 1)`,
+      [s.email],
+    );
+    const pending = lookup.find(r => r.kind === 1);
+    const lastClaimed = lookup.find(r => r.kind === 2);
+    if (pending) {
       return {
-        challenge_id: id,
-        nonce_prefix: noncePrefix.toString('hex'),
-        difficulty_bits: difficulty,
-        expires_at: expiresAt.toISOString(),
+        challenge_id: pending.id!,
+        nonce_prefix: pending.nonce_prefix!.toString('hex'),
+        difficulty_bits: pending.difficulty_bits!,
+        expires_at: pending.expires_at!.toISOString(),
       };
-    });
+    }
+    if (lastClaimed?.claimed_at && !isOperator) {
+      const elapsedMs = Date.now() - lastClaimed.claimed_at.getTime();
+      if (elapsedMs < 5000) {
+        const wait = Math.ceil((5000 - elapsedMs) / 1000);
+        return reply.code(429).send({ error: 'COOLDOWN', message: `wait ${wait}s before next challenge`, retry_after: wait });
+      }
+    }
 
-    if ('_busy' in result) {
-      return reply.code(429).send({ error: 'BUSY', message: 'another challenge is in flight for this account', retry_after: 1 });
-    }
-    if ('_cooldown' in result) {
-      return reply.code(429).send({ error: 'COOLDOWN', message: `wait ${result.wait}s before next challenge`, retry_after: result.wait });
-    }
-    return result;
+    const scheduledBits = difficultyBitsForSupply(mintedPre, {
+      difficultyBits: app.config.difficultyBits,
+      maxSupplyRpow: app.config.mintMaxSupply,
+    });
+    const difficulty = Math.max(app.config.difficultyFloor, scheduledBits);
+
+    const id = randomUUID();
+    const noncePrefix = randomBytes(16);
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+    await app.pool.query(
+      'INSERT INTO challenges(id, user_email, nonce_prefix, difficulty_bits, expires_at) VALUES($1,$2,$3,$4,$5)',
+      [id, s.email, noncePrefix, difficulty, expiresAt],
+    );
+    return {
+      challenge_id: id,
+      nonce_prefix: noncePrefix.toString('hex'),
+      difficulty_bits: difficulty,
+      expires_at: expiresAt.toISOString(),
+    };
   });
 }
