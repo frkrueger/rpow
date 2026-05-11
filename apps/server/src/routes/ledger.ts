@@ -30,7 +30,7 @@ export async function ledgerRoutes(app: FastifyInstance) {
         `SELECT count(*)::int AS n FROM users`,
       ),
       app.pool.query<{ value: string }>(
-        `SELECT value::text FROM app_counters WHERE name='minted_supply'`,
+        `SELECT COALESCE(SUM(value), 0)::text AS value FROM app_counters WHERE name='minted_supply'`,
       ),
     ]);
 

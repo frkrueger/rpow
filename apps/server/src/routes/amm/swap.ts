@@ -7,6 +7,7 @@ import { burnFromUser } from '../../longshot/burn.js';
 import { signSwapPayload, signTokenPayload, type SwapPayload } from '../../signing.js';
 import { computeSwapOutput, computeFeeIn, computePriceImpactBps } from '../../amm/math.js';
 import { isAllowed, readTermsAcceptedAt } from './allowlist.js';
+import { pickSupplyShard } from '../../supplyShards.js';
 
 const BuyBody = z.object({
   usdc_base_units: z.string().regex(/^[1-9][0-9]{0,18}$/, 'positive bigint as string'),
@@ -217,8 +218,10 @@ async function handleSwap(req: any, reply: any, app: FastifyInstance, direction:
         const capBaseUnits = BigInt(app.config.mintMaxSupply) * RPOW_BASE_UNITS_PER_RPOW;
         const supplyResult = await c.query(
           `UPDATE app_counters SET value = value + $1::bigint
-           WHERE name = 'minted_supply' AND value + $1::bigint <= $2::bigint`,
-          [output.toString(), capBaseUnits.toString()],
+           WHERE name = 'minted_supply' AND shard = $3
+             AND (SELECT COALESCE(SUM(value), 0) FROM app_counters WHERE name = 'minted_supply')
+                 + $1::bigint <= $2::bigint`,
+          [output.toString(), capBaseUnits.toString(), pickSupplyShard()],
         );
         if ((supplyResult.rowCount ?? 0) === 0) {
           throw new Error('SUPPLY_CAP_REACHED');
@@ -245,8 +248,9 @@ async function handleSwap(req: any, reply: any, app: FastifyInstance, direction:
         await burnFromUser(c, s.email, amountIn, app.config.signingPrivateKeyHex);
         // Burned RPOW leaves user circulation (escrowed in pool).
         await c.query(
-          `UPDATE app_counters SET value = value - $1::bigint WHERE name = 'minted_supply'`,
-          [amountIn.toString()],
+          `UPDATE app_counters SET value = value - $1::bigint
+           WHERE name = 'minted_supply' AND shard = $2`,
+          [amountIn.toString(), pickSupplyShard()],
         );
         // Credit caller's USDC.
         await c.query(

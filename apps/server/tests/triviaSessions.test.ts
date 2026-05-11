@@ -150,7 +150,8 @@ describe('POST /api/trivia/sessions', () => {
     const cookie = await login(ctx, 'a@b.com');
     await markVerified(ctx.pool, 'a@b.com', 'alice');
     await seedToken(ctx.pool, 'a@b.com', 200n);
-    await ctx.pool.query(`UPDATE app_counters SET value = 200 WHERE name = 'minted_supply'`);
+    await ctx.pool.query(`UPDATE app_counters SET value = 0 WHERE name = 'minted_supply'`);
+    await ctx.pool.query(`UPDATE app_counters SET value = 200 WHERE name = 'minted_supply' AND shard = 0`);
 
     const res = await ctx.app.inject({
       method: 'POST',
@@ -177,7 +178,7 @@ describe('POST /api/trivia/sessions', () => {
 
     // Verify minted_supply decremented: 200 - 100 = 100
     const supply = await ctx.pool.query<{ value: string }>(
-      `SELECT value::text FROM app_counters WHERE name = 'minted_supply'`,
+      `SELECT COALESCE(SUM(value), 0)::text AS value FROM app_counters WHERE name = 'minted_supply'`,
     );
     expect(supply.rows[0].value).toBe('100');
 
@@ -284,7 +285,8 @@ describe('POST /api/trivia/sessions/:id/close', () => {
     const cookie = await login(ctx, 'a@b.com');
     await markVerified(ctx.pool, 'a@b.com', 'alice');
     await seedToken(ctx.pool, 'a@b.com', 200n);
-    await ctx.pool.query(`UPDATE app_counters SET value = 200 WHERE name = 'minted_supply'`);
+    await ctx.pool.query(`UPDATE app_counters SET value = 0 WHERE name = 'minted_supply'`);
+    await ctx.pool.query(`UPDATE app_counters SET value = 200 WHERE name = 'minted_supply' AND shard = 0`);
 
     // Enter with bankroll = 100, bet = 10
     const enterRes = await ctx.app.inject({
@@ -330,7 +332,7 @@ describe('POST /api/trivia/sessions/:id/close', () => {
 
     // minted_supply restored to 200
     const supply = await ctx.pool.query<{ value: string }>(
-      `SELECT value::text FROM app_counters WHERE name = 'minted_supply'`,
+      `SELECT COALESCE(SUM(value), 0)::text AS value FROM app_counters WHERE name = 'minted_supply'`,
     );
     expect(supply.rows[0].value).toBe('200');
   });

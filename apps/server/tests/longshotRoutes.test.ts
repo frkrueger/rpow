@@ -106,16 +106,17 @@ describe('POST /api/longshot/spin', () => {
     expect(body.net_user_change_base_units).toBe('200');
     expect(body.new_balance_base_units).toBe('1200');
 
-    const supply = await ctx.pool.query<{ value: string }>(
-      `SELECT value::text FROM app_counters WHERE name = 'minted_supply'`,
+    const supply = await ctx.pool.query<{ total: string }>(
+      `SELECT COALESCE(SUM(value), 0)::text AS total FROM app_counters WHERE name = 'minted_supply'`,
     );
-    expect(supply.rows[0].value).toBe('200');
+    expect(supply.rows[0].total).toBe('200');
   });
 
   it('LOSE: invalidates stake worth of user tokens, decrements minted_supply', async () => {
     const ctx = await makeTestApp(); cleanup = ctx.cleanup;
     const cookie = await login(ctx, 'a@b.com');
     await seedToken(ctx.pool, 'a@b.com', 1000n);
+    // Initialize all shards to the same value so any randomly picked shard will have the correct balance
     await ctx.pool.query(`UPDATE app_counters SET value = 1000 WHERE name = 'minted_supply'`);
     vi.spyOn(randomness, 'drawSpin').mockReturnValue({ outcome: false, hex: 'aabbccddeeff0011' });
 
@@ -130,10 +131,11 @@ describe('POST /api/longshot/spin', () => {
     expect(body.net_user_change_base_units).toBe('-100');
     expect(body.new_balance_base_units).toBe('900');
 
-    const supply = await ctx.pool.query<{ value: string }>(
-      `SELECT value::text FROM app_counters WHERE name = 'minted_supply'`,
+    const supply = await ctx.pool.query<{ total: string }>(
+      `SELECT COALESCE(SUM(value), 0)::text AS total FROM app_counters WHERE name = 'minted_supply'`,
     );
-    expect(supply.rows[0].value).toBe('900');
+    // 16 shards initialized to 1000 each = 16000, minus 100 stake = 15900
+    expect(supply.rows[0].total).toBe('15900');
   });
 
   it('records a long_shot_bets row with signature', async () => {

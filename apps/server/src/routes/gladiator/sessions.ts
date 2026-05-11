@@ -5,6 +5,7 @@ import { readSession } from '../auth.js';
 import { withTx } from '../../db.js';
 import { burnFromUser } from '../../longshot/burn.js';
 import { signTokenPayload } from '../../signing.js';
+import { pickSupplyShard } from '../../supplyShards.js';
 
 const BASE_UNITS_PER_RPOW = 1_000_000_000n;
 
@@ -127,8 +128,9 @@ export async function sessionsRoutes(app: FastifyInstance) {
         // Burn bankroll from user's tokens, then mirror minted_supply.
         await burnFromUser(c, email, bankroll, app.config.signingPrivateKeyHex);
         await c.query(
-          `UPDATE app_counters SET value = value - $1::bigint WHERE name = 'minted_supply'`,
-          [bankroll.toString()],
+          `UPDATE app_counters SET value = value - $1::bigint
+           WHERE name = 'minted_supply' AND shard = $2`,
+          [bankroll.toString(), pickSupplyShard()],
         );
 
         // Insert gladiator session
@@ -263,8 +265,10 @@ export async function sessionsRoutes(app: FastifyInstance) {
           // Defensive cap check (should never fire since we burned this exact amount)
           const supplyResult = await c.query(
             `UPDATE app_counters SET value = value + $1::bigint
-             WHERE name = 'minted_supply' AND value + $1::bigint <= $2::bigint`,
-            [remaining.toString(), capBaseUnits.toString()],
+             WHERE name = 'minted_supply' AND shard = $3
+               AND (SELECT COALESCE(SUM(value), 0) FROM app_counters WHERE name = 'minted_supply')
+                   + $1::bigint <= $2::bigint`,
+            [remaining.toString(), capBaseUnits.toString(), pickSupplyShard()],
           );
           if ((supplyResult.rowCount ?? 0) === 0) {
             throw new Error('SUPPLY_CAP_REACHED');

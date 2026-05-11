@@ -5,6 +5,7 @@ import { readSession } from '../auth.js';
 import { withTx } from '../../db.js';
 import { burnFromUser } from '../../longshot/burn.js';
 import { resolveMatchTx } from '../../trivia/resolve.js';
+import { pickSupplyShard } from '../../supplyShards.js';
 
 
 type MatchRow = {
@@ -233,8 +234,9 @@ export async function matchesRoutes(app: FastifyInstance) {
 
         await burnFromUser(c, challengerEmail, bet, app.config.signingPrivateKeyHex);
         await c.query(
-          `UPDATE app_counters SET value = value - $1::bigint WHERE name = 'minted_supply'`,
-          [bet.toString()],
+          `UPDATE app_counters SET value = value - $1::bigint
+           WHERE name = 'minted_supply' AND shard = $2`,
+          [bet.toString(), pickSupplyShard()],
         );
 
         const matchId = randomUUID();

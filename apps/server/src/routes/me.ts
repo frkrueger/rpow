@@ -76,7 +76,7 @@ export async function meRoutes(app: FastifyInstance) {
         [email, todayUtc],
       ),
       app.pool.query<{ value: string }>(
-        `SELECT value::text AS value FROM app_counters WHERE name='minted_supply'`,
+        `SELECT COALESCE(SUM(value), 0)::text AS value FROM app_counters WHERE name='minted_supply'`,
       ),
     ]);
 
