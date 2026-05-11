@@ -19,6 +19,7 @@ import { phantomRoutes } from './routes/phantom.js';
 import { srpowRoutes } from './routes/srpow.js';
 import { longshotRoutes } from './routes/longshot.js';
 import { gladiatorRoutes } from './routes/gladiator/index.js';
+import { triviaRoutes } from './routes/trivia/index.js';
 
 export interface AppConfig {
   sessionSecret: string;
@@ -155,6 +156,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   await app.register(srpowRoutes);
   await app.register(longshotRoutes);
   await app.register(gladiatorRoutes);
+  await app.register(triviaRoutes);
 
   app.get('/.well-known/rpow-pubkey.pem', async (_req, reply) => {
     const pubDer = Buffer.concat([
