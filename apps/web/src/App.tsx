@@ -67,6 +67,7 @@ export default function App() {
         <main>
           <Routes>
             <Route path="/" element={<WalletPage />} />
+            <Route path="/wallet" element={<WalletPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/mine" element={<MinePage />} />
             <Route path="/send" element={<SendPage />} />
