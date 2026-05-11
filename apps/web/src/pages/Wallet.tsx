@@ -5,15 +5,29 @@ import { useMe } from '../hooks/useMe.js';
 import { api } from '../api.js';
 import { formatRpow, parseRpowToBaseUnits } from '../lib/format.js';
 
+/** Best-effort safety check on a return_url. Accept http(s) only. Reject
+ *  data:, javascript:, file:, etc. Reject malformed URLs. The displayed
+ *  hostname lets the user verify before clicking, so we don't need a
+ *  domain allowlist. */
+function safeReturnUrl(raw: string | null): { url: string; host: string } | null {
+  if (!raw) return null;
+  try {
+    const u = new URL(raw);
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+    return { url: u.toString(), host: u.host };
+  } catch { return null; }
+}
+
 /** Inline pay-request card shown on /wallet when the URL has ?to=…&amount=…&memo=…
  *  query params. One-click confirm submits a normal /send call. After success
  *  the user is already on /wallet, so the balance updates inline. */
 function PayRequestCard({
-  to, amount, memo, onSent,
+  to, amount, memo, returnUrl, onSent,
 }: {
   to: string;
   amount: string;
   memo: string | null;
+  returnUrl: string | null;
   onSent: () => Promise<void>;
 }) {
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
@@ -85,6 +99,17 @@ function PayRequestCard({
   transfer id: ${transferId}`}
         </pre>
       )}
+      {status === 'sent' && returnUrl && (() => {
+        const safe = safeReturnUrl(returnUrl);
+        if (!safe) return null;
+        return (
+          <div style={{ marginTop: 12 }}>
+            <a href={safe.url} className="primary" style={{ display: 'inline-block', padding: '4px 12px', border: '1px solid var(--accent)', textDecoration: 'none' }}>
+              [ RETURN TO {safe.host} ↗ ]
+            </a>
+          </div>
+        );
+      })()}
       {status === 'error' && <div className="error" style={{ marginTop: 8 }}>error: {error}</div>}
     </Panel>
   );
@@ -96,6 +121,7 @@ export function WalletPage() {
   const toParam = searchParams.get('to');
   const amountParam = searchParams.get('amount');
   const memoParam = searchParams.get('memo');
+  const returnUrlParam = searchParams.get('return_url');
   const hasPayRequest = !!(toParam && amountParam);
 
   if (loading) return <Panel><div>loading...</div></Panel>;
@@ -132,6 +158,7 @@ export function WalletPage() {
           to={toParam!}
           amount={amountParam!}
           memo={memoParam}
+          returnUrl={returnUrlParam}
           onSent={refresh}
         />
       )}
