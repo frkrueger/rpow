@@ -28,7 +28,7 @@ export default function App() {
       <div className="app-shell">
         <header className="app-header">
           <pre style={{ margin: 0 }}>{'+======================================================================+\n|                   RPOW2 - Reusable Proofs of Work                  '}<span onClick={() => setTheme(nextTheme(theme))} title="cycle theme" style={{ cursor: 'pointer', fontSize: 13, color: 'var(--accent)' }}>{'\u25cf'}</span>{' |\n+======================================================================+'}</pre>
-          <div className="tagline">a modern tribute to a tribute to the original rpow by hal finney</div>
+          <div className="tagline">a modern tribute to the original rpow by hal finney</div>
           {me && (
             <div className="identity-bar" style={{ fontSize: 12, color: 'var(--dim)', marginTop: 4 }}>
               logged in as <strong style={{ color: 'var(--accent)' }}>{me.email}</strong>
