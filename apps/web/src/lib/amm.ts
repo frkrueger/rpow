@@ -15,23 +15,18 @@ const USDC_DECIMALS = 6;
 const USDC_DIVISOR = 1_000_000n;
 
 /**
- * Format USDC base units (6-decimal) as a human-readable string with
- * thousand separators and 2 fractional digits. Rounds toward zero —
- * never overstate balances.
+ * Format USDC base units (6-decimal) as a human-readable decimal string
+ * with exactly two fractional digits. Rounds to nearest cent (half-up).
+ * No thousand separators — keep display predictable across magnitudes.
  */
 export function formatUsdc(baseUnits: string): string {
   const n = BigInt(baseUnits);
-  const whole = n / USDC_DIVISOR;
-  // Two fractional digits → keep 2 of the 6 decimals, rounding to nearest.
-  const remainder = n % USDC_DIVISOR;
-  const fraction = (remainder + 5000n) / 10_000n; // round to nearest
-  // Apply thousand separators only for numbers >= 10000.
-  let wholeStr = whole.toString();
-  if (whole >= 10000n) {
-    wholeStr = wholeStr.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  }
-  const fracStr = fraction.toString().padStart(2, '0');
-  return `${wholeStr}.${fracStr}`;
+  // Round to nearest cent by adding half a cent (5000 base units) before
+  // dividing down to cents. Handles carry past .99 → 1.00 correctly.
+  const cents = (n + 5000n) / 10_000n;
+  const whole = cents / 100n;
+  const fraction = cents % 100n;
+  return `${whole.toString()}.${fraction.toString().padStart(2, '0')}`;
 }
 
 /**

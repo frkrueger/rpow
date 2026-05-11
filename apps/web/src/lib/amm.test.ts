@@ -34,14 +34,18 @@ describe('formatUsdc', () => {
   it('formats 1_000_000 as 1.00 (USDC = 6 decimals)', () => {
     expect(formatUsdc('1000000')).toBe('1.00');
   });
-  it('formats 1_234_567_890 as 1234.57 (rounded down)', () => {
+  it('formats 1_234_567_890 as 1234.57 (round to nearest cent)', () => {
     expect(formatUsdc('1234567890')).toBe('1234.57');
   });
   it('formats 500_000 as 0.50', () => {
     expect(formatUsdc('500000')).toBe('0.50');
   });
-  it('includes thousand separators for readability', () => {
-    expect(formatUsdc('1234567890000')).toBe('1,234,567.89');
+  it('formats large amounts as plain digits, no thousand separators', () => {
+    expect(formatUsdc('1234567890000')).toBe('1234567.89');
+  });
+  it('carries .99 + half-cent over to next whole', () => {
+    // 999500 base units = 0.9995 USDC; rounds up to 1.00.
+    expect(formatUsdc('999500')).toBe('1.00');
   });
 });
 
