@@ -76,3 +76,47 @@ export function signFlipPayload(payload: FlipPayload, privHex: string): Buffer {
 export function verifyFlipPayload(payload: FlipPayload, sig: Buffer, pubHex: string): boolean {
   return verify(null, canonicalFlip(payload), pubKeyFromHex(pubHex), sig);
 }
+
+export interface MatchPayload {
+  id: string;
+  offerer_email_hash: string;
+  challenger_email_hash: string;
+  bet_base_units: bigint;
+  question_id: string;
+  offerer_choice_idx: number | null;
+  offerer_answered_at: string | null;
+  challenger_choice_idx: number | null;
+  challenger_answered_at: string | null;
+  winner_email_hash: string;
+  created_at: string;
+}
+
+function canonicalMatch(payload: MatchPayload): Buffer {
+  // Field order is part of the contract — never reorder, never add fields
+  // in place; new versions get a new payload type.
+  const ordered = JSON.stringify(
+    {
+      id: payload.id,
+      offerer_email_hash: payload.offerer_email_hash,
+      challenger_email_hash: payload.challenger_email_hash,
+      bet_base_units: payload.bet_base_units,
+      question_id: payload.question_id,
+      offerer_choice_idx: payload.offerer_choice_idx,
+      offerer_answered_at: payload.offerer_answered_at,
+      challenger_choice_idx: payload.challenger_choice_idx,
+      challenger_answered_at: payload.challenger_answered_at,
+      winner_email_hash: payload.winner_email_hash,
+      created_at: payload.created_at,
+    },
+    (_, v) => (typeof v === 'bigint' ? v.toString() : v),
+  );
+  return Buffer.from(ordered, 'utf8');
+}
+
+export function signMatchPayload(payload: MatchPayload, privHex: string): Buffer {
+  return sign(null, canonicalMatch(payload), privKeyFromHex(privHex));
+}
+
+export function verifyMatchPayload(payload: MatchPayload, sig: Buffer, pubHex: string): boolean {
+  return verify(null, canonicalMatch(payload), pubKeyFromHex(pubHex), sig);
+}
