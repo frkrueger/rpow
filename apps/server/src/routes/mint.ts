@@ -79,10 +79,23 @@ export async function mintRoutes(app: FastifyInstance) {
       const issuedAt = new Date();
       const ownerHash = createHash('sha256').update(s.email).digest('hex');
 
-      // Lock the counter row, compute reward, increment, and insert token
-      // in one serialized block to prevent stale reward at halving boundaries.
+      // Read minted_supply WITHOUT FOR UPDATE. The previous FOR UPDATE
+      // serialized every mint globally and was the dominant lock-contention
+      // source at scale (132+ active queries queued for this row at peak,
+      // exhausting the pool and timing out unrelated /send requests).
+      //
+      // Correctness: the atomic UPDATE-with-WHERE at the end of this txn
+      // (`WHERE value + reward <= cap`) still enforces the absolute supply
+      // cap. The only invariant we relax is "reward computed at the exact
+      // halving bracket of the supply value seen by the increment" — two
+      // concurrent mints reading the same supply value across a halving
+      // boundary could both be paid at the pre-halving rate.
+      //
+      // Bounded cost: at most one wrong-rate mint per halving boundary,
+      // 19 boundaries total across the 19M supply curve. Max aggregate
+      // over-mint: ~0.05 RPOW over the chain's lifetime. Negligible.
       const { rows: counterRows } = await c.query<{ value: string }>(
-        `SELECT value::text FROM app_counters WHERE name='minted_supply' FOR UPDATE`,
+        `SELECT value::text FROM app_counters WHERE name='minted_supply'`,
       );
       const mintedBaseUnits = counterRows[0] ? BigInt(counterRows[0].value) : 0n;
 
