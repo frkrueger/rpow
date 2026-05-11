@@ -121,6 +121,7 @@ const app = await buildApp({
     triviaWebOrigin: env.TRIVIA_WEB_ORIGIN,
     ammAllowedEmails: env.AMM_ALLOWED_EMAILS,
     ammAdminEmails: env.AMM_ADMIN_EMAILS,
+    ammUsdcPoolCapBaseUnits: env.AMM_USDC_POOL_CAP_BASE_UNITS,
     secureCookies: env.NODE_ENV === 'production',
     turnstileSecret: env.TURNSTILE_SECRET,
     operatorEmails: new Set(

@@ -73,6 +73,9 @@ export interface AppConfig {
   ammAllowedEmails: string;
   /** AMM admin allowlist — subset that can call admin endpoints (credit, seed). */
   ammAdminEmails: string;
+  /** System-wide cap on total USDC (sum of users.usdc_base_units + pool reserve).
+   *  Bounds the worst-case hot-wallet loss for the alpha. */
+  ammUsdcPoolCapBaseUnits: number;
   secureCookies: boolean;
   /**
    * Cloudflare Turnstile secret. When set, /auth/request requires a valid
