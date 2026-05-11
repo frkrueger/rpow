@@ -10,20 +10,13 @@ describe('trivia route skeleton', () => {
     cleanup = null;
   });
 
+  // Remaining 501 stubs after slice 2. The match-flow endpoints land in slice 3;
+  // everything else (sessions/lobby/chat/stats/me/match-reads) is now real.
   const endpoints: Array<{ method: 'GET' | 'POST'; url: string }> = [
-    { method: 'GET',  url: '/api/trivia/me' },
-    { method: 'POST', url: '/api/trivia/sessions' },
-    { method: 'POST', url: '/api/trivia/sessions/00000000-0000-0000-0000-000000000000/close' },
-    { method: 'GET',  url: '/api/trivia/lobby' },
     { method: 'POST', url: '/api/trivia/matches/start' },
     { method: 'GET',  url: '/api/trivia/matches/active?session_id=00000000-0000-0000-0000-000000000000' },
     { method: 'POST', url: '/api/trivia/matches/00000000-0000-0000-0000-000000000000/answer' },
     { method: 'GET',  url: '/api/trivia/matches/00000000-0000-0000-0000-000000000000' },
-    { method: 'GET',  url: '/api/trivia/matches/recent' },
-    { method: 'GET',  url: '/api/trivia/matches/history' },
-    { method: 'GET',  url: '/api/trivia/chat' },
-    { method: 'POST', url: '/api/trivia/chat' },
-    { method: 'GET',  url: '/api/trivia/stats' },
   ];
 
   for (const { method, url } of endpoints) {
