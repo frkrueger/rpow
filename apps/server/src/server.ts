@@ -111,6 +111,13 @@ const app = await buildApp({
     gladiatorAllowedEmails: env.GLADIATOR_ALLOWED_EMAILS,
     gladiatorWebOrigin: env.GLADIATOR_WEB_ORIGIN,
     gladiatorAdminToken: env.GLADIATOR_ADMIN_TOKEN,
+    triviaMinBetBaseUnits: env.TRIVIA_MIN_BET_BASE_UNITS,
+    triviaMaxBetBaseUnits: env.TRIVIA_MAX_BET_BASE_UNITS,
+    triviaMaxBankrollBaseUnits: env.TRIVIA_MAX_BANKROLL_BASE_UNITS,
+    triviaMatchDeadlineSeconds: env.TRIVIA_MATCH_DEADLINE_SECONDS,
+    triviaSessionTtlHours: env.TRIVIA_SESSION_TTL_HOURS,
+    triviaAllowedEmails: env.TRIVIA_ALLOWED_EMAILS,
+    triviaWebOrigin: env.TRIVIA_WEB_ORIGIN,
     secureCookies: env.NODE_ENV === 'production',
     turnstileSecret: env.TURNSTILE_SECRET,
     operatorEmails: new Set(

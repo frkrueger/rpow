@@ -9,6 +9,7 @@ import pg from 'pg';
 export async function makeTestApp(opts: {
   bridgeClient?: FakeBridgeClient;
   wrapAllowlistCsv?: string;
+  triviaAllowedEmails?: string;
 } = {}): Promise<{
   app: Awaited<ReturnType<typeof buildApp>>;
   pool: Pool;
@@ -62,6 +63,13 @@ export async function makeTestApp(opts: {
       gladiatorChatRetentionDays: 30,
       gladiatorAllowedEmails: '*',
       gladiatorWebOrigin: 'http://gladiator.test',
+      triviaMinBetBaseUnits: 10,
+      triviaMaxBetBaseUnits: 1_000_000_000,
+      triviaMaxBankrollBaseUnits: 10_000_000_000,
+      triviaMatchDeadlineSeconds: 10,
+      triviaSessionTtlHours: 48,
+      triviaAllowedEmails: opts?.triviaAllowedEmails ?? '*',
+      triviaWebOrigin: 'http://trivia.test',
       secureCookies: false,
     },
   });
