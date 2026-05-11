@@ -324,4 +324,60 @@ export async function lpRoutes(app: FastifyInstance) {
       server_time: result.createdAt.toISOString(),
     });
   });
+
+  app.get('/amm/me', async (req, reply) => {
+    const s = readSession(req as any, app.config.sessionSecret);
+    if (!s) return reply.code(401).send({ error: 'UNAUTHORIZED', message: 'login required' });
+    if (!isAllowed(app.config.ammAllowedEmails, s.email)) {
+      return reply.code(403).send({ error: 'NOT_ALLOWED', message: 'AMM access not enabled' });
+    }
+
+    const userRes = await app.pool.query<{
+      usdc_base_units: string;
+      amm_terms_accepted_at: Date | null;
+    }>(
+      `SELECT usdc_base_units::text AS usdc_base_units, amm_terms_accepted_at FROM users WHERE email = $1`,
+      [s.email],
+    );
+    const u = userRes.rows[0];
+
+    const lpRes = await app.pool.query<{ lp_balance: string }>(
+      `SELECT lp_balance::text AS lp_balance FROM amm_lp_balances WHERE account_email = $1`,
+      [s.email],
+    );
+    const lpBalance = lpRes.rows[0] ? BigInt(lpRes.rows[0].lp_balance) : 0n;
+
+    const poolRes = await app.pool.query<{
+      rpow_reserve_base_units: string;
+      usdc_reserve_base_units: string;
+      total_lp_supply: string;
+    }>(
+      `SELECT rpow_reserve_base_units::text AS rpow_reserve_base_units,
+              usdc_reserve_base_units::text AS usdc_reserve_base_units,
+              total_lp_supply::text AS total_lp_supply
+       FROM amm_pool WHERE id='main'`,
+    );
+
+    const RPOW_BASE_PER_RPOW = 1_000_000_000n;
+    let spotE9: string | null = null;
+    let shareBps: string | null = null;
+    if (poolRes.rows[0]) {
+      const R_rpow = BigInt(poolRes.rows[0].rpow_reserve_base_units);
+      const R_usdc = BigInt(poolRes.rows[0].usdc_reserve_base_units);
+      const totalLp = BigInt(poolRes.rows[0].total_lp_supply);
+      spotE9 = ((R_usdc * RPOW_BASE_PER_RPOW) / R_rpow).toString();
+      if (lpBalance > 0n && totalLp > 0n) {
+        shareBps = ((lpBalance * 10000n) / totalLp).toString();
+      }
+    }
+
+    return reply.code(200).send({
+      email: s.email,
+      usdc_base_units: u?.usdc_base_units ?? '0',
+      lp_balance: lpBalance.toString(),
+      terms_accepted_at: u?.amm_terms_accepted_at?.toISOString() ?? null,
+      spot_price_usdc_per_rpow_e9: spotE9,
+      your_pool_share_bps: shareBps,
+    });
+  });
 }
