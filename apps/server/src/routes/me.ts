@@ -57,8 +57,8 @@ export async function meRoutes(app: FastifyInstance) {
         `SELECT coalesce(sum(amount),0)::text AS n FROM transfers WHERE recipient_email=$1`,
         [email],
       ),
-      app.pool.query<{ solana_wallet: string | null }>(
-        'SELECT solana_wallet FROM users WHERE email=$1', [email],
+      app.pool.query<{ solana_wallet: string | null; x_handle: string | null; x_avatar_url: string | null }>(
+        'SELECT solana_wallet, x_handle, x_avatar_url FROM users WHERE email=$1', [email],
       ),
       app.pool.query<{ n: string }>(
         `SELECT coalesce(sum(value),0)::text AS n FROM tokens WHERE owner_email=$1 AND state='WRAPPED'`,
@@ -86,6 +86,8 @@ export async function meRoutes(app: FastifyInstance) {
       received_base_units: recv[0]!.n,
       wrap_allowed: isAllowed(app.wrapAllowlist, email),
       solana_wallet: userRow[0]?.solana_wallet ?? null,
+      x_handle: userRow[0]?.x_handle ?? null,
+      x_avatar_url: userRow[0]?.x_avatar_url ?? null,
       srpow_supply_owned_base_units: wrappedRow[0]?.n ?? '0',
       daily_mint_cap_base_units: dailyCap.toString(),
       daily_minted_base_units: dailyMintedToday.toString(),
