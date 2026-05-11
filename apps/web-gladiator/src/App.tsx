@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  fetchMe, fetchGladiatorMe, fetchLobby, fetchRecentFlips, fetchChat, fetchGladiatorStats, postChat, formatRpow,
+  fetchMe, fetchGladiatorMe, fetchLobby, fetchRecentFlips, fetchChat, fetchGladiatorStats, postChat,
+  addFavorite, removeFavorite, formatRpow,
   type Me, type GladiatorProfile, type LobbyEntry, type RecentFlip, type ChatMessage, type GladiatorStats,
 } from './api.js';
 import { XHandleClaimModal } from './XHandleClaimModal.js';
@@ -43,6 +44,8 @@ export function App() {
   const [stats, setStats] = useState<GladiatorStats | null>(null);
   const [authState, setAuthState] = useState<'loading' | 'spectator' | 'unverified' | 'verified'>('loading');
   const [flipTarget, setFlipTarget] = useState<LobbyEntry | null>(null);
+  const [sortMode, setSortMode] = useState<'recent' | 'highest-bet'>('recent');
+  const [search, setSearch] = useState('');
   const [chatDraft, setChatDraft] = useState('');
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -70,6 +73,24 @@ export function App() {
       setChatError(e.message);
     } finally {
       setChatBusy(false);
+    }
+  }
+
+  async function toggleFavorite(entry: LobbyEntry) {
+    const prev = lobby;
+    const next = lobby.map(g =>
+      g.session_id === entry.session_id ? { ...g, is_favorite: !g.is_favorite } : g
+    );
+    setLobby(next);
+    try {
+      if (entry.is_favorite) {
+        await removeFavorite(entry.x_handle);
+      } else {
+        await addFavorite(entry.x_handle);
+      }
+    } catch (e: any) {
+      setLobby(prev);
+      console.error('favorite toggle failed:', e.message);
     }
   }
 
@@ -115,6 +136,26 @@ export function App() {
   }, []);
 
   const myOpenSession = profile?.open_session ?? null;
+
+  const visibleLobby = (() => {
+    let rows = [...lobby];
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      rows = rows.filter(r => r.x_handle.toLowerCase().includes(q));
+    }
+    if (sortMode === 'highest-bet') {
+      rows.sort((a, b) => {
+        const ab = BigInt(a.bet_base_units);
+        const bb = BigInt(b.bet_base_units);
+        if (ab > bb) return -1;
+        if (ab < bb) return 1;
+        return 0;
+      });
+    }
+    return rows;
+  })();
+
+  const favoritesInArena = lobby.filter(g => g.is_favorite);
 
   return (
     <div className="app">
@@ -173,15 +214,66 @@ export function App() {
             <YourSessionPanel session={myOpenSession} onClosed={refreshAll} />
           )}
 
+          {authState === 'verified' && favoritesInArena.length > 0 && (
+            <div className="panel-inner favorites-panel">
+              <h2>FAVORITES IN ARENA ({favoritesInArena.length})</h2>
+              {favoritesInArena.map(g => {
+                const isOwnSession = me && g.account_email === me.email;
+                return (
+                  <div key={g.session_id} className="lobby-row">
+                    <div>
+                      <XLink handle={g.x_handle} />
+                      {' — '}
+                      bet {formatRpow(g.bet_base_units)} RPOW
+                    </div>
+                    {!isOwnSession && (
+                      <button onClick={() => setFlipTarget(g)} style={{ marginLeft: 8 }}>
+                        [ FLIP! ]
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           <div className="panel-inner">
-            <h2>OPEN GLADIATORS ({lobby.length})</h2>
-            {lobby.length === 0
-              ? <p style={{ color: '#666' }}>nobody in the arena</p>
-              : lobby.map(g => {
+            <div className="lobby-controls">
+              <h2 style={{ marginBottom: 0 }}>
+                OPEN GLADIATORS ({visibleLobby.length}{search ? `/${lobby.length}` : ''})
+              </h2>
+              <div className="lobby-filter">
+                <input
+                  type="text"
+                  placeholder="search @handle..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="lobby-search"
+                />
+                <select
+                  value={sortMode}
+                  onChange={e => setSortMode(e.target.value as 'recent' | 'highest-bet')}
+                  className="lobby-sort"
+                >
+                  <option value="recent">recent</option>
+                  <option value="highest-bet">highest bet</option>
+                </select>
+              </div>
+            </div>
+            {visibleLobby.length === 0
+              ? <p style={{ color: '#666' }}>{lobby.length === 0 ? 'nobody in the arena' : 'no matches'}</p>
+              : visibleLobby.map(g => {
                   const isOwnSession = me && g.account_email === me.email;
                   return (
                     <div key={g.session_id} className="lobby-row">
                       <div>
+                        {authState === 'verified' && !isOwnSession && (
+                          <button
+                            className={`fav-star ${g.is_favorite ? 'on' : ''}`}
+                            title={g.is_favorite ? 'unfavorite' : 'favorite'}
+                            onClick={() => toggleFavorite(g)}
+                          >{g.is_favorite ? '★' : '☆'}</button>
+                        )}
                         <XLink handle={g.x_handle} />
                         {' — '}
                         bankroll {formatRpow(g.bankroll_remaining_base_units)} RPOW
