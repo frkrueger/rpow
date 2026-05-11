@@ -100,12 +100,24 @@ export function WalletPage() {
 
   if (loading) return <Panel><div>loading...</div></Panel>;
   if (!me) return (
-    <Panel title="WALLET">
-      <div>not signed in.</div>
-      <div style={{ marginTop: 8 }}>
-        <Link to="/login">[ go to login ]</Link>
-      </div>
-    </Panel>
+    <>
+      {hasPayRequest && (
+        <Panel title="PAY REQUEST">
+          <div style={{ fontSize: 12, color: 'var(--dim)', marginBottom: 8 }}>
+            Someone shared a payment link. Sign in to confirm before sending.
+          </div>
+          <div>TO     : <strong>{toParam}</strong></div>
+          <div>AMOUNT : <strong>{amountParam} RPOW</strong></div>
+          {memoParam && <div>MEMO   : <code style={{ background: 'rgba(110,231,183,0.06)', padding: '0 4px' }}>{memoParam}</code></div>}
+        </Panel>
+      )}
+      <Panel title="WALLET">
+        <div>not signed in.</div>
+        <div style={{ marginTop: 8 }}>
+          <Link to="/login">[ go to login ]</Link>
+        </div>
+      </Panel>
+    </>
   );
 
   async function logout() {
