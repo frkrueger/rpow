@@ -54,6 +54,76 @@ function formatMatch(r: MatchRow) {
   };
 }
 
+type PollMatchRow = {
+  id: string;
+  state: 'ACTIVE' | 'RESOLVED';
+  offerer_email: string;
+  challenger_email: string;
+  offerer_x_handle: string | null;
+  challenger_x_handle: string | null;
+  bet_base_units: string;
+  question_id: string;
+  question: string;
+  choices: string[];
+  correct_idx: number;
+  offerer_choice_idx: number | null;
+  offerer_answered_at: Date | null;
+  challenger_choice_idx: number | null;
+  challenger_answered_at: Date | null;
+  winner_email: string | null;
+  signature: Buffer | null;
+  deadline_at: Date;
+  created_at: Date;
+  resolved_at: Date | null;
+};
+
+function formatPollMatch(r: PollMatchRow) {
+  const resolved = r.state === 'RESOLVED';
+  return {
+    id: r.id,
+    state: r.state,
+    offerer_email: r.offerer_email,
+    challenger_email: r.challenger_email,
+    offerer_x_handle: r.offerer_x_handle ?? null,
+    challenger_x_handle: r.challenger_x_handle ?? null,
+    bet_base_units: r.bet_base_units,
+    question_id: r.question_id,
+    question: r.question,
+    choices: r.choices,
+    // Don't leak the correct answer while the match is still active.
+    correct_choice_idx: resolved ? r.correct_idx : null,
+    offerer_choice_idx: r.offerer_choice_idx,
+    offerer_answered: r.offerer_choice_idx !== null,
+    offerer_answered_at: r.offerer_answered_at?.toISOString() ?? null,
+    challenger_choice_idx: r.challenger_choice_idx,
+    challenger_answered: r.challenger_choice_idx !== null,
+    challenger_answered_at: r.challenger_answered_at?.toISOString() ?? null,
+    winner_email: r.winner_email,
+    signature_hex: r.signature ? Buffer.from(r.signature).toString('hex') : null,
+    deadline_at: r.deadline_at.toISOString(),
+    created_at: r.created_at.toISOString(),
+    resolved_at: r.resolved_at?.toISOString() ?? null,
+  };
+}
+
+const POLL_MATCH_SELECT = `
+  SELECT
+    m.id, m.state,
+    m.offerer_email, m.challenger_email,
+    off_user.x_handle AS offerer_x_handle,
+    cha_user.x_handle AS challenger_x_handle,
+    m.bet_base_units::text,
+    m.question_id, q.question, q.choices, q.correct_idx,
+    m.offerer_choice_idx, m.offerer_answered_at,
+    m.challenger_choice_idx, m.challenger_answered_at,
+    m.winner_email, m.signature,
+    m.deadline_at, m.created_at, m.resolved_at
+  FROM trivia_matches m
+  JOIN trivia_questions q ON q.id = m.question_id
+  LEFT JOIN users off_user ON off_user.email = m.offerer_email
+  LEFT JOIN users cha_user ON cha_user.email = m.challenger_email
+`;
+
 const StartBody = z.object({
   session_id: z.string().uuid(),
 });
@@ -208,8 +278,64 @@ export async function matchesRoutes(app: FastifyInstance) {
       deadline_at: result.deadlineAt.toISOString(),
     });
   });
-  app.get('/api/trivia/matches/active', async (_req, reply) => {
-    return reply.code(501).send(NOT_IMPLEMENTED);
+  app.get('/api/trivia/matches/active', async (req, reply) => {
+    const s = readSession(req as any, app.config.sessionSecret);
+    if (!s) return reply.code(401).send({ error: 'UNAUTHORIZED', message: 'login required' });
+    const query = req.query as Record<string, string | undefined>;
+    const sessionId = query['session_id'];
+    if (!sessionId) {
+      return reply.code(400).send({ error: 'BAD_REQUEST', message: 'session_id required' });
+    }
+
+    // Ownership check.
+    const sessRes = await app.pool.query<{ account_email: string }>(
+      `SELECT account_email FROM trivia_sessions WHERE id = $1`,
+      [sessionId],
+    );
+    if (sessRes.rows.length === 0) {
+      return reply.code(404).send({ error: 'SESSION_NOT_FOUND', message: 'session not found' });
+    }
+    if (sessRes.rows[0].account_email !== s.email) {
+      return reply.code(403).send({ error: 'FORBIDDEN', message: 'not your session' });
+    }
+
+    // Find the most recent match for this session. ACTIVE always wins;
+    // otherwise fall back to a very recent RESOLVED one so the offerer's
+    // UI can render the result for ~5s.
+    const matchRes = await app.pool.query<PollMatchRow>(
+      `${POLL_MATCH_SELECT}
+       WHERE m.offerer_session_id = $1
+         AND (m.state = 'ACTIVE'
+              OR (m.state = 'RESOLVED' AND m.resolved_at > now() - interval '5 seconds'))
+       ORDER BY m.created_at DESC LIMIT 1`,
+      [sessionId],
+    );
+    if (matchRes.rows.length === 0) {
+      return reply.code(200).send({ match: null });
+    }
+    let row = matchRes.rows[0];
+
+    // Lazy resolve if ACTIVE but deadline has passed.
+    if (row.state === 'ACTIVE' && row.deadline_at.getTime() <= Date.now()) {
+      try {
+        await withTx(app.pool, async (c) => {
+          await resolveMatchTx(c, row.id, {
+            signingPrivateKeyHex: app.config.signingPrivateKeyHex,
+            mintMaxSupply: app.config.mintMaxSupply,
+          });
+        });
+      } catch (e: any) {
+        if (e?.message !== 'SUPPLY_CAP_REACHED') throw e;
+        return reply.code(503).send({ error: 'SUPPLY_CAP_REACHED', message: 'minted supply cap reached' });
+      }
+      const refetch = await app.pool.query<PollMatchRow>(
+        `${POLL_MATCH_SELECT} WHERE m.id = $1`,
+        [row.id],
+      );
+      row = refetch.rows[0];
+    }
+
+    return reply.code(200).send({ match: formatPollMatch(row) });
   });
   app.get('/api/trivia/matches/recent', async (_req, reply) => {
     const res = await app.pool.query<MatchRow>(
@@ -327,7 +453,43 @@ export async function matchesRoutes(app: FastifyInstance) {
   });
   // Note: register the parameterized GET LAST so the string-literal routes
   // (start/active/recent/history) match before this catch-all does.
-  app.get('/api/trivia/matches/:id', async (_req, reply) => {
-    return reply.code(501).send(NOT_IMPLEMENTED);
+  app.get('/api/trivia/matches/:id', async (req, reply) => {
+    const sSess = readSession(req as any, app.config.sessionSecret);
+    if (!sSess) return reply.code(401).send({ error: 'UNAUTHORIZED', message: 'login required' });
+    const { id: mid } = req.params as { id: string };
+
+    const r = await app.pool.query<PollMatchRow>(
+      `${POLL_MATCH_SELECT} WHERE m.id = $1`,
+      [mid],
+    );
+    if (r.rows.length === 0) {
+      return reply.code(404).send({ error: 'MATCH_NOT_FOUND', message: 'match not found' });
+    }
+    let row = r.rows[0];
+
+    if (row.offerer_email !== sSess.email && row.challenger_email !== sSess.email) {
+      return reply.code(403).send({ error: 'NOT_A_PLAYER', message: 'not a player of this match' });
+    }
+
+    if (row.state === 'ACTIVE' && row.deadline_at.getTime() <= Date.now()) {
+      try {
+        await withTx(app.pool, async (c) => {
+          await resolveMatchTx(c, mid, {
+            signingPrivateKeyHex: app.config.signingPrivateKeyHex,
+            mintMaxSupply: app.config.mintMaxSupply,
+          });
+        });
+      } catch (e: any) {
+        if (e?.message !== 'SUPPLY_CAP_REACHED') throw e;
+        return reply.code(503).send({ error: 'SUPPLY_CAP_REACHED', message: 'minted supply cap reached' });
+      }
+      const refetch = await app.pool.query<PollMatchRow>(
+        `${POLL_MATCH_SELECT} WHERE m.id = $1`,
+        [mid],
+      );
+      row = refetch.rows[0];
+    }
+
+    return reply.code(200).send({ match: formatPollMatch(row) });
   });
 }
