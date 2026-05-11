@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   fetchMe, fetchGladiatorMe, fetchLobby, fetchRecentFlips, fetchChat, postChat, formatRpow,
   type Me, type GladiatorProfile, type LobbyEntry, type RecentFlip, type ChatMessage,
@@ -19,6 +19,19 @@ function XLink({ handle }: { handle: string | null | undefined }) {
       className="x-handle"
     >@{handle}</a>
   );
+}
+
+/** Render a free-form string, turning every @handle token into an X profile link. */
+function linkifyHandles(text: string): ReactNode[] {
+  const re = /(@[A-Za-z0-9_]{1,15})/g;
+  const parts = text.split(re);
+  return parts.map((part, i) => {
+    if (part.startsWith('@')) {
+      const handle = part.slice(1);
+      return <XLink key={i} handle={handle} />;
+    }
+    return part;
+  });
 }
 
 export function App() {
@@ -184,7 +197,7 @@ export function App() {
               : [...chat].reverse().map(m => (
                   <div key={m.id} className={m.kind === 'SYSTEM' ? 'chat-system' : 'chat-user'}>
                     {m.kind === 'SYSTEM'
-                      ? <em>{m.body}</em>
+                      ? <em>{linkifyHandles(m.body)}</em>
                       : <><XLink handle={m.x_handle} />: {m.body}</>}
                   </div>
                 ))
