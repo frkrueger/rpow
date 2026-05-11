@@ -79,4 +79,26 @@ export async function ledgerRoutes(app: FastifyInstance) {
     })();
     return inflight;
   });
+
+  // Background warmup: each worker refreshes its cache in the background every
+  // 30s so user requests never block on the cold-cache aggregate-sum queries
+  // (each refresh hits the tokens table, which is ~50M rows on prod). Without
+  // this, a cluster of N workers means 1/N of requests hit cold cache and
+  // wait 5–20s — visible as flaky /ledger latency.
+  //
+  // The proper long-term fix is to maintain `circulating_supply_base_units`
+  // and `wrapped_supply_base_units` counters in `app_counters` instead of
+  // re-summing the tokens table — that makes /ledger O(1). For now, this
+  // warmup is the surgical patch.
+  if (process.env.NODE_ENV !== 'test') {
+    refresh()
+      .then((body) => { cached = { ts: Date.now(), body }; })
+      .catch(() => { /* swallow — next user request will retry */ });
+    const warmupTimer = setInterval(() => {
+      refresh()
+        .then((body) => { cached = { ts: Date.now(), body }; })
+        .catch(() => {});
+    }, 30_000);
+    app.addHook('onClose', async () => { clearInterval(warmupTimer); });
+  }
 }
