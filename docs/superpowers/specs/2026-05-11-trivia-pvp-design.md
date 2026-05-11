@@ -195,7 +195,7 @@ All endpoints under `/api/trivia/`. Cookie auth via the existing `rpow_session` 
 ```
 POST /api/trivia/sessions { bankroll_base_units, bet_base_units }
   → require x_handle_verified_at IS NOT NULL                              → else 403 X_HANDLE_REQUIRED
-  → require gladiatorAllowedEmails ⊇ s.email                              → else 403 NOT_ALLOWED (re-use the existing config)
+  → require triviaAllowedEmails ⊇ s.email                                 → else 403 NOT_ALLOWED
   → validate ranges and multiples (same as gladiator)
   → withTx:
        burnFromUser(c, email, bankroll, signingKey)
