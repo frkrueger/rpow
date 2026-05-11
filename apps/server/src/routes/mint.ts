@@ -6,6 +6,7 @@ import { verifySolution } from '../pow.js';
 import { signTokenPayload } from '../signing.js';
 import { withTx } from '../db.js';
 import { currentRewardBaseUnits, BASE_UNITS_PER_RPOW } from '../schedule.js';
+import { pickSupplyShard } from '../supplyShards.js';
 
 const Body = z.object({ challenge_id: z.string().uuid(), solution_nonce: z.string().regex(/^\d{1,20}$/) });
 
@@ -149,16 +150,19 @@ export async function mintRoutes(app: FastifyInstance) {
         { id: tokenId, owner_email_hash: ownerHash, value: reward, issued_at: issuedAt.toISOString() },
         app.config.signingPrivateKeyHex,
       );
+      const supplyShard = pickSupplyShard();
       const mintResult = await c.query(
         `WITH inc AS (
            UPDATE app_counters SET value = value + $2::bigint
-           WHERE name='minted_supply' AND value + $2::bigint <= $1::bigint
+           WHERE name='minted_supply' AND shard = $8
+             AND (SELECT COALESCE(SUM(value), 0) FROM app_counters WHERE name='minted_supply')
+                 + $2::bigint <= $1::bigint
            RETURNING 1
          )
          INSERT INTO tokens(id, owner_email, value, state, issued_at, server_sig)
          SELECT $3, $4, $5::bigint, 'VALID', $6, $7 FROM inc
          RETURNING id`,
-        [capBaseUnits.toString(), reward.toString(), tokenId, s.email, reward.toString(), issuedAt, sig],
+        [capBaseUnits.toString(), reward.toString(), tokenId, s.email, reward.toString(), issuedAt, sig, supplyShard],
       );
       if (mintResult.rowCount === 0) {
         return { error: 'SUPPLY_EXHAUSTED' as const, message: 'mining cap reached' };
