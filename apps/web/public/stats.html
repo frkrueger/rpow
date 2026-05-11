@@ -180,12 +180,14 @@ a:hover { border-bottom-color: var(--accent); }
 </div>
 
 <script>
+// Use absolute URL so this works on stats.rpow2.com (a separate Netlify site
+// without an /api/* proxy rule). CORS on api.rpow2.com already allows this origin.
 const API = (window.location.hostname === 'localhost' && window.location.port === '5173')
   ? 'http://localhost:8080'
-  : '/api';
+  : 'https://api.rpow2.com';
 
-const BAKED = {"total_minted":9915521,"total_transferred":2429448,"circulating_supply":4175787,"current_difficulty_bits":25,"user_count":39965,"max_supply":19000000,"epoch":0,"epoch_size":10000000,"next_milestone_at":10000000,"coins_until_next_milestone":84479,"next_difficulty_bits":26,"is_capped":false};
-const BAKED_AT = "2026-05-10T03:10:00Z";
+const BAKED = {"total_minted":10047741,"total_transferred":6958733,"circulating_supply":3992719,"wrapped_supply":5897487,"current_difficulty_bits":25,"user_count":88137,"max_supply":19000000,"epoch":1,"epoch_size":1000000,"next_milestone_at":11000000,"coins_until_next_milestone":952258,"next_difficulty_bits":26,"is_capped":false};
+const BAKED_AT = "2026-05-11T15:07:42Z";
 
 const $ = (id) => document.getElementById(id);
 let prev = {};
