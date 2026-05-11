@@ -11,6 +11,10 @@ export interface MeResponse {
   received_base_units: string;
   wrap_allowed: boolean;
   solana_wallet: string | null;
+  /** Verified X handle, lowercased. Doubles as the RPOW username. Null if not verified. */
+  x_handle: string | null;
+  /** Avatar URL derived from x_handle (unavatar.io). Null if not verified. */
+  x_avatar_url: string | null;
   srpow_supply_owned_base_units: string;
   /** Per-account UTC-day mint quota. Scales with the current halving reward. */
   daily_mint_cap_base_units: string;
