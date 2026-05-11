@@ -482,3 +482,57 @@ a.x-handle {
 a.x-handle:hover {
   text-decoration: underline;
 }
+
+/* Flip animation: rolling byte → reveal */
+.modal.flip-rolling {
+  text-align: center;
+}
+.flip-byte {
+  font-family: inherit;
+  font-size: 84px;
+  font-weight: 700;
+  letter-spacing: 6px;
+  color: var(--accent);
+  text-shadow: 0 0 18px rgba(110,231,183,0.45);
+  margin: 18px 0 6px;
+  font-feature-settings: "tnum";
+  animation: flip-pulse 0.18s linear infinite;
+}
+.flip-history {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--accent-dim);
+  letter-spacing: 2px;
+  min-height: 18px;
+}
+@keyframes flip-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+
+.modal.flip-result {
+  text-align: center;
+  animation: flip-result-in 0.42s cubic-bezier(.2,.9,.3,1.2) both;
+}
+@keyframes flip-result-in {
+  0%   { transform: scale(0.6); opacity: 0; }
+  60%  { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); }
+}
+.flip-byte-final {
+  font-size: 56px;
+  font-weight: 700;
+  letter-spacing: 4px;
+  margin-bottom: 12px;
+  font-feature-settings: "tnum";
+}
+.flip-win .flip-byte-final {
+  color: var(--accent);
+  text-shadow: 0 0 24px rgba(110,231,183,0.55);
+}
+.flip-lose .flip-byte-final {
+  color: #e07a7a;
+  text-shadow: 0 0 24px rgba(224,122,122,0.45);
+}
