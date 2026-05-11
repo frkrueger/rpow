@@ -51,7 +51,7 @@ async function openSession(
 
 async function totalSupply(pool: any): Promise<bigint> {
   const res = await pool.query<{ value: string }>(
-    `SELECT value::text FROM app_counters WHERE name = 'minted_supply'`,
+    `SELECT COALESCE(SUM(value), 0)::text AS value FROM app_counters WHERE name = 'minted_supply'`,
   );
   return BigInt(res.rows[0]?.value ?? '0');
 }

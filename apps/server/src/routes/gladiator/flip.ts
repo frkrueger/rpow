@@ -6,6 +6,7 @@ import { withTx } from '../../db.js';
 import { burnFromUser } from '../../longshot/burn.js';
 import { signTokenPayload, signFlipPayload, type FlipPayload } from '../../signing.js';
 import { drawFlip } from '../../gladiator/randomness.js';
+import { pickSupplyShard } from '../../supplyShards.js';
 
 const BASE_UNITS_PER_RPOW = 1_000_000_000n;
 
@@ -137,8 +138,9 @@ export async function flipRoutes(app: FastifyInstance) {
         await burnFromUser(c, challengerEmail, bet, app.config.signingPrivateKeyHex);
 
         await c.query(
-          `UPDATE app_counters SET value = value - $1::bigint WHERE name = 'minted_supply'`,
-          [bet.toString()],
+          `UPDATE app_counters SET value = value - $1::bigint
+           WHERE name = 'minted_supply' AND shard = $2`,
+          [bet.toString(), pickSupplyShard()],
         );
 
         const { challengerWins, hex: rvHex } = drawFlip();
@@ -160,8 +162,10 @@ export async function flipRoutes(app: FastifyInstance) {
           const capBaseUnits = BigInt(app.config.mintMaxSupply) * BASE_UNITS_PER_RPOW;
           const supplyResult = await c.query(
             `UPDATE app_counters SET value = value + $1::bigint
-             WHERE name = 'minted_supply' AND value + $1::bigint <= $2::bigint`,
-            [payout.toString(), capBaseUnits.toString()],
+             WHERE name = 'minted_supply' AND shard = $3
+               AND (SELECT COALESCE(SUM(value), 0) FROM app_counters WHERE name = 'minted_supply')
+                   + $1::bigint <= $2::bigint`,
+            [payout.toString(), capBaseUnits.toString(), pickSupplyShard()],
           );
           if ((supplyResult.rowCount ?? 0) === 0) {
             throw new Error('SUPPLY_CAP_REACHED');
@@ -198,8 +202,10 @@ export async function flipRoutes(app: FastifyInstance) {
             const capBaseUnits = BigInt(app.config.mintMaxSupply) * BASE_UNITS_PER_RPOW;
             const supplyResult = await c.query(
               `UPDATE app_counters SET value = value + $1::bigint
-               WHERE name = 'minted_supply' AND value + $1::bigint <= $2::bigint`,
-              [newBankroll.toString(), capBaseUnits.toString()],
+               WHERE name = 'minted_supply' AND shard = $3
+                 AND (SELECT COALESCE(SUM(value), 0) FROM app_counters WHERE name = 'minted_supply')
+                     + $1::bigint <= $2::bigint`,
+              [newBankroll.toString(), capBaseUnits.toString(), pickSupplyShard()],
             );
             if ((supplyResult.rowCount ?? 0) === 0) {
               throw new Error('SUPPLY_CAP_REACHED');
