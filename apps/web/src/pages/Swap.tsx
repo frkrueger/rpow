@@ -166,7 +166,7 @@ export function SwapPage() {
         <div style={{ marginTop: 6 }}>YOU GET   : ~ {outDisplay} {outUnit}</div>
         <div style={{ marginTop: 8 }}>
           <button type="submit" disabled={status === 'sending' || !quoteOut}>
-            [ {status === 'sending' ? '...' : direction}
+            [ {status === 'sending' ? '...' : direction} ]
           </button>
         </div>
       </form>

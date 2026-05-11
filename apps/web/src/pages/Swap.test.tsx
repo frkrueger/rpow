@@ -125,7 +125,7 @@ describe('SwapPage', () => {
     renderSwap();
     fireEvent.change(screen.getByLabelText('amount in'), { target: { value: '1' } });
     await waitFor(() => expect(quoteBuyMock).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole('button', { name: /BUY$/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^\[ BUY \]$/ }));
     await waitFor(() => expect(screen.queryByText(/Accept AMM terms/)).not.toBeNull());
     fireEvent.click(screen.getByRole('button', { name: /ACCEPT/ }));
     await waitFor(() => expect(acceptMock).toHaveBeenCalledOnce());
@@ -148,7 +148,7 @@ describe('SwapPage', () => {
     renderSwap();
     fireEvent.change(screen.getByLabelText('amount in'), { target: { value: '1' } });
     await waitFor(() => expect(quoteBuyMock).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole('button', { name: /BUY$/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^\[ BUY \]$/ }));
     await waitFor(() => expect(buyMock).toHaveBeenCalledOnce());
     expect(acceptMock).not.toHaveBeenCalled();
     expect(screen.queryByText(/Accept AMM terms/)).toBeNull();
@@ -161,7 +161,7 @@ describe('SwapPage', () => {
     renderSwap();
     fireEvent.change(screen.getByLabelText('amount in'), { target: { value: '1' } });
     await waitFor(() => expect(quoteBuyMock).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole('button', { name: /BUY$/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^\[ BUY \]$/ }));
     await waitFor(() => expect(screen.queryByText(/Accept AMM terms/)).not.toBeNull());
     fireEvent.click(screen.getByRole('button', { name: /CANCEL/ }));
     await waitFor(() => expect(screen.queryByText(/Accept AMM terms/)).toBeNull());
@@ -182,7 +182,7 @@ describe('SwapPage', () => {
     fireEvent.change(screen.getByLabelText('slippage percent'), { target: { value: '1' } });
     fireEvent.change(screen.getByLabelText('amount in'), { target: { value: '1' } });
     await waitFor(() => expect(quoteBuyMock).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole('button', { name: /BUY$/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^\[ BUY \]$/ }));
     await waitFor(() => expect(buyMock).toHaveBeenCalledWith({
       usdc_base_units: '1000000',
       min_rpow_out: '99000000', // 1% slippage
