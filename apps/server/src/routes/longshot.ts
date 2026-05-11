@@ -313,7 +313,9 @@ export async function longshotRoutes(app: FastifyInstance) {
     };
   }
 
-  app.get('/api/longshot/stats', async () => {
+  app.get('/api/longshot/stats', async (_req, reply) => {
+    // Cacheable for 30s — public stats endpoint, no per-user data.
+    reply.header('Cache-Control', 'public, max-age=30, stale-while-revalidate=60');
     if (statsCache && Date.now() - statsCache.ts < STATS_CACHE_MS) return statsCache.body;
     if (statsInflight) return statsInflight;
     statsInflight = (async () => {
