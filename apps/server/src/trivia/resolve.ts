@@ -6,7 +6,7 @@ const BASE_UNITS_PER_RPOW = 1_000_000_000n;
 
 export interface ResolveCtx {
   signingPrivateKeyHex: string;
-  mintMaxSupply: string | number;
+  mintMaxSupply: number;
 }
 
 export interface ResolveResult {
@@ -25,9 +25,11 @@ export interface ResolveResult {
  *   - auto-close the session if bankroll drops below bet (minting remainder back)
  *   - sign the canonical MatchPayload and write state='RESOLVED'
  *
- * Caller is responsible for opening the surrounding `withTx`. This function
- * always acquires `FOR UPDATE` locks on the match and session rows, so the
- * caller does not need to pre-lock — but a pre-existing lock is harmless.
+ * Caller is responsible for opening the surrounding `withTx` and SHOULD have
+ * already `SELECT … FOR UPDATE`-locked the match row. This function defensively
+ * re-acquires `FOR UPDATE OF m` on the match plus a fresh `FOR UPDATE` on the
+ * session row, so it is safe to call from a code path that already holds the
+ * match lock.
  *
  * Idempotent: if the match is already RESOLVED, returns the persisted state
  * without mutating anything.

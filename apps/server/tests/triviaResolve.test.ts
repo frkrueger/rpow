@@ -92,7 +92,6 @@ async function getSession(pool: any, id: string) {
   return r.rows[0];
 }
 
-import { generateKeypair } from '../src/signing.js';
 import { withTx } from '../src/db.js';
 import { createHash } from 'node:crypto';
 
