@@ -444,3 +444,31 @@ label {
   color: #888;
   margin-bottom: 2px;
 }
+
+/* Chat panel layout: scrollable history above, fixed input row below */
+.chat-panel { display: flex; flex-direction: column; }
+.chat-scroll {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 380px;
+  margin-bottom: 8px;
+}
+.chat-input-row {
+  display: flex;
+  gap: 6px;
+  border-top: 1px solid var(--accent-dim);
+  padding-top: 8px;
+}
+.chat-input-row input {
+  flex: 1;
+  background: #111;
+  border: 1px solid #333;
+  color: #eee;
+  font-family: inherit;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+.chat-input-row button {
+  padding: 4px 12px;
+  font-size: 11px;
+}

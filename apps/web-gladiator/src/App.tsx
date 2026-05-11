@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  fetchMe, fetchGladiatorMe, fetchLobby, fetchRecentFlips, fetchChat, formatRpow,
+  fetchMe, fetchGladiatorMe, fetchLobby, fetchRecentFlips, fetchChat, postChat, formatRpow,
   type Me, type GladiatorProfile, type LobbyEntry, type RecentFlip, type ChatMessage,
 } from './api.js';
 import { XHandleClaimModal } from './XHandleClaimModal.js';
@@ -16,6 +16,26 @@ export function App() {
   const [chat, setChat] = useState<ChatMessage[]>([]);
   const [authState, setAuthState] = useState<'loading' | 'spectator' | 'unverified' | 'verified'>('loading');
   const [flipTarget, setFlipTarget] = useState<LobbyEntry | null>(null);
+  const [chatDraft, setChatDraft] = useState('');
+  const [chatBusy, setChatBusy] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
+
+  async function sendChat() {
+    const body = chatDraft.trim();
+    if (!body || chatBusy) return;
+    setChatError(null);
+    setChatBusy(true);
+    try {
+      await postChat(body);
+      setChatDraft('');
+      const fresh = await fetchChat().catch(() => []);
+      setChat(fresh);
+    } catch (e: any) {
+      setChatError(e.message);
+    } finally {
+      setChatBusy(false);
+    }
+  }
 
   async function refreshAll() {
     // Resolve auth state from /me + /api/gladiator/me FIRST so the banner /
@@ -145,14 +165,39 @@ export function App() {
 
         <aside className="chat-panel">
           <h2>ARENA CHAT</h2>
-          {chat.length === 0
-            ? <p style={{ color: '#666' }}>no messages yet</p>
-            : [...chat].reverse().map(m => (
-                <div key={m.id} className={m.kind === 'SYSTEM' ? 'chat-system' : 'chat-user'}>
-                  {m.kind === 'SYSTEM' ? <em>{m.body}</em> : <><strong>@{m.x_handle}:</strong> {m.body}</>}
-                </div>
-              ))
-          }
+          <div className="chat-scroll">
+            {chat.length === 0
+              ? <p style={{ color: '#666' }}>no messages yet</p>
+              : [...chat].reverse().map(m => (
+                  <div key={m.id} className={m.kind === 'SYSTEM' ? 'chat-system' : 'chat-user'}>
+                    {m.kind === 'SYSTEM' ? <em>{m.body}</em> : <><strong>@{m.x_handle}:</strong> {m.body}</>}
+                  </div>
+                ))
+            }
+          </div>
+          {authState === 'verified' ? (
+            <div className="chat-input-row">
+              <input
+                type="text"
+                value={chatDraft}
+                onChange={e => setChatDraft(e.target.value.slice(0, 280))}
+                onKeyDown={e => { if (e.key === 'Enter') sendChat(); }}
+                placeholder="say something..."
+                maxLength={280}
+                disabled={chatBusy}
+              />
+              <button onClick={sendChat} disabled={chatBusy || !chatDraft.trim()}>
+                {chatBusy ? '...' : 'send'}
+              </button>
+            </div>
+          ) : (
+            <p style={{ fontSize: 11, color: '#666', marginTop: 8 }}>
+              {authState === 'unverified'
+                ? 'verify your X handle to chat'
+                : 'sign in at rpow2.com to chat'}
+            </p>
+          )}
+          {chatError && <div className="error" style={{ marginTop: 6, fontSize: 11 }}>{chatError}</div>}
         </aside>
       </main>
 
