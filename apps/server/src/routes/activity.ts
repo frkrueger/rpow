@@ -35,16 +35,22 @@ export async function activityRoutes(app: FastifyInstance) {
         return reply.code(400).send({ error: 'BAD_REQUEST', message: 'invalid since (expect iso8601)' });
       }
       // ASC order, capped, filter at > since.
+      // Postgres stores microsecond precision but Date.toISOString() emits only
+      // millisecond precision, so the `at` we return is truncated. Without
+      // matching truncation in the WHERE clause, the most recent row reappears
+      // on every poll using its own `at` as cursor (its real us-precision time
+      // is still > the truncated ms cursor). Truncate to ms here so the
+      // comparison matches what consumers see.
       // amount/value columns are BIGINT base units; cast to text for string return.
       const sql = `
         SELECT 'mint' AS type, value::text AS amount, NULL::text AS counterparty_email, NULL::text AS memo, issued_at AS at
-        FROM tokens WHERE owner_email=$1 AND parent_token_id IS NULL AND issued_at > $2
+        FROM tokens WHERE owner_email=$1 AND parent_token_id IS NULL AND date_trunc('milliseconds', issued_at) > $2
         UNION ALL
         SELECT 'send' AS type, amount::text AS amount, recipient_email AS counterparty_email, memo, created_at AS at
-        FROM transfers WHERE sender_email=$1 AND created_at > $2
+        FROM transfers WHERE sender_email=$1 AND date_trunc('milliseconds', created_at) > $2
         UNION ALL
         SELECT 'receive' AS type, amount::text AS amount, sender_email AS counterparty_email, memo, created_at AS at
-        FROM transfers WHERE recipient_email=$1 AND created_at > $2
+        FROM transfers WHERE recipient_email=$1 AND date_trunc('milliseconds', created_at) > $2
         ORDER BY at ASC LIMIT ${SINCE_LIMIT}`;
       const { rows } = await app.pool.query<Row>(sql, [s.email, sinceDate]);
       const entries = rows.map(rowToEntry);
