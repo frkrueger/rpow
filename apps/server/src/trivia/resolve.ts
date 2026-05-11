@@ -1,6 +1,7 @@
 import type { PoolClient } from 'pg';
 import { randomUUID, createHash } from 'node:crypto';
 import { signMatchPayload, signTokenPayload, type MatchPayload } from '../signing.js';
+import { pickSupplyShard } from '../supplyShards.js';
 
 const BASE_UNITS_PER_RPOW = 1_000_000_000n;
 
@@ -154,8 +155,10 @@ export async function resolveMatchTx(
     const payout = bet * 2n;
     const supplyResult = await c.query(
       `UPDATE app_counters SET value = value + $1::bigint
-       WHERE name = 'minted_supply' AND value + $1::bigint <= $2::bigint`,
-      [payout.toString(), capBaseUnits.toString()],
+       WHERE name = 'minted_supply' AND shard = $3
+         AND (SELECT COALESCE(SUM(value), 0) FROM app_counters WHERE name = 'minted_supply')
+             + $1::bigint <= $2::bigint`,
+      [payout.toString(), capBaseUnits.toString(), pickSupplyShard()],
     );
     if ((supplyResult.rowCount ?? 0) === 0) {
       throw new Error('SUPPLY_CAP_REACHED');
@@ -196,8 +199,10 @@ export async function resolveMatchTx(
     if (newBankroll > 0n) {
       const supplyResult = await c.query(
         `UPDATE app_counters SET value = value + $1::bigint
-         WHERE name = 'minted_supply' AND value + $1::bigint <= $2::bigint`,
-        [newBankroll.toString(), capBaseUnits.toString()],
+         WHERE name = 'minted_supply' AND shard = $3
+           AND (SELECT COALESCE(SUM(value), 0) FROM app_counters WHERE name = 'minted_supply')
+               + $1::bigint <= $2::bigint`,
+        [newBankroll.toString(), capBaseUnits.toString(), pickSupplyShard()],
       );
       if ((supplyResult.rowCount ?? 0) === 0) {
         throw new Error('SUPPLY_CAP_REACHED');
