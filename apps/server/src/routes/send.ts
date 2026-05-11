@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { randomUUID, randomBytes, createHash } from 'node:crypto';
 import { z } from 'zod';
-import { readSession } from './auth.js';
+import { readAuth } from './auth.js';
 import { withTx } from '../db.js';
 import { signTokenPayload } from '../signing.js';
 import { makeUnsubToken } from '../unsub.js';
@@ -38,11 +38,61 @@ function formatRpow(baseUnits: bigint): string {
 }
 
 export async function sendRoutes(app: FastifyInstance) {
-  app.post('/send', async (req, reply) => {
-    const s = readSession(req as any, app.config.sessionSecret);
-    if (!s) return reply.code(401).send({ error: 'UNAUTHORIZED', message: 'login required' });
+  app.post('/send', {
+    // Pre-resolve auth in a preHandler so the rate-limit hook (also preHandler)
+    // can read req.viaApiKey/apiKeyHash without re-parsing the header. Fastify
+    // runs preHandlers in registration order; this one fires before rate-limit.
+    preHandler: async (req: any, reply) => {
+      const s = await readAuth(req, app);
+      if (!s) {
+        await reply.code(401).send({ error: 'UNAUTHORIZED', message: 'login required' });
+        return;
+      }
+      req.resolvedAuth = s;
+    },
+    config: {
+      // Burst cap: 10 sends per second per API key. Skipped entirely for
+      // session auth via allowList returning true (which means "allow, skip limit").
+      rateLimit: {
+        max: 10,
+        timeWindow: '1 second',
+        hook: 'preHandler',
+        // keyGenerator runs before allowList(), so we must return a non-null key
+        // even when allowList will discard the limit check. __skip__ prefix is
+        // a non-colliding bucket Fastify never reads.
+        keyGenerator: (req: any) => req.apiKeyHash ?? `__skip__:${req.ip}`,
+        allowList: (req: any) => !req.viaApiKey,
+        errorResponseBuilder: (_req: any, ctx: any) => {
+          const err: any = {
+            error: 'RATE_LIMITED',
+            message: 'API key burst limit (10/sec) exceeded',
+            retry_after: Math.ceil(ctx.ttl / 1000),
+          };
+          err.statusCode = 429;
+          return err;
+        },
+      },
+    },
+  }, async (req, reply) => {
+    const s = (req as any).resolvedAuth as { email: string; viaApiKey: boolean };
+    // (No 401 check needed — the preHandler already short-circuited on missing auth.)
+
     const parsed = Body.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: 'BAD_REQUEST', message: 'invalid body' });
+
+    if (s.viaApiKey) {
+      // Per-account, not per-key: counts ALL transfers (including session-authed)
+      // from this email in the last hour. Equivalent to per-key under the
+      // one-key-per-account spec.
+      const { rows } = await app.pool.query<{ n: string }>(
+        `SELECT count(*)::text AS n FROM transfers
+         WHERE sender_email = $1 AND created_at > now() - interval '1 hour'`,
+        [s.email],
+      );
+      if (BigInt(rows[0].n) >= 1000n) {
+        return reply.code(429).send({ error: 'RATE_LIMITED', message: 'hourly send cap (1000) reached', retry_after: 3600 });
+      }
+    }
 
     const sender = s.email;
     const recipient = parsed.data.recipient_email.toLowerCase().trim();

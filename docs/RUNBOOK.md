@@ -56,7 +56,9 @@ ssh ubuntu@15.204.254.192 '
   sudo systemctl restart rpow-server rpow-auth'
 ```
 
-Both services must restart together — `rpow-server` handles mining (`/challenge`, `/mint`), `rpow-auth` handles the user-facing routes (`/me`, `/auth`, `/activity`, `/ledger`, `/api/longshot`, `/api/gladiator/*`). nginx routes by path. Forgetting to restart `rpow-auth` leaves user-facing endpoints on stale code.
+Both services must restart together — `rpow-server` handles mining (`/challenge`, `/mint`), `rpow-auth` handles the user-facing routes (`/me`, `/auth`, `/activity`, `/ledger`, `/api/longshot/*`, `/api/gladiator/*`, `/api/trivia/*`). nginx routes by path. Forgetting to restart `rpow-auth` leaves user-facing endpoints on stale code.
+
+When adding a new game (gladiator, trivia, future), the corresponding `<GAME>_*` env vars in `/etc/rpow/server.env` must ALSO be set in `/etc/rpow/auth.env` — `rpow-auth` reads its own env file. Vars with defaults in `apps/server/src/env.ts` will work even if missing, but operator overrides (allowlists, web origins, admin tokens) require both files. The nginx `location /api/<game>/ → rpow_user` block must also be added at deploy time.
 
 ## Secrets / config files
 

@@ -19,6 +19,7 @@ import { phantomRoutes } from './routes/phantom.js';
 import { srpowRoutes } from './routes/srpow.js';
 import { longshotRoutes } from './routes/longshot.js';
 import { gladiatorRoutes } from './routes/gladiator/index.js';
+import { triviaRoutes } from './routes/trivia/index.js';
 
 export interface AppConfig {
   sessionSecret: string;
@@ -52,6 +53,20 @@ export interface AppConfig {
   gladiatorWebOrigin: string;
   /** Bearer token for the admin verify-handle route; undefined → 403. */
   gladiatorAdminToken?: string;
+  /** Min trivia bet in base units. */
+  triviaMinBetBaseUnits: number;
+  /** Max trivia bet in base units. */
+  triviaMaxBetBaseUnits: number;
+  /** Max trivia bankroll in base units. */
+  triviaMaxBankrollBaseUnits: number;
+  /** Per-match answer window in seconds (default 10). */
+  triviaMatchDeadlineSeconds: number;
+  /** Hours of idle before auto-close sweeper acts. */
+  triviaSessionTtlHours: number;
+  /** CSV allowlist; '*' = all signed-in users. */
+  triviaAllowedEmails: string;
+  /** CORS origin for the Trivia frontend. */
+  triviaWebOrigin: string;
   secureCookies: boolean;
   /**
    * Cloudflare Turnstile secret. When set, /auth/request requires a valid
@@ -104,7 +119,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   // Allow both the main rpow2.com frontend and the longshot.rpow2.com
   // subdomain frontend. Both share the .rpow2.com session cookie via
   // credentials=include and need credentialed-CORS to api.rpow2.com.
-  const allowedOrigins = [opts.config.webOrigin, opts.config.longShotWebOrigin, opts.config.gladiatorWebOrigin];
+  const allowedOrigins = [opts.config.webOrigin, opts.config.longShotWebOrigin, opts.config.gladiatorWebOrigin, opts.config.triviaWebOrigin];
   await app.register(cors, {
     origin: (origin, cb) => {
       if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
@@ -141,6 +156,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   await app.register(srpowRoutes);
   await app.register(longshotRoutes);
   await app.register(gladiatorRoutes);
+  await app.register(triviaRoutes);
 
   app.get('/.well-known/rpow-pubkey.pem', async (_req, reply) => {
     const pubDer = Buffer.concat([

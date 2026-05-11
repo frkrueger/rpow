@@ -6,6 +6,7 @@ import { Connection, PublicKey } from '@solana/web3.js';
 import { SolanaBridgeClient, FakeBridgeClient, type BridgeClient, SRPOW_BASE_UNITS_PER_RPOW } from '@rpow/solana-bridge';
 import { loadBridgeKeypair } from './bridge-keys.js';
 import { reconcilePendingWraps } from './srpow-reconcile.js';
+import { refillTriviaQuestions } from './trivia/questions.js';
 
 const env = parseEnv();
 const pool = createPool(env.DATABASE_URL, env.PG_POOL_MAX);
@@ -111,6 +112,13 @@ const app = await buildApp({
     gladiatorAllowedEmails: env.GLADIATOR_ALLOWED_EMAILS,
     gladiatorWebOrigin: env.GLADIATOR_WEB_ORIGIN,
     gladiatorAdminToken: env.GLADIATOR_ADMIN_TOKEN,
+    triviaMinBetBaseUnits: env.TRIVIA_MIN_BET_BASE_UNITS,
+    triviaMaxBetBaseUnits: env.TRIVIA_MAX_BET_BASE_UNITS,
+    triviaMaxBankrollBaseUnits: env.TRIVIA_MAX_BANKROLL_BASE_UNITS,
+    triviaMatchDeadlineSeconds: env.TRIVIA_MATCH_DEADLINE_SECONDS,
+    triviaSessionTtlHours: env.TRIVIA_SESSION_TTL_HOURS,
+    triviaAllowedEmails: env.TRIVIA_ALLOWED_EMAILS,
+    triviaWebOrigin: env.TRIVIA_WEB_ORIGIN,
     secureCookies: env.NODE_ENV === 'production',
     turnstileSecret: env.TURNSTILE_SECRET,
     operatorEmails: new Set(
@@ -118,5 +126,22 @@ const app = await buildApp({
     ),
   },
 });
+// One refill at boot so /matches/start can find questions immediately.
+// Errors are non-fatal — the route will return 503 NO_QUESTIONS_AVAILABLE
+// until the next refill succeeds.
+try {
+  const r = await refillTriviaQuestions(app.pool, { low: 50, high: 200 });
+  app.log.info({ inserted: r.inserted, total: r.total }, 'trivia: boot refill done');
+} catch (err) {
+  app.log.warn({ err }, 'trivia: boot refill failed');
+}
+
+// Top-up every 10 minutes. setInterval is non-blocking; refillTriviaQuestions
+// short-circuits when the pool is already above the low-watermark.
+setInterval(() => {
+  refillTriviaQuestions(app.pool, { low: 50, high: 200 })
+    .catch(err => app.log.warn({ err }, 'trivia: periodic refill failed'));
+}, 10 * 60 * 1000);
+
 await app.listen({ host: '0.0.0.0', port: env.PORT });
 app.log.info(`rpow2 server listening on :${env.PORT}`);
