@@ -362,3 +362,85 @@ header {
   font-size: 12px;
   margin-top: 4px;
 }
+
+/* ── Slice 7: arena panels, buttons, form controls ─────────────── */
+
+/* .panel — standalone card for EnterArenaForm / YourSessionPanel */
+.panel {
+  border: 1px solid var(--accent-dim);
+  padding: 16px;
+  background: rgba(110,231,183,0.02);
+  margin-bottom: 16px;
+  animation: panel-in 400ms ease-out;
+}
+.panel h2 {
+  margin-top: 0;
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: var(--accent);
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--accent-dim);
+  padding-bottom: 6px;
+  margin-bottom: 12px;
+}
+
+/* .panel-inner — unstyled inner section within an existing panel cell */
+.panel-inner h2 {
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: var(--accent);
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--accent-dim);
+  padding-bottom: 4px;
+  margin: 0 0 12px;
+}
+
+/* .main-col adjusts the grid layout for the left column */
+.main-col {
+  display: flex;
+  flex-direction: column;
+}
+
+/* lobby-row flex so the FLIP button aligns right */
+.lobby-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Generic buttons (outside .modal) */
+button {
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-family: inherit;
+  padding: 6px 12px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: all 150ms;
+}
+button:hover:not(:disabled) {
+  background: rgba(110,231,183,0.1);
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* select / input outside modal */
+select {
+  background: #111;
+  border: 1px solid #333;
+  color: #eee;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 4px 8px;
+}
+
+label {
+  display: block;
+  font-size: 11px;
+  color: #888;
+  margin-bottom: 2px;
+}
