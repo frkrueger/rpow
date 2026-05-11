@@ -45,6 +45,40 @@ export async function adminRoutes(app: FastifyInstance) {
       [targetEmail],
     );
 
+    // Hard system-wide USDC cap. Refuses credits that would push the total
+    // (user balances + pool reserve) over AMM_USDC_POOL_CAP_BASE_UNITS.
+    // Bounds worst-case hot-wallet loss for the alpha.
+    //
+    // We sum user balances first, then add the pool reserve only when the
+    // amm_pool table exists (it's created in slice 2 Task 1). We cannot use
+    // a SQL CASE WHEN to_regclass(...) IS NULL THEN 0 ELSE (SELECT FROM
+    // amm_pool ...) END because PostgreSQL resolves all table references at
+    // parse/plan time regardless of runtime CASE branches.
+    const userTotalRes = await app.pool.query<{ total: string }>(
+      `SELECT COALESCE(SUM(usdc_base_units), 0)::text AS total FROM users`,
+    );
+    let currentTotal = BigInt(userTotalRes.rows[0].total);
+
+    // Add pool reserve if the amm_pool table exists yet.
+    const tableExistsRes = await app.pool.query<{ oid: string | null }>(
+      `SELECT to_regclass('amm_pool')::text AS oid`,
+    );
+    if (tableExistsRes.rows[0].oid !== null) {
+      const poolRes = await app.pool.query<{ reserve: string }>(
+        `SELECT COALESCE(usdc_reserve_base_units, 0)::text AS reserve FROM amm_pool WHERE id = 'main'`,
+      );
+      if (poolRes.rows.length > 0) {
+        currentTotal += BigInt(poolRes.rows[0].reserve);
+      }
+    }
+    const cap = BigInt(app.config.ammUsdcPoolCapBaseUnits);
+    if (currentTotal + amount > cap) {
+      return reply.code(409).send({
+        error: 'USDC_POOL_CAP_EXCEEDED',
+        message: `system-wide USDC cap is ${cap} base units; current ${currentTotal}, would add ${amount}`,
+      });
+    }
+
     const res = await app.pool.query<{ usdc_base_units: string }>(
       `UPDATE users
        SET usdc_base_units = usdc_base_units + $1::bigint

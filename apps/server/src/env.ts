@@ -61,6 +61,7 @@ const Schema = z.object({
   AMM_ALLOWED_EMAILS: z.string().default('frk314@gmail.com'),
   // Admin allowlist — subset that can call admin endpoints (USDC credit, pool seed).
   AMM_ADMIN_EMAILS: z.string().default(''),
+  AMM_USDC_POOL_CAP_BASE_UNITS: z.coerce.number().int().nonnegative().default(1_000_000_000),
 }).superRefine((v, ctx) => {
   if (v.MAILER === 'resend' && !v.RESEND_API_KEY) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['RESEND_API_KEY'], message: 'required when MAILER=resend' });

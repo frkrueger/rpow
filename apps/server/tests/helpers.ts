@@ -13,6 +13,7 @@ export async function makeTestApp(opts: {
   triviaAllowedEmails?: string;
   ammAllowedEmails?: string;
   ammAdminEmails?: string;
+  ammUsdcPoolCapBaseUnits?: number;
 } = {}): Promise<{
   app: Awaited<ReturnType<typeof buildApp>>;
   pool: Pool;
@@ -75,6 +76,7 @@ export async function makeTestApp(opts: {
       triviaWebOrigin: 'http://trivia.test',
       ammAllowedEmails: opts?.ammAllowedEmails ?? '*',
       ammAdminEmails: opts?.ammAdminEmails ?? '',
+      ammUsdcPoolCapBaseUnits: opts?.ammUsdcPoolCapBaseUnits ?? 1_000_000_000,
       secureCookies: false,
       operatorEmails: new Set<string>(),
     },
