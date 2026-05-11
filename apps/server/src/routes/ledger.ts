@@ -95,9 +95,23 @@ export async function ledgerRoutes(app: FastifyInstance) {
       .then((body) => { cached = { ts: Date.now(), body }; })
       .catch(() => { /* swallow — next user request will retry */ });
     const warmupTimer = setInterval(() => {
-      refresh()
-        .then((body) => { cached = { ts: Date.now(), body }; })
-        .catch(() => {});
+      // Re-entrancy guard: skip this tick if a previous refresh is still
+      // running. Without this, slow SUM(tokens) queries (30M+ rows) under
+      // heavy load pile up — N workers × M unfinished refreshes consumed
+      // 54+ pool connections at peak and starved /send. Reuse the same
+      // `inflight` slot the user-request path uses, so user requests and
+      // warmup ticks dedupe against each other.
+      if (inflight) return;
+      inflight = (async () => {
+        try {
+          const body = await refresh();
+          cached = { ts: Date.now(), body };
+          return body;
+        } finally {
+          inflight = null;
+        }
+      })();
+      inflight.catch(() => { /* swallow — next user/timer will retry */ });
     }, 30_000);
     app.addHook('onClose', async () => { clearInterval(warmupTimer); });
   }
