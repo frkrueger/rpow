@@ -20,6 +20,7 @@ import { srpowRoutes } from './routes/srpow.js';
 import { longshotRoutes } from './routes/longshot.js';
 import { gladiatorRoutes } from './routes/gladiator/index.js';
 import { triviaRoutes } from './routes/trivia/index.js';
+import { ammRoutes } from './routes/amm/index.js';
 import { favoritesRoutes } from './routes/favorites.js';
 
 export interface AppConfig {
@@ -68,6 +69,10 @@ export interface AppConfig {
   triviaAllowedEmails: string;
   /** CORS origin for the Trivia frontend. */
   triviaWebOrigin: string;
+  /** AMM alpha allowlist — CSV of emails that can hit any /amm/* endpoint. */
+  ammAllowedEmails: string;
+  /** AMM admin allowlist — subset that can call admin endpoints (credit, seed). */
+  ammAdminEmails: string;
   secureCookies: boolean;
   /**
    * Cloudflare Turnstile secret. When set, /auth/request requires a valid
@@ -159,6 +164,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   await app.register(gladiatorRoutes);
   await app.register(triviaRoutes);
   await app.register(favoritesRoutes);
+  await app.register(ammRoutes);
 
   app.get('/.well-known/rpow-pubkey.pem', async (_req, reply) => {
     const pubDer = Buffer.concat([

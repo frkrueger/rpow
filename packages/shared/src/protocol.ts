@@ -22,6 +22,12 @@ export interface MeResponse {
   daily_minted_base_units: string;
   /** Convenience: cap - minted (clamped at 0). */
   daily_remaining_base_units: string;
+  /** AMM USDC balance in base units (6 decimals, Solana-native). '0' if never credited. */
+  usdc_base_units: string;
+  /** ISO timestamp the user clicked through the AMM "experimental game" risk
+   *  warning. Null until accepted. Required before any /amm/* state-changing
+   *  endpoint will accept the user. */
+  amm_terms_accepted_at: string | null;
 }
 
 export interface ChallengeResponse {
