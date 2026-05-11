@@ -4,6 +4,7 @@ import { Panel } from '../components/Panel.js';
 import { api } from '../api.js';
 import { useMe } from '../hooks/useMe.js';
 import { formatRpow, parseRpowToBaseUnits } from '../lib/format.js';
+import { ALLOWED_RETURN_ORIGINS, resolveReturnTarget } from '../lib/returnUrl.js';
 
 export function SendPage() {
   const { me, refresh } = useMe();
@@ -18,8 +19,9 @@ export function SendPage() {
   const [pending, setPending] = useState(false);
   const [sentTo, setSentTo] = useState('');
   const [sentAmt, setSentAmt] = useState('');
+  const [returnTarget, setReturnTarget] = useState<URL | null>(null);
 
-  // URL prefill — supports `https://rpow2.com/#/send?to=email&amount=N&memo=abc`
+  // URL prefill — supports `https://rpow2.com/#/send?to=email&amount=N&memo=abc&return_url=…`
   // (and the equivalent /wallet link, which redirects here). Read once on mount.
   useEffect(() => {
     const to = searchParams.get('to');
@@ -28,6 +30,7 @@ export function SendPage() {
     if (to) setRecipient(to);
     if (amt) setAmount(amt);
     if (m) setMemo(m);
+    setReturnTarget(resolveReturnTarget(searchParams.get('return_url'), ALLOWED_RETURN_ORIGINS));
     // intentionally not depending on searchParams — prefill only on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
