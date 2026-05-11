@@ -52,7 +52,7 @@ const communityApps = [
   {
     name: "Hall's Tavern",
     url: 'https://halstavern.net/',
-    description: 'Peer-to-peer betting on real-world events. Stake RPOW on outcomes; pay-on-bet links open the rpow2 wallet and bounce you back automatically after confirmation.',
+    description: 'Pick a game. Wager RPOW. Provably fair. House pays winners instantly.',
     author: 'halstavern.net',
     authorUrl: 'https://halstavern.net/',
   },
