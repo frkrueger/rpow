@@ -78,6 +78,12 @@ export interface ActivityEntry {
 }
 export type ActivityResponse = ActivityEntry[];
 
+export interface ActivityResponseSince {
+  entries: ActivityEntry[];
+  /** Pass back as ?since=<this> on the next call. null when entries is empty. */
+  next_cursor: string | null;
+}
+
 export interface LedgerResponse {
   total_minted_base_units: string;        // stringified bigint
   total_transferred_base_units: string;

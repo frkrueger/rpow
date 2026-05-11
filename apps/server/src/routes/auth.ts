@@ -1,15 +1,34 @@
-import type { FastifyInstance } from 'fastify';
-import { randomUUID } from 'node:crypto';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { randomUUID, createHash } from 'node:crypto';
 import { z } from 'zod';
 import { hashToken, issueMagicLink } from '../magic.js';
 import { signSession, SESSION_COOKIE, SESSION_TTL_SECONDS, verifySession } from '../session.js';
 import { makeUnsubToken } from '../unsub.js';
 import { magicLinkEmail } from '../email-template.js';
 
+declare module 'fastify' {
+  interface FastifyRequest {
+    /** Set to true by readAuth() when the request was authed via API key. */
+    viaApiKey?: boolean;
+    /** Hex-encoded sha256 of the API-key plaintext. Used as a rate-limit bucket key. */
+    apiKeyHash?: string;
+    /** Stashed by the /send preHandler so the route handler doesn't re-call readAuth(). */
+    resolvedAuth?: { email: string; viaApiKey: boolean };
+  }
+}
+
 const RequestBody = z.object({
   email: z.string().email(),
   turnstile_token: z.string().min(1).max(2048).optional(),
 });
+
+/**
+ * Stable sha256 of a plaintext API key. Server stores the hash; plaintext
+ * never touches the DB. 32-byte CSPRNG token entropy makes a fast hash safe.
+ */
+export function hashApiKey(plaintext: string): Buffer {
+  return createHash('sha256').update(plaintext).digest();
+}
 
 // Verify a Cloudflare Turnstile token. Returns true if the token is valid for
 // the given secret. Returns false on any failure (network, malformed JSON,
@@ -172,6 +191,45 @@ export function readSession(
   for (const tok of candidates) {
     const session = verifySession(tok, secret);
     if (session) return session;
+  }
+  return null;
+}
+
+/**
+ * Resolves the calling identity for a request. Two paths:
+ *   1. Authorization: Bearer rpow_sk_* — looked up in api_keys by sha256(plaintext).
+ *   2. Session cookie — existing readSession() path.
+ * Returns null when neither resolves. Side-effects: on a successful API-key
+ * match, attaches viaApiKey=true and apiKeyHash (hex) to the request, and
+ * updates last_used_at fire-and-forget.
+ */
+export async function readAuth(
+  req: FastifyRequest,
+  app: FastifyInstance,
+): Promise<{ email: string; viaApiKey: boolean } | null> {
+  const auth = req.headers?.['authorization'];
+  if (typeof auth === 'string' && auth.startsWith('Bearer rpow_sk_')) {
+    const plaintext = auth.slice('Bearer '.length);
+    const hashBuf = hashApiKey(plaintext);
+    const { rows } = await app.pool.query<{ email: string }>(
+      'SELECT email FROM api_keys WHERE token_hash = $1',
+      [hashBuf],
+    );
+    if (rows[0]) {
+      app.pool.query('UPDATE api_keys SET last_used_at = now() WHERE token_hash = $1', [hashBuf])
+        .catch((err: unknown) => app.log?.warn?.({ err }, 'api_keys last_used_at update failed'));
+      req.viaApiKey = true;
+      req.apiKeyHash = hashBuf.toString('hex');
+      return { email: rows[0].email, viaApiKey: true };
+    }
+    // Bearer present but no match → fall through to session, NOT 401.
+    // (Stale key + valid cookie should still work.)
+  }
+
+  const session = readSession(req, app.config.sessionSecret);
+  if (session) {
+    req.viaApiKey = false;
+    return { email: session.email, viaApiKey: false };
   }
   return null;
 }
