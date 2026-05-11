@@ -6,7 +6,17 @@ import { formatRpow } from '../lib/format.js';
 
 export function LedgerPage() {
   const [d, setD] = useState<LedgerResponse | null>(null);
-  useEffect(() => { api.ledger().then(setD); }, []);
+  // Poll every 30s so the page stays fresh for users who leave it open.
+  // Server caches /ledger 60s, so polling is cheap (most calls hit cache).
+  useEffect(() => {
+    let mounted = true;
+    const fetch = () => {
+      api.ledger().then(r => { if (mounted) setD(r); }).catch(() => { /* ignore transient */ });
+    };
+    fetch();
+    const id = setInterval(fetch, 30_000);
+    return () => { mounted = false; clearInterval(id); };
+  }, []);
   if (!d) return <Panel title="PUBLIC LEDGER"><div>loading...</div></Panel>;
   return (
     <>
