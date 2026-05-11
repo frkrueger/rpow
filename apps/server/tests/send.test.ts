@@ -179,4 +179,71 @@ describe('POST /send', () => {
     expect(aMe.balance_base_units).toBe('0');
     expect(bMe.balance_base_units).toBe(target.toString());
   });
+
+  it('persists memo on the transfer and exposes it on both sides via /activity', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    const aCookie = await loginAs(ctx, 'a@x.com');
+    const bCookie = await loginAs(ctx, 'b@x.com');
+    await seedToken(ctx, 'a@x.com', ONE_RPOW);
+
+    const res = await ctx.app.inject({
+      method: 'POST', url: '/send',
+      headers: { cookie: aCookie, 'content-type': 'application/json' },
+      payload: {
+        recipient_email: 'b@x.com',
+        amount_base_units: ONE_RPOW.toString(),
+        idempotency_key: randomUUID(),
+        memo: 'game-session-abc123',
+      },
+    });
+    expect(res.statusCode).toBe(200);
+
+    const aAct = (await ctx.app.inject({ method: 'GET', url: '/activity', headers: { cookie: aCookie } })).json();
+    const sendEntry = aAct.find((r: any) => r.type === 'send');
+    expect(sendEntry).toBeDefined();
+    expect(sendEntry.memo).toBe('game-session-abc123');
+
+    const bAct = (await ctx.app.inject({ method: 'GET', url: '/activity', headers: { cookie: bCookie } })).json();
+    const receiveEntry = bAct.find((r: any) => r.type === 'receive');
+    expect(receiveEntry).toBeDefined();
+    expect(receiveEntry.memo).toBe('game-session-abc123');
+  });
+
+  it('rejects memo with disallowed characters', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    const aCookie = await loginAs(ctx, 'a@x.com');
+    await loginAs(ctx, 'b@x.com');
+    await seedToken(ctx, 'a@x.com', ONE_RPOW);
+
+    const res = await ctx.app.inject({
+      method: 'POST', url: '/send',
+      headers: { cookie: aCookie, 'content-type': 'application/json' },
+      payload: {
+        recipient_email: 'b@x.com',
+        amount_base_units: ONE_RPOW.toString(),
+        idempotency_key: randomUUID(),
+        memo: 'bad memo with spaces & chars!',
+      },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe('BAD_REQUEST');
+  });
+
+  it('omits memo from /activity when none was provided', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    const aCookie = await loginAs(ctx, 'a@x.com');
+    const bCookie = await loginAs(ctx, 'b@x.com');
+    await seedToken(ctx, 'a@x.com', ONE_RPOW);
+
+    await ctx.app.inject({
+      method: 'POST', url: '/send',
+      headers: { cookie: aCookie, 'content-type': 'application/json' },
+      payload: { recipient_email: 'b@x.com', amount_base_units: ONE_RPOW.toString(), idempotency_key: randomUUID() },
+    });
+
+    const bAct = (await ctx.app.inject({ method: 'GET', url: '/activity', headers: { cookie: bCookie } })).json();
+    const receiveEntry = bAct.find((r: any) => r.type === 'receive');
+    expect(receiveEntry).toBeDefined();
+    expect(receiveEntry.memo).toBeUndefined();
+  });
 });

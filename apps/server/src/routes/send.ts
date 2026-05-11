@@ -24,6 +24,10 @@ const Body = z.object({
       'amount_base_units must be a positive bigint up to 10^18',
     ),
   idempotency_key: z.string().min(8).max(80),
+  // Optional free-form context string. Surfaced to both sender and recipient
+  // via /activity. Useful for integrations that need to match a transfer to
+  // an external event (e.g. a game session id).
+  memo: z.string().max(256).regex(/^[A-Za-z0-9_-]*$/, 'alphanumeric + - _ only').optional(),
 });
 
 const PENDING_TTL_DAYS = 30;
@@ -99,6 +103,7 @@ export async function sendRoutes(app: FastifyInstance) {
     const amount_base_units = parsed.data.amount_base_units;
     const target = BigInt(amount_base_units);
     const idem = parsed.data.idempotency_key;
+    const memo = parsed.data.memo ?? null;
 
     if (recipient === sender) return reply.code(400).send({ error: 'BAD_REQUEST', message: 'cannot send to self' });
 
@@ -220,8 +225,8 @@ export async function sendRoutes(app: FastifyInstance) {
           }
 
           await c.query(
-            'INSERT INTO transfers(id, sender_email, recipient_email, amount, idempotency_key) VALUES($1,$2,$3,$4,$5)',
-            [transferId, sender, recipient, target.toString(), idem],
+            'INSERT INTO transfers(id, sender_email, recipient_email, amount, idempotency_key, memo) VALUES($1,$2,$3,$4,$5,$6)',
+            [transferId, sender, recipient, target.toString(), idem, memo],
           );
           return {
             ok: true as const,
