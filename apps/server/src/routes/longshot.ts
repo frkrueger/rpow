@@ -7,6 +7,7 @@ import { signTokenPayload } from '../signing.js';
 import { isValidOddsChoice, winProbabilityFor, payoutMultipleFor } from '../longshot/odds.js';
 import * as randomness from '../longshot/randomness.js';
 import { burnFromUser } from '../longshot/burn.js';
+import { pickSupplyShard } from '../supplyShards.js';
 
 const BASE_UNITS_PER_RPOW = 1_000_000_000n;
 
@@ -108,10 +109,13 @@ export async function longshotRoutes(app: FastifyInstance) {
 
         if (won) {
           // WIN: mint payout tokens to user, increment minted_supply (cap-checked)
+          const supplyShard = pickSupplyShard();
           const supplyResult = await c.query(
             `UPDATE app_counters SET value = value + $1::bigint
-             WHERE name = 'minted_supply' AND value + $1::bigint <= $2::bigint`,
-            [payout.toString(), capBaseUnits.toString()],
+             WHERE name = 'minted_supply' AND shard = $3
+               AND (SELECT COALESCE(SUM(value), 0) FROM app_counters WHERE name = 'minted_supply')
+                   + $1::bigint <= $2::bigint`,
+            [payout.toString(), capBaseUnits.toString(), supplyShard],
           );
           if ((supplyResult.rowCount ?? 0) === 0) {
             return { error: 'SUPPLY_CAP_REACHED', message: 'minted supply cap reached', status: 503 };
@@ -145,8 +149,9 @@ export async function longshotRoutes(app: FastifyInstance) {
           await burnFromUser(c, email, stake, app.config.signingPrivateKeyHex);
 
           await c.query(
-            `UPDATE app_counters SET value = value - $1::bigint WHERE name = 'minted_supply'`,
-            [stake.toString()],
+            `UPDATE app_counters SET value = value - $1::bigint
+             WHERE name = 'minted_supply' AND shard = $2`,
+            [stake.toString(), pickSupplyShard()],
           );
 
           await c.query(
