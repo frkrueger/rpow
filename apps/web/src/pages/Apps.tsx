@@ -47,13 +47,14 @@ function onForwardSessionClick(e: React.MouseEvent<HTMLAnchorElement>, url: stri
   window.location.href = `${url}${sep}#/auth-callback?s=${encodeURIComponent(token)}`;
 }
 
+// Ordered most-recent first.
 const communityApps = [
   {
-    name: 'RPOW2 Swap',
-    url: 'https://rpow2swap.com/',
-    description: 'Token swap interface for RPOW2',
-    author: '@adamamcbride',
-    authorUrl: 'https://x.com/adamamcbride',
+    name: "Hall's Tavern",
+    url: 'https://halstavern.net/',
+    description: 'Peer-to-peer betting on real-world events. Stake RPOW on outcomes; pay-on-bet links open the rpow2 wallet and bounce you back automatically after confirmation.',
+    author: 'halstavern.net',
+    authorUrl: 'https://halstavern.net/',
   },
   {
     name: 'RPOW Market',
@@ -63,11 +64,11 @@ const communityApps = [
     authorUrl: 'https://github.com/ImMike',
   },
   {
-    name: "Hall's Tavern",
-    url: 'https://halstavern.net/',
-    description: 'Peer-to-peer betting on real-world events. Stake RPOW on outcomes; pay-on-bet links open the rpow2 wallet and bounce you back automatically after confirmation.',
-    author: 'halstavern.net',
-    authorUrl: 'https://halstavern.net/',
+    name: 'RPOW2 Swap',
+    url: 'https://rpow2swap.com/',
+    description: 'Token swap interface for RPOW2',
+    author: '@adamamcbride',
+    authorUrl: 'https://x.com/adamamcbride',
   },
 ];
 
