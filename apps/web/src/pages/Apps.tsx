@@ -4,7 +4,9 @@ type ProtocolApp = {
   name: string;
   url: string;
   description: string;
-  comingSoon?: boolean;
+  /** If set, the click handler forwards the rpow_session cookie via URL fragment.
+   *  Sidesteps Chrome quirks where the .rpow2.com cookie doesn't reach subdomain fetches. */
+  forwardSession?: boolean;
 };
 
 const protocolApps: ProtocolApp[] = [
@@ -17,8 +19,27 @@ const protocolApps: ProtocolApp[] = [
     name: 'RPOW Gladiator',
     url: 'https://gladiator.rpow2.com/',
     description: 'PvP coin flips against X-verified opponents. Pure 50/50, zero rake, winner takes both bets. Signed audit per flip.',
+    forwardSession: true,
   },
 ];
+
+/** Read the rpow_session cookie value from document.cookie. */
+function readSessionCookie(): string | null {
+  const match = document.cookie.match(/(?:^|;\s*)rpow_session=([^;]+)/);
+  return match ? match[1] : null;
+}
+
+/** Click handler that forwards the current rpow_session via URL fragment.
+ *  The destination app's AuthCallback (or equivalent) reads the fragment,
+ *  writes the cookie to its own storage with Domain=.rpow2.com, strips the
+ *  fragment, and continues. */
+function onForwardSessionClick(e: React.MouseEvent<HTMLAnchorElement>, url: string) {
+  const token = readSessionCookie();
+  if (!token) return; // not signed in — let the link navigate normally
+  e.preventDefault();
+  const sep = url.endsWith('/') ? '' : '/';
+  window.location.href = `${url}${sep}#/auth-callback?s=${encodeURIComponent(token)}`;
+}
 
 const communityApps = [
   {
@@ -47,16 +68,15 @@ export function AppsPage() {
         {protocolApps.map(app => (
           <div key={app.url} style={{ borderTop: '1px solid #222', padding: '12px 0' }}>
             <div>
-              {app.comingSoon ? (
-                <span style={{ color: 'var(--dim)', fontWeight: 700 }}>{app.name}</span>
-              ) : (
-                <a href={app.url} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', fontWeight: 700 }}>
-                  {app.name}
-                </a>
-              )}
-              {app.comingSoon && (
-                <span style={{ fontSize: 11, marginLeft: 8, color: '#666' }}>[ coming soon ]</span>
-              )}
+              <a
+                href={app.url}
+                target={app.forwardSession ? undefined : '_blank'}
+                rel="noreferrer"
+                style={{ color: 'var(--accent)', fontWeight: 700 }}
+                onClick={app.forwardSession ? (e) => onForwardSessionClick(e, app.url) : undefined}
+              >
+                {app.name}
+              </a>
             </div>
             <div style={{ fontSize: 12, marginTop: 4, color: '#aaa' }}>{app.description}</div>
           </div>
