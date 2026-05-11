@@ -38,12 +38,37 @@ export function TriviaMatchModal({ mode, myEmail, onClose }: Props) {
           const start = await startMatch(mode.target.session_id);
           if (cancelled) return;
           matchIdRef.current = start.match_id;
-          const m = await fetchMatch(start.match_id);
+          // Try to get the canonical full payload, but fall back to a synthesized
+          // one if the GET races the just-committed INSERT or fails. The 1s poll
+          // cycle in 'active' mode will replace this with the canonical payload.
+          const m = await fetchMatch(start.match_id).catch(() => null);
           if (cancelled) return;
-          if (m) {
-            setMatch(m);
-            setStage(m.state === 'RESOLVED' ? 'result' : 'active');
-          }
+          const initial: MatchPollPayload = m ?? {
+            id: start.match_id,
+            state: 'ACTIVE',
+            offerer_email: mode.target.account_email,
+            challenger_email: myEmail,
+            offerer_x_handle: mode.target.x_handle,
+            challenger_x_handle: null,
+            bet_base_units: start.bet_base_units,
+            question_id: start.question_id,
+            question: start.question,
+            choices: start.choices,
+            correct_choice_idx: null,
+            offerer_choice_idx: null,
+            offerer_answered: false,
+            offerer_answered_at: null,
+            challenger_choice_idx: null,
+            challenger_answered: false,
+            challenger_answered_at: null,
+            winner_email: null,
+            signature_hex: null,
+            deadline_at: start.deadline_at,
+            created_at: new Date().toISOString(),
+            resolved_at: null,
+          };
+          setMatch(initial);
+          setStage(initial.state === 'RESOLVED' ? 'result' : 'active');
         } else {
           matchIdRef.current = mode.matchId;
           const m = await fetchMatch(mode.matchId);
@@ -51,6 +76,8 @@ export function TriviaMatchModal({ mode, myEmail, onClose }: Props) {
           if (m) {
             setMatch(m);
             setStage(m.state === 'RESOLVED' ? 'result' : 'active');
+          } else {
+            setStartError('could not load match');
           }
         }
       } catch (e: any) {
