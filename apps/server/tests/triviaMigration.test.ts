@@ -68,6 +68,12 @@ describe('migration 016_trivia', () => {
       `INSERT INTO trivia_sessions (id, account_email, bet_base_units, bankroll_initial_base_units, bankroll_remaining_base_units, status)
        VALUES (gen_random_uuid(), 'a@b.com', 10, 100, 100, 'OPEN')`,
     )).rejects.toThrow();
+    // The partial UNIQUE index only restricts WHERE status='OPEN'.
+    // A CLOSED row for the same user must still insert cleanly.
+    await expect(ctx.pool.query(
+      `INSERT INTO trivia_sessions (id, account_email, bet_base_units, bankroll_initial_base_units, bankroll_remaining_base_units, status, closed_at)
+       VALUES (gen_random_uuid(), 'a@b.com', 10, 100, 100, 'CLOSED', now())`,
+    )).resolves.toBeDefined();
   });
 
   it('enforces one ACTIVE match per session via partial UNIQUE index', async () => {

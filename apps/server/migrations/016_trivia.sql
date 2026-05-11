@@ -59,6 +59,7 @@ CREATE TABLE trivia_matches (
   signature                BYTEA,
   created_at               TIMESTAMPTZ NOT NULL DEFAULT now(),
   resolved_at              TIMESTAMPTZ,
+  CHECK (deadline_at > created_at),
   CHECK ((state = 'RESOLVED') = (winner_email IS NOT NULL AND signature IS NOT NULL AND resolved_at IS NOT NULL))
 );
 
