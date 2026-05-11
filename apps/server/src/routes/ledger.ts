@@ -65,7 +65,11 @@ export async function ledgerRoutes(app: FastifyInstance) {
     };
   }
 
-  app.get('/ledger', async () => {
+  app.get('/ledger', async (_req, reply) => {
+    // Cache-Control hints downstream caches (Cloudflare, browsers) that
+    // /ledger is safe to cache for 30s. Combined with the per-worker
+    // inflight dedup below, this offloads most repeat polls to the CF edge.
+    reply.header('Cache-Control', 'public, max-age=30, stale-while-revalidate=60');
     if (cached && Date.now() - cached.ts < LEDGER_CACHE_MS) return cached.body;
     if (inflight) return inflight;
     inflight = (async () => {
