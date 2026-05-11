@@ -198,6 +198,19 @@ export interface FlipResponse {
   closed_at: string | null;
 }
 
+export interface GladiatorStats {
+  total_flips: number;
+  total_volume_base_units: string;
+  total_verified_users: number;
+  open_gladiators: number;
+}
+
+export async function fetchGladiatorStats(): Promise<GladiatorStats | null> {
+  const res = await fetch(`${API_BASE}/api/gladiator/stats`, { credentials: 'omit' });
+  if (!res.ok) return null;
+  return res.json();
+}
+
 export async function flipAgainst(sessionId: string): Promise<FlipResponse> {
   const res = await fetch(`${API_BASE}/api/gladiator/flip`, {
     method: 'POST',

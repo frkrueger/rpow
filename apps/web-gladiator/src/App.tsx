@@ -1,12 +1,38 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
-  fetchMe, fetchGladiatorMe, fetchLobby, fetchRecentFlips, fetchChat, formatRpow,
-  type Me, type GladiatorProfile, type LobbyEntry, type RecentFlip, type ChatMessage,
+  fetchMe, fetchGladiatorMe, fetchLobby, fetchRecentFlips, fetchChat, fetchGladiatorStats, postChat, formatRpow,
+  type Me, type GladiatorProfile, type LobbyEntry, type RecentFlip, type ChatMessage, type GladiatorStats,
 } from './api.js';
 import { XHandleClaimModal } from './XHandleClaimModal.js';
 import { EnterArenaForm } from './EnterArenaForm.js';
 import { YourSessionPanel } from './YourSessionPanel.js';
 import { FlipModal } from './FlipModal.js';
+
+/** Render a handle as a link to that person's X profile. */
+function XLink({ handle }: { handle: string | null | undefined }) {
+  if (!handle) return <span>—</span>;
+  return (
+    <a
+      href={`https://x.com/${handle}`}
+      target="_blank"
+      rel="noreferrer noopener"
+      className="x-handle"
+    >@{handle}</a>
+  );
+}
+
+/** Render a free-form string, turning every @handle token into an X profile link. */
+function linkifyHandles(text: string): ReactNode[] {
+  const re = /(@[A-Za-z0-9_]{1,15})/g;
+  const parts = text.split(re);
+  return parts.map((part, i) => {
+    if (part.startsWith('@')) {
+      const handle = part.slice(1);
+      return <XLink key={i} handle={handle} />;
+    }
+    return part;
+  });
+}
 
 export function App() {
   const [me, setMe] = useState<Me | null>(null);
@@ -14,8 +40,29 @@ export function App() {
   const [lobby, setLobby] = useState<LobbyEntry[]>([]);
   const [recentFlips, setRecentFlips] = useState<RecentFlip[]>([]);
   const [chat, setChat] = useState<ChatMessage[]>([]);
+  const [stats, setStats] = useState<GladiatorStats | null>(null);
   const [authState, setAuthState] = useState<'loading' | 'spectator' | 'unverified' | 'verified'>('loading');
   const [flipTarget, setFlipTarget] = useState<LobbyEntry | null>(null);
+  const [chatDraft, setChatDraft] = useState('');
+  const [chatBusy, setChatBusy] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
+
+  async function sendChat() {
+    const body = chatDraft.trim();
+    if (!body || chatBusy) return;
+    setChatError(null);
+    setChatBusy(true);
+    try {
+      await postChat(body);
+      setChatDraft('');
+      const fresh = await fetchChat().catch(() => []);
+      setChat(fresh);
+    } catch (e: any) {
+      setChatError(e.message);
+    } finally {
+      setChatBusy(false);
+    }
+  }
 
   async function refreshAll() {
     // Resolve auth state from /me + /api/gladiator/me FIRST so the banner /
@@ -32,14 +79,16 @@ export function App() {
     else if (!p || !p.x_handle_verified_at) setAuthState('unverified');
     else setAuthState('verified');
 
-    const [l, r, c] = await Promise.all([
+    const [l, r, c, s] = await Promise.all([
       fetchLobby().catch(() => []),
       fetchRecentFlips().catch(() => []),
       fetchChat().catch(() => []),
+      fetchGladiatorStats().catch(() => null),
     ]);
     setLobby(l);
     setRecentFlips(r);
     setChat(c);
+    if (s) setStats(s);
   }
 
   useEffect(() => { refreshAll(); }, []);
@@ -64,11 +113,32 @@ export function App() {
         <h1>RPOW GLADIATOR</h1>
         <div className="auth-bar">
           {me
-            ? <span>logged in as <strong>{profile?.x_handle ? `@${profile.x_handle}` : me.email}</strong></span>
+            ? <span>logged in as {profile?.x_handle ? <XLink handle={profile.x_handle} /> : <strong>{me.email}</strong>}</span>
             : <a href="https://rpow2.com/#/">[ sign in at rpow2.com ]</a>
           }
         </div>
       </header>
+
+      {stats && (
+        <div className="kpi-strip">
+          <div className="kpi-cell">
+            <div className="kpi-num">{stats.total_flips.toLocaleString()}</div>
+            <div className="kpi-label">total combats</div>
+          </div>
+          <div className="kpi-cell">
+            <div className="kpi-num">{formatRpow(stats.total_volume_base_units)}</div>
+            <div className="kpi-label">RPOW wagered</div>
+          </div>
+          <div className="kpi-cell">
+            <div className="kpi-num">{stats.open_gladiators}</div>
+            <div className="kpi-label">in the arena</div>
+          </div>
+          <div className="kpi-cell">
+            <div className="kpi-num">{stats.total_verified_users.toLocaleString()}</div>
+            <div className="kpi-label">verified players</div>
+          </div>
+        </div>
+      )}
 
       {authState === 'loading' && <p style={{ padding: '20px 24px' }}>loading...</p>}
 
@@ -103,7 +173,7 @@ export function App() {
                   return (
                     <div key={g.session_id} className="lobby-row">
                       <div>
-                        <strong>@{g.x_handle}</strong>
+                        <XLink handle={g.x_handle} />
                         {' — '}
                         bankroll {formatRpow(g.bankroll_remaining_base_units)} RPOW
                         {' — '}
@@ -135,7 +205,7 @@ export function App() {
                   const payout = (BigInt(f.bet_base_units) * 2n).toString();
                   return (
                     <div key={f.id} className="flip-row">
-                      <strong>@{winnerHandle}</strong> beat <span>@{loserHandle}</span> for {formatRpow(payout)} RPOW
+                      <XLink handle={winnerHandle} /> beat <XLink handle={loserHandle} /> for {formatRpow(payout)} RPOW
                     </div>
                   );
                 })
@@ -145,14 +215,41 @@ export function App() {
 
         <aside className="chat-panel">
           <h2>ARENA CHAT</h2>
-          {chat.length === 0
-            ? <p style={{ color: '#666' }}>no messages yet</p>
-            : [...chat].reverse().map(m => (
-                <div key={m.id} className={m.kind === 'SYSTEM' ? 'chat-system' : 'chat-user'}>
-                  {m.kind === 'SYSTEM' ? <em>{m.body}</em> : <><strong>@{m.x_handle}:</strong> {m.body}</>}
-                </div>
-              ))
-          }
+          <div className="chat-scroll">
+            {chat.length === 0
+              ? <p style={{ color: '#666' }}>no messages yet</p>
+              : [...chat].reverse().map(m => (
+                  <div key={m.id} className={m.kind === 'SYSTEM' ? 'chat-system' : 'chat-user'}>
+                    {m.kind === 'SYSTEM'
+                      ? <em>{linkifyHandles(m.body)}</em>
+                      : <><XLink handle={m.x_handle} />: {m.body}</>}
+                  </div>
+                ))
+            }
+          </div>
+          {authState === 'verified' ? (
+            <div className="chat-input-row">
+              <input
+                type="text"
+                value={chatDraft}
+                onChange={e => setChatDraft(e.target.value.slice(0, 280))}
+                onKeyDown={e => { if (e.key === 'Enter') sendChat(); }}
+                placeholder="say something..."
+                maxLength={280}
+                disabled={chatBusy}
+              />
+              <button onClick={sendChat} disabled={chatBusy || !chatDraft.trim()}>
+                {chatBusy ? '...' : 'send'}
+              </button>
+            </div>
+          ) : (
+            <p style={{ fontSize: 11, color: '#666', marginTop: 8 }}>
+              {authState === 'unverified'
+                ? 'verify your X handle to chat'
+                : 'sign in at rpow2.com to chat'}
+            </p>
+          )}
+          {chatError && <div className="error" style={{ marginTop: 6, fontSize: 11 }}>{chatError}</div>}
         </aside>
       </main>
 
