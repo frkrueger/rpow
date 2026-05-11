@@ -53,8 +53,10 @@ ssh ubuntu@15.204.254.192 '
     npm ci --workspaces --include-workspace-root --ignore-scripts && \
     npm run build --workspace @rpow/shared && \
     npm run build --workspace @rpow/server" && \
-  sudo systemctl restart rpow-server'
+  sudo systemctl restart rpow-server rpow-auth'
 ```
+
+Both services must restart together — `rpow-server` handles mining (`/challenge`, `/mint`), `rpow-auth` handles the user-facing routes (`/me`, `/auth`, `/activity`, `/ledger`, `/api/longshot`, `/api/gladiator/*`). nginx routes by path. Forgetting to restart `rpow-auth` leaves user-facing endpoints on stale code.
 
 ## Secrets / config files
 

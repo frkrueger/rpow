@@ -31,7 +31,8 @@ export default function App() {
           <div className="tagline">a modern tribute to a tribute to the original rpow by hal finney</div>
           {me && (
             <div className="identity-bar" style={{ fontSize: 12, color: 'var(--dim)', marginTop: 4 }}>
-              logged in as <strong style={{ color: 'var(--accent)' }}>{me.x_handle ? `@${me.x_handle}` : me.email}</strong>
+              logged in as <strong style={{ color: 'var(--accent)' }}>{me.email}</strong>
+              {me.x_handle && <> · <strong style={{ color: 'var(--accent)' }}>@{me.x_handle}</strong></>}
             </div>
           )}
           <nav className="nav">
