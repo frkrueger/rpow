@@ -33,7 +33,20 @@ export async function mintRoutes(app: FastifyInstance) {
     const parsed = Body.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: 'BAD_REQUEST', message: 'invalid body' });
 
-    const result = await withTx(app.pool, async (c) => {
+    let result;
+    try {
+      result = await withTx(app.pool, async (c) => {
+      // Stopgap until minted_supply is sharded: cap any single /mint statement
+      // at 3 seconds. The single-row UPDATE on minted_supply serializes all
+      // mints globally; under heavy load some calls queue for many seconds,
+      // holding their pool connection and starving /send. With this timeout
+      // a blocked mint fails fast with 'canceling statement due to statement
+      // timeout', returning a 5xx the client can retry — while freeing the
+      // connection back to the pool so /send (and others) keep working.
+      // The full fix is a sharded counter; see
+      // docs/superpowers/specs/2026-05-11-sharded-minted-supply-design.md.
+      await c.query("SET LOCAL statement_timeout = '3s'");
+
       // Lock the challenge row and atomically claim it if eligible — one
       // round-trip instead of SELECT FOR UPDATE + UPDATE. The CTE always
       // returns the target row (when it exists) so we can distinguish
@@ -151,7 +164,16 @@ export async function mintRoutes(app: FastifyInstance) {
         return { error: 'SUPPLY_EXHAUSTED' as const, message: 'mining cap reached' };
       }
       return { token: { id: tokenId, value_base_units: reward.toString(), issued_at: issuedAt.toISOString() } };
-    });
+      });
+    } catch (e: any) {
+      // statement_timeout fired (Postgres error code 57014). Surface as 503
+      // so the client can retry; the connection has already been returned to
+      // the pool, so other routes (/send, etc.) keep working.
+      if (e?.code === '57014') {
+        return reply.code(503).send({ error: 'MINT_BUSY', message: 'mint contention; retry shortly', retry_after: 2 });
+      }
+      throw e;
+    }
 
     if ('error' in result) {
       let status: number;
