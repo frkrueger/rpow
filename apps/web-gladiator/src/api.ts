@@ -71,15 +71,40 @@ export interface XHandleStartResponse {
   expires_at: string;
 }
 
+/**
+ * Fetch with retry on transient errors (5xx + network failure). 4xx responses
+ * are authoritative (401 = not signed in, etc.) and never retried. Backoff:
+ * 300ms / 600ms / 1.2s. Lets a signed-in user ride through a brief upstream
+ * spike instead of being dropped to the spectator state on a single bad fetch.
+ */
+async function fetchWithRetry(url: string, init?: RequestInit, retries = 3): Promise<Response> {
+  let attempt = 0;
+  while (true) {
+    try {
+      const res = await fetch(url, init);
+      if (res.status >= 500 && attempt < retries) {
+        await new Promise(r => setTimeout(r, 300 * Math.pow(2, attempt)));
+        attempt++;
+        continue;
+      }
+      return res;
+    } catch (err) {
+      if (attempt >= retries) throw err;
+      await new Promise(r => setTimeout(r, 300 * Math.pow(2, attempt)));
+      attempt++;
+    }
+  }
+}
+
 export async function fetchMe(): Promise<Me | null> {
-  const res = await fetch(`${API_BASE}/me`, { credentials: 'include' });
+  const res = await fetchWithRetry(`${API_BASE}/me`, { credentials: 'include' });
   if (res.status === 401) return null;
   if (!res.ok) throw new Error(`me ${res.status}`);
   return res.json();
 }
 
 export async function fetchGladiatorMe(): Promise<GladiatorProfile | null> {
-  const res = await fetch(`${API_BASE}/api/gladiator/me`, { credentials: 'include' });
+  const res = await fetchWithRetry(`${API_BASE}/api/gladiator/me`, { credentials: 'include' });
   if (res.status === 401) return null;
   if (!res.ok) throw new Error(`gladiator/me ${res.status}`);
   return res.json();
