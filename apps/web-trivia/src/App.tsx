@@ -52,6 +52,7 @@ export function App() {
   const [chatBusy, setChatBusy] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
+  const pendingToggles = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     const el = chatScrollRef.current;
@@ -76,11 +77,11 @@ export function App() {
   }
 
   async function toggleFavorite(entry: LobbyEntry) {
-    const prev = lobby;
-    const next = lobby.map(g =>
+    if (pendingToggles.current.has(entry.session_id)) return;
+    pendingToggles.current.add(entry.session_id);
+    setLobby(prev => prev.map(g =>
       g.session_id === entry.session_id ? { ...g, is_favorite: !g.is_favorite } : g
-    );
-    setLobby(next);
+    ));
     try {
       if (entry.is_favorite) {
         await removeFavorite(entry.x_handle);
@@ -88,8 +89,12 @@ export function App() {
         await addFavorite(entry.x_handle);
       }
     } catch (e: any) {
-      setLobby(prev);
+      setLobby(prev => prev.map(g =>
+        g.session_id === entry.session_id ? { ...g, is_favorite: entry.is_favorite } : g
+      ));
       console.error('favorite toggle failed:', e.message);
+    } finally {
+      pendingToggles.current.delete(entry.session_id);
     }
   }
 
