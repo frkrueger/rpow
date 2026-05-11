@@ -7,8 +7,9 @@
 //
 // Env required: DATABASE_URL.
 //
-// In production:
-//   ssh ubuntu@<host> 'sudo -u rpow node /opt/rpow/repo/apps/server/dist/scripts/issue-api-key.js --email rpow2swap@protonmail.com'
+// In production (scripts run via tsx — apps/server/tsconfig.json only compiles src/,
+// so dist/scripts/ does not exist):
+//   ssh ubuntu@<host> 'sudo -u rpow bash -c "set -a; . /etc/rpow/server.env; set +a; cd /opt/rpow/repo && npx tsx apps/server/scripts/issue-api-key.ts --email <email>"'
 
 import { Pool } from 'pg';
 import { randomBytes, createHash } from 'node:crypto';
