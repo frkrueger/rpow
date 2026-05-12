@@ -20,6 +20,7 @@ import { srpowRoutes } from './routes/srpow.js';
 import { longshotRoutes } from './routes/longshot.js';
 import { gladiatorRoutes } from './routes/gladiator/index.js';
 import { triviaRoutes } from './routes/trivia/index.js';
+import { freelotteryRoutes } from './routes/freelottery/index.js';
 import { ammRoutes } from './routes/amm/index.js';
 import { favoritesRoutes } from './routes/favorites.js';
 
@@ -71,6 +72,18 @@ export interface AppConfig {
   triviaAllowedEmails: string;
   /** CORS origin for the Trivia frontend. */
   triviaWebOrigin: string;
+  /** Freelottery campaign start (YYYY-MM-DD). When unset, all freelottery routes return 404. */
+  freelotteryStartUtcDate?: string;
+  /** Total days of the campaign (default 100). */
+  freelotteryTotalDays: number;
+  /** Daily prize in base units (default 10^12 = 1,000 RPOW). */
+  freelotteryPrizeBaseUnits: bigint;
+  /** UTC hour at which the daily entry window closes and draw runs (default 19). */
+  freelotteryDrawHourUtc: number;
+  /** CSV allowlist; '*' opens to all signed-in users. */
+  freelotteryAllowedEmails: string;
+  /** CORS origin for the Freelottery frontend. */
+  freelotteryWebOrigin: string;
   /** AMM alpha allowlist — CSV of emails that can hit any /amm/* endpoint. */
   ammAllowedEmails: string;
   /** AMM admin allowlist — subset that can call admin endpoints (credit, seed). */
@@ -138,7 +151,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   // Allow both the main rpow2.com frontend and the longshot.rpow2.com
   // subdomain frontend. Both share the .rpow2.com session cookie via
   // credentials=include and need credentialed-CORS to api.rpow2.com.
-  const allowedOrigins = [opts.config.webOrigin, opts.config.longShotWebOrigin, opts.config.gladiatorWebOrigin, opts.config.triviaWebOrigin];
+  const allowedOrigins = [opts.config.webOrigin, opts.config.longShotWebOrigin, opts.config.gladiatorWebOrigin, opts.config.triviaWebOrigin, opts.config.freelotteryWebOrigin];
   await app.register(cors, {
     origin: (origin, cb) => {
       if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
@@ -176,6 +189,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   await app.register(longshotRoutes);
   await app.register(gladiatorRoutes);
   await app.register(triviaRoutes);
+  await app.register(freelotteryRoutes);
   await app.register(favoritesRoutes);
   await app.register(ammRoutes);
   const { solanaRpcRoutes } = await import('./routes/solanaRpc.js');
