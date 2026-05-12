@@ -104,6 +104,7 @@ export function Public() {
   }, []);
 
   useInterval(() => {
+    if (status?.ended) return; // No point polling once the campaign is over.
     api.today().then(setToday).catch(() => {});
   }, POLL_TODAY_MS);
 
@@ -178,7 +179,7 @@ function RunningView({ status, today, winners }: RunningProps) {
     <div className="bulletin">
       <header className="masthead">
         <span className="brand"><span className="dot" />RPOW · FREE LOTTERY</span>
-        <span className="meta">{ended ? 'FINAL · CLOSED' : `LIVE · DRAW DAILY 19:00 UTC`}</span>
+        <span className="meta">{ended ? 'FINAL · CLOSED' : `LIVE · DRAW DAILY ${String(status.drawHourUtc).padStart(2, '0')}:00 UTC`}</span>
       </header>
 
       {/* HERO */}
@@ -215,16 +216,18 @@ function RunningView({ status, today, winners }: RunningProps) {
               <span className="arrow">→</span>
             </a>
           )}
-          <div className="stats-strip">
-            <div className="stat">
-              <span className="stat-label">Today · Entrants</span>
-              <span className="stat-value">{today?.total_entries ?? 0}</span>
+          {!ended && (
+            <div className="stats-strip">
+              <div className="stat">
+                <span className="stat-label">Today · Entrants</span>
+                <span className="stat-value">{today?.total_entries ?? 0}</span>
+              </div>
+              <div className="stat">
+                <span className="stat-label">Today · Tickets</span>
+                <span className="stat-value">{today?.total_tickets ?? 0}</span>
+              </div>
             </div>
-            <div className="stat">
-              <span className="stat-label">Today · Tickets</span>
-              <span className="stat-value">{today?.total_tickets ?? 0}</span>
-            </div>
-          </div>
+          )}
         </div>
       </section>
 
