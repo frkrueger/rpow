@@ -91,9 +91,127 @@ export async function entryRoutes(app: FastifyInstance) {
   });
 
   // -------------------------------------------------------------------------
-  // POST /api/freelottery/entry/verify — implemented in Task 3
+  // POST /api/freelottery/entry/verify
   // -------------------------------------------------------------------------
-  app.post('/api/freelottery/entry/verify', async (_req, reply) => {
-    return reply.code(501).send({ error: 'not_implemented' });
+  app.post('/api/freelottery/entry/verify', {
+    config: {
+      rateLimit: {
+        max: 20,
+        timeWindow: '10 minutes',
+        keyGenerator: (req: any) => req.headers['x-forwarded-for'] ?? req.ip,
+      },
+    },
+  }, async (req, reply) => {
+    const s = readSession(req as any, app.config.sessionSecret);
+    if (!s) return reply.code(401).send({ error: 'UNAUTHORIZED', message: 'login required' });
+
+    const parsed = VerifyBody.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'BAD_REQUEST', message: 'invalid body' });
+    }
+
+    const sched = scheduleFor(app);
+    if (!sched.startUtcDate) {
+      return reply.code(404).send({ error: 'FEATURE_DISABLED', message: 'freelottery is not enabled' });
+    }
+    const dayUtc = getDayUtc(new Date(), sched);
+    if (!dayUtc) {
+      return reply.code(404).send({ error: 'CAMPAIGN_INACTIVE', message: 'no active day' });
+    }
+
+    // Read the pending code for today.
+    const codeRes = await app.pool.query<{ code: string; expires_at: Date }>(
+      `SELECT code, expires_at FROM freelottery_codes WHERE account_email = $1 AND day_utc = $2`,
+      [s.email, dayUtc],
+    );
+    if (codeRes.rows.length === 0) {
+      return reply.code(400).send({ error: 'CODE_NOT_FOUND', message: 'no pending code; call /start first' });
+    }
+    const { code, expires_at } = codeRes.rows[0];
+    if (new Date() > expires_at) {
+      await app.pool.query(
+        `DELETE FROM freelottery_codes WHERE account_email = $1 AND day_utc = $2`,
+        [s.email, dayUtc],
+      );
+      return reply.code(400).send({ error: 'CODE_EXPIRED', message: 'code expired; call /start again' });
+    }
+
+    // Read bound x_handle. (If null, /start would have already returned 409
+    // BIND_REQUIRED — but defensive re-check here in case the user unbound.)
+    const userRes = await app.pool.query<{ x_handle: string | null }>(
+      `SELECT x_handle FROM users WHERE email = $1`,
+      [s.email],
+    );
+    const xHandle = userRes.rows[0]?.x_handle ?? null;
+    if (!xHandle) {
+      return reply.code(409).send({ error: 'BIND_REQUIRED', message: 'bind an X handle first' });
+    }
+
+    // oEmbed-verify the tweet.
+    const oembed = await verifyTweet(parsed.data.tweet_url);
+    if (!oembed) {
+      return reply.code(400).send({ error: 'TWEET_UNRESOLVABLE', message: 'could not verify tweet' });
+    }
+    if (oembed.authorHandle.toLowerCase() !== xHandle.toLowerCase()) {
+      return reply.code(403).send({ error: 'HANDLE_MISMATCH', message: 'tweet author does not match bound handle' });
+    }
+    if (!oembed.text.includes(code)) {
+      return reply.code(400).send({ error: 'CODE_MISMATCH', message: 'code not found in tweet text' });
+    }
+
+    // Read the user's current balance to decide ticket tier.
+    const balRes = await app.pool.query<{ balance: string }>(
+      `SELECT COALESCE(SUM(value) FILTER (WHERE state = 'VALID'), 0)::text AS balance
+       FROM tokens WHERE owner_email = $1`,
+      [s.email],
+    );
+    const balance = BigInt(balRes.rows[0]?.balance ?? '0');
+    const ticketCount = ticketCountForBalance(balance);
+
+    // Transaction: insert the entry, delete the code. Idempotent against
+    // race: re-check no existing entry inside the tx.
+    type VerifyResult =
+      | { ok: true; ticket_count: 1 | 2; day_utc: string; balance_base_units_at_entry: string }
+      | { error: string; message: string; status: number };
+
+    let result: VerifyResult;
+    try {
+      result = await withTx<VerifyResult>(app.pool, async (c) => {
+        const existing = await c.query(
+          `SELECT 1 FROM freelottery_entries WHERE account_email = $1 AND day_utc = $2`,
+          [s.email, dayUtc],
+        );
+        if (existing.rows.length > 0) {
+          return { error: 'ALREADY_ENTERED', message: 'already entered for today', status: 409 };
+        }
+        await c.query(
+          `INSERT INTO freelottery_entries
+             (account_email, day_utc, x_handle, tweet_url, ticket_count, balance_base_units_at_entry)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [s.email, dayUtc, xHandle, parsed.data.tweet_url, ticketCount, balance.toString()],
+        );
+        await c.query(
+          `DELETE FROM freelottery_codes WHERE account_email = $1 AND day_utc = $2`,
+          [s.email, dayUtc],
+        );
+        return {
+          ok: true,
+          ticket_count: ticketCount,
+          day_utc: dayUtc,
+          balance_base_units_at_entry: balance.toString(),
+        };
+      });
+    } catch (e: any) {
+      if (e?.code === '23505') {
+        return reply.code(409).send({ error: 'ALREADY_ENTERED', message: 'already entered for today' });
+      }
+      throw e;
+    }
+
+    if ('error' in result) {
+      return reply.code(result.status).send({ error: result.error, message: result.message });
+    }
+
+    return reply.code(200).send(result);
   });
 }

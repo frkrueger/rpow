@@ -137,3 +137,152 @@ describe('POST /api/freelottery/entry/start', () => {
     expect(rows[0].code).toBe(second.json().code);
   });
 });
+
+describe('POST /api/freelottery/entry/verify', () => {
+  let cleanup: (() => Promise<void>) | null = null;
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    if (cleanup) await cleanup();
+    cleanup = null;
+  });
+
+  async function seedCode(ctx: Awaited<ReturnType<typeof makeTestApp>>, email: string, code: string) {
+    const expires = new Date();
+    expires.setUTCHours(expires.getUTCHours() + 24); // safely in the future for the test
+    const dayUtc = activeDayUtc();
+    await ctx.pool.query(
+      `INSERT INTO freelottery_codes (account_email, day_utc, code, expires_at)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (account_email, day_utc) DO UPDATE
+         SET code = EXCLUDED.code, expires_at = EXCLUDED.expires_at`,
+      [email, dayUtc, code, expires],
+    );
+  }
+
+  it('401 unauthenticated', async () => {
+    const ctx = await makeTestApp({ freelotteryStartUtcDate: TODAY });
+    cleanup = ctx.cleanup;
+    const res = await ctx.app.inject({
+      method: 'POST', url: '/api/freelottery/entry/verify',
+      headers: { 'content-type': 'application/json' },
+      payload: { tweet_url: 'https://twitter.com/alice/status/1' },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('400 CODE_NOT_FOUND when no /start was called', async () => {
+    const ctx = await makeTestApp({ freelotteryStartUtcDate: TODAY });
+    cleanup = ctx.cleanup;
+    const cookie = await login(ctx, 'a@b.com', { xHandle: 'alice' });
+    const res = await verify(ctx, cookie, 'https://twitter.com/alice/status/1');
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe('CODE_NOT_FOUND');
+  });
+
+  it('400 when oEmbed returns null', async () => {
+    const ctx = await makeTestApp({ freelotteryStartUtcDate: TODAY });
+    cleanup = ctx.cleanup;
+    const cookie = await login(ctx, 'a@b.com', { xHandle: 'alice' });
+    await seedCode(ctx, 'a@b.com', '123456');
+    vi.spyOn(xVerify, 'verifyTweet').mockResolvedValueOnce(null);
+    const res = await verify(ctx, cookie, 'https://twitter.com/alice/status/1');
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('403 HANDLE_MISMATCH when tweet author != bound handle', async () => {
+    const ctx = await makeTestApp({ freelotteryStartUtcDate: TODAY });
+    cleanup = ctx.cleanup;
+    const cookie = await login(ctx, 'a@b.com', { xHandle: 'alice' });
+    await seedCode(ctx, 'a@b.com', '123456');
+    vi.spyOn(xVerify, 'verifyTweet').mockResolvedValueOnce({
+      authorHandle: 'someoneelse',
+      text: 'I am entering the daily free lottery for 1000 RPOW. My code is 123456.',
+    });
+    const res = await verify(ctx, cookie, 'https://twitter.com/someoneelse/status/1');
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error).toBe('HANDLE_MISMATCH');
+  });
+
+  it('400 CODE_MISMATCH when the tweet body lacks the code', async () => {
+    const ctx = await makeTestApp({ freelotteryStartUtcDate: TODAY });
+    cleanup = ctx.cleanup;
+    const cookie = await login(ctx, 'a@b.com', { xHandle: 'alice' });
+    await seedCode(ctx, 'a@b.com', '123456');
+    vi.spyOn(xVerify, 'verifyTweet').mockResolvedValueOnce({
+      authorHandle: 'alice',
+      text: 'I am entering the daily free lottery for 1000 RPOW. My code is 999999.',
+    });
+    const res = await verify(ctx, cookie, 'https://twitter.com/alice/status/1');
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe('CODE_MISMATCH');
+  });
+
+  it('200 succeeds with ticket_count=1 when balance is below 1 RPOW', async () => {
+    const ctx = await makeTestApp({ freelotteryStartUtcDate: TODAY });
+    cleanup = ctx.cleanup;
+    const cookie = await login(ctx, 'a@b.com', { xHandle: 'alice' });
+    await seedCode(ctx, 'a@b.com', '123456');
+    vi.spyOn(xVerify, 'verifyTweet').mockResolvedValueOnce({
+      authorHandle: 'alice',
+      text: 'I am entering the daily free lottery for 1000 RPOW. My code is 123456.',
+    });
+    const res = await verify(ctx, cookie, 'https://twitter.com/alice/status/1');
+    expect(res.statusCode).toBe(200);
+    const dayUtc = activeDayUtc();
+    expect(res.json()).toMatchObject({ ok: true, ticket_count: 1, day_utc: dayUtc });
+
+    // Entry row inserted; code row deleted.
+    const entries = await ctx.pool.query(
+      `SELECT ticket_count, balance_base_units_at_entry FROM freelottery_entries
+       WHERE account_email = 'a@b.com' AND day_utc = $1`,
+      [dayUtc],
+    );
+    expect(entries.rows[0].ticket_count).toBe(1);
+    expect(entries.rows[0].balance_base_units_at_entry).toBe('0');
+    const codes = await ctx.pool.query(
+      `SELECT 1 FROM freelottery_codes WHERE account_email = 'a@b.com' AND day_utc = $1`,
+      [dayUtc],
+    );
+    expect(codes.rows.length).toBe(0);
+  });
+
+  it('200 succeeds with ticket_count=2 when balance is >= 1 RPOW', async () => {
+    const ctx = await makeTestApp({ freelotteryStartUtcDate: TODAY });
+    cleanup = ctx.cleanup;
+    const cookie = await login(ctx, 'a@b.com', { xHandle: 'alice' });
+    await seedCode(ctx, 'a@b.com', '123456');
+    // Seed a 5 RPOW token to push balance over the threshold.
+    // server_sig is NOT NULL so we pass an empty byte string; the verify route
+    // only sums `value`, it doesn't validate the signature.
+    await ctx.pool.query(
+      `INSERT INTO tokens (id, owner_email, value, state, parent_token_id, server_sig)
+       VALUES (gen_random_uuid(), 'a@b.com', 5000000000, 'VALID', NULL, '\\x00'::bytea)`,
+    );
+    vi.spyOn(xVerify, 'verifyTweet').mockResolvedValueOnce({
+      authorHandle: 'alice',
+      text: 'I am entering the daily free lottery for 1000 RPOW. My code is 123456.',
+    });
+    const res = await verify(ctx, cookie, 'https://twitter.com/alice/status/1');
+    expect(res.statusCode).toBe(200);
+    expect(res.json().ticket_count).toBe(2);
+    const entries = await ctx.pool.query<{ balance_base_units_at_entry: string }>(
+      `SELECT balance_base_units_at_entry FROM freelottery_entries
+       WHERE account_email = 'a@b.com' AND day_utc = $1`,
+      [activeDayUtc()],
+    );
+    expect(entries.rows[0].balance_base_units_at_entry).toBe('5000000000');
+  });
+
+  it('handle is case-insensitive against the bound handle', async () => {
+    const ctx = await makeTestApp({ freelotteryStartUtcDate: TODAY });
+    cleanup = ctx.cleanup;
+    const cookie = await login(ctx, 'a@b.com', { xHandle: 'alice' });
+    await seedCode(ctx, 'a@b.com', '123456');
+    vi.spyOn(xVerify, 'verifyTweet').mockResolvedValueOnce({
+      authorHandle: 'Alice', // mixed case — should still match
+      text: 'I am entering the daily free lottery for 1000 RPOW. My code is 123456.',
+    });
+    const res = await verify(ctx, cookie, 'https://twitter.com/Alice/status/1');
+    expect(res.statusCode).toBe(200);
+  });
+});
