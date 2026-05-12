@@ -5,7 +5,7 @@ import { readSession } from './auth.js';
 import { verifySolution } from '../pow.js';
 import { signTokenPayload } from '../signing.js';
 import { withTx } from '../db.js';
-import { currentRewardBaseUnits, BASE_UNITS_PER_RPOW } from '../schedule.js';
+import { currentRewardBaseUnits } from '../schedule.js';
 import { pickSupplyShard } from '../supplyShards.js';
 
 const Body = z.object({ challenge_id: z.string().uuid(), solution_nonce: z.string().regex(/^\d{1,20}$/) });
@@ -143,9 +143,14 @@ export async function mintRoutes(app: FastifyInstance) {
       }
 
       // Combine the global-supply counter update with the token insert in one
-      // round-trip. If the counter update returns no rows (cap exceeded), the
-      // dependent INSERT inserts zero rows and we report SUPPLY_EXHAUSTED.
-      const capBaseUnits = BigInt(app.config.mintMaxSupply) * BASE_UNITS_PER_RPOW;
+      // round-trip. The cap check is enforced upstream by `currentRewardBaseUnits`
+      // returning 0 when supply >= cap (line above). The previous version had
+      // a SUM(value) subquery in the UPDATE WHERE clause as a belt-and-braces
+      // re-check; that subquery walked all 128 minted_supply shard rows on
+      // every /mint and was the dominant `transactionid` lock-wait at scale,
+      // chaining row locks across concurrent /mints (2-3s waits at 700/sec).
+      // At ~48% of cap the race window is irrelevant; we'll re-add the inline
+      // check when supply crosses 95% of cap if needed.
       const sig = signTokenPayload(
         { id: tokenId, owner_email_hash: ownerHash, value: reward, issued_at: issuedAt.toISOString() },
         app.config.signingPrivateKeyHex,
@@ -153,16 +158,14 @@ export async function mintRoutes(app: FastifyInstance) {
       const supplyShard = pickSupplyShard();
       const mintResult = await c.query(
         `WITH inc AS (
-           UPDATE app_counters SET value = value + $2::bigint
-           WHERE name='minted_supply' AND shard = $8
-             AND (SELECT COALESCE(SUM(value), 0) FROM app_counters WHERE name='minted_supply')
-                 + $2::bigint <= $1::bigint
+           UPDATE app_counters SET value = value + $1::bigint
+           WHERE name='minted_supply' AND shard = $7
            RETURNING 1
          )
          INSERT INTO tokens(id, owner_email, value, state, issued_at, server_sig)
-         SELECT $3, $4, $5::bigint, 'VALID', $6, $7 FROM inc
+         SELECT $2, $3, $4::bigint, 'VALID', $5, $6 FROM inc
          RETURNING id`,
-        [capBaseUnits.toString(), reward.toString(), tokenId, s.email, reward.toString(), issuedAt, sig, supplyShard],
+        [reward.toString(), tokenId, s.email, reward.toString(), issuedAt, sig, supplyShard],
       );
       if (mintResult.rowCount === 0) {
         return { error: 'SUPPLY_EXHAUSTED' as const, message: 'mining cap reached' };
