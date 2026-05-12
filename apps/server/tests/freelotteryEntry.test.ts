@@ -170,6 +170,15 @@ describe('POST /api/freelottery/entry/verify', () => {
     expect(res.statusCode).toBe(401);
   });
 
+  it('404 FEATURE_DISABLED when feature is off', async () => {
+    const ctx = await makeTestApp();
+    cleanup = ctx.cleanup;
+    const cookie = await login(ctx, 'a@b.com', { xHandle: 'alice' });
+    const res = await verify(ctx, cookie, 'https://twitter.com/alice/status/1');
+    expect(res.statusCode).toBe(404);
+    expect(res.json().error).toBe('FEATURE_DISABLED');
+  });
+
   it('400 CODE_NOT_FOUND when no /start was called', async () => {
     const ctx = await makeTestApp({ freelotteryStartUtcDate: TODAY });
     cleanup = ctx.cleanup;
@@ -179,14 +188,14 @@ describe('POST /api/freelottery/entry/verify', () => {
     expect(res.json().error).toBe('CODE_NOT_FOUND');
   });
 
-  it('400 when oEmbed returns null', async () => {
+  it('503 when oEmbed returns null', async () => {
     const ctx = await makeTestApp({ freelotteryStartUtcDate: TODAY });
     cleanup = ctx.cleanup;
     const cookie = await login(ctx, 'a@b.com', { xHandle: 'alice' });
     await seedCode(ctx, 'a@b.com', '123456');
     vi.spyOn(xVerify, 'verifyTweet').mockResolvedValueOnce(null);
     const res = await verify(ctx, cookie, 'https://twitter.com/alice/status/1');
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(503);
   });
 
   it('403 HANDLE_MISMATCH when tweet author != bound handle', async () => {
@@ -244,6 +253,43 @@ describe('POST /api/freelottery/entry/verify', () => {
       [dayUtc],
     );
     expect(codes.rows.length).toBe(0);
+  });
+
+  it('idempotent re-verify with same tweet_url returns the original ticket_count', async () => {
+    const ctx = await makeTestApp({ freelotteryStartUtcDate: TODAY });
+    cleanup = ctx.cleanup;
+    const cookie = await login(ctx, 'a@b.com', { xHandle: 'alice' });
+    await seedCode(ctx, 'a@b.com', '123456');
+    vi.spyOn(xVerify, 'verifyTweet').mockResolvedValue({
+      authorHandle: 'alice',
+      text: 'I am entering the daily free lottery for 1000 RPOW. My code is 123456.',
+    });
+    // First verify succeeds.
+    const r1 = await verify(ctx, cookie, 'https://twitter.com/alice/status/1');
+    expect(r1.statusCode).toBe(200);
+    const t1 = r1.json().ticket_count;
+    // Same tweet URL — must return 200 with the same ticket_count.
+    const r2 = await verify(ctx, cookie, 'https://twitter.com/alice/status/1');
+    expect(r2.statusCode).toBe(200);
+    expect(r2.json().ticket_count).toBe(t1);
+  });
+
+  it('409 ALREADY_ENTERED when re-verifying with a different tweet_url', async () => {
+    const ctx = await makeTestApp({ freelotteryStartUtcDate: TODAY });
+    cleanup = ctx.cleanup;
+    const cookie = await login(ctx, 'a@b.com', { xHandle: 'alice' });
+    await seedCode(ctx, 'a@b.com', '123456');
+    vi.spyOn(xVerify, 'verifyTweet').mockResolvedValue({
+      authorHandle: 'alice',
+      text: 'I am entering the daily free lottery for 1000 RPOW. My code is 123456.',
+    });
+    // First verify succeeds.
+    const r1 = await verify(ctx, cookie, 'https://twitter.com/alice/status/1');
+    expect(r1.statusCode).toBe(200);
+    // Different tweet URL — must 409.
+    const r2 = await verify(ctx, cookie, 'https://twitter.com/alice/status/999');
+    expect(r2.statusCode).toBe(409);
+    expect(r2.json().error).toBe('ALREADY_ENTERED');
   });
 
   it('200 succeeds with ticket_count=2 when balance is >= 1 RPOW', async () => {

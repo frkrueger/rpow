@@ -116,7 +116,33 @@ export async function entryRoutes(app: FastifyInstance) {
     }
     const dayUtc = getDayUtc(new Date(), sched);
     if (!dayUtc) {
-      return reply.code(404).send({ error: 'CAMPAIGN_INACTIVE', message: 'no active day' });
+      return reply.code(404).send({ error: 'CAMPAIGN_NOT_STARTED', message: 'campaign has not started yet' });
+    }
+
+    // Idempotency: if an entry already exists for today, short-circuit.
+    // Same tweet_url → return the existing ticket_count (handles lost-response retry).
+    // Different tweet_url → 409 ALREADY_ENTERED.
+    const existingEntry = await app.pool.query<{
+      ticket_count: number;
+      balance_base_units_at_entry: string;
+      tweet_url: string;
+    }>(
+      `SELECT ticket_count, balance_base_units_at_entry, tweet_url
+       FROM freelottery_entries
+       WHERE account_email = $1 AND day_utc = $2`,
+      [s.email, dayUtc],
+    );
+    if (existingEntry.rows.length > 0) {
+      const row = existingEntry.rows[0];
+      if (row.tweet_url === parsed.data.tweet_url) {
+        return reply.code(200).send({
+          ok: true,
+          ticket_count: row.ticket_count,
+          day_utc: dayUtc,
+          balance_base_units_at_entry: row.balance_base_units_at_entry,
+        });
+      }
+      return reply.code(409).send({ error: 'ALREADY_ENTERED', message: 'already entered for today' });
     }
 
     // Read the pending code for today.
@@ -150,7 +176,10 @@ export async function entryRoutes(app: FastifyInstance) {
     // oEmbed-verify the tweet.
     const oembed = await verifyTweet(parsed.data.tweet_url);
     if (!oembed) {
-      return reply.code(400).send({ error: 'TWEET_UNRESOLVABLE', message: 'could not verify tweet' });
+      return reply.code(503).send({
+        error: 'TWEET_UNRESOLVABLE',
+        message: 'could not verify tweet (Twitter may be unavailable) — try again, or check the URL',
+      });
     }
     if (oembed.authorHandle.toLowerCase() !== xHandle.toLowerCase()) {
       return reply.code(403).send({ error: 'HANDLE_MISMATCH', message: 'tweet author does not match bound handle' });
