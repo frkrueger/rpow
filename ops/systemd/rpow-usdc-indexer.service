@@ -7,9 +7,9 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=rpow
-WorkingDirectory=/opt/rpow
-EnvironmentFile=/etc/rpow/.env
-ExecStart=/usr/bin/node --enable-source-maps /opt/rpow/apps/server/dist/amm/usdc-indexer-main.js
+WorkingDirectory=/opt/rpow/repo
+EnvironmentFile=/etc/rpow/server.env
+ExecStart=/usr/bin/node --enable-source-maps /opt/rpow/repo/apps/server/dist/amm/usdc-indexer-main.js
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
