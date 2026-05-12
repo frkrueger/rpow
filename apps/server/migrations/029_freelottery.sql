@@ -45,5 +45,6 @@ CREATE TABLE freelottery_draws (
   mint_credited_at     TIMESTAMPTZ,
   on_chain_signature   TEXT,
   status               TEXT NOT NULL DEFAULT 'ok'
-    CHECK (status IN ('ok','empty','pending_blockhash'))
+    CHECK (status IN ('ok','empty','pending_blockhash')),
+  CHECK ((status = 'ok') = (winner_email IS NOT NULL))
 );

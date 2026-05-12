@@ -71,11 +71,46 @@ describe('migration 029_freelottery', () => {
     expect(await tableExists(ctx.pool, 'freelottery_draws')).toBe(true);
     expect(await columnType(ctx.pool, 'freelottery_draws', 'prize_base_units')).toBe('bigint');
     expect(await columnType(ctx.pool, 'freelottery_draws', 'status')).toBe('text');
+    // Use status='empty' so winner_email stays NULL (satisfies the new CHECK constraint).
     await ctx.pool.query(
-      `INSERT INTO freelottery_draws (day_utc, drawn_at, total_tickets, prize_base_units)
-       VALUES ('2026-05-13', now(), 0, 1000000000000)`,
+      `INSERT INTO freelottery_draws (day_utc, drawn_at, total_tickets, prize_base_units, status)
+       VALUES ('2026-05-13', now(), 0, 1000000000000, 'empty')`,
     );
     const { rows } = await ctx.pool.query(`SELECT status FROM freelottery_draws WHERE day_utc='2026-05-13'`);
-    expect(rows[0].status).toBe('ok');
+    expect(rows[0].status).toBe('empty');
+  });
+
+  it('enforces winner_email nullability against status', async () => {
+    const ctx = await makeTestApp();
+    cleanup = ctx.cleanup;
+    await ctx.pool.query(`INSERT INTO users (email) VALUES ('w@test') ON CONFLICT DO NOTHING`);
+
+    // status='ok' with no winner_email must fail.
+    await expect(
+      ctx.pool.query(
+        `INSERT INTO freelottery_draws (day_utc, drawn_at, total_tickets, prize_base_units, status)
+         VALUES ('2026-05-13', now(), 5, 1000000000000, 'ok')`,
+      ),
+    ).rejects.toThrow(/check|winner_email/i);
+
+    // status='empty' WITH a winner_email must also fail.
+    await expect(
+      ctx.pool.query(
+        `INSERT INTO freelottery_draws (day_utc, drawn_at, total_tickets, prize_base_units, status, winner_email)
+         VALUES ('2026-05-14', now(), 0, 1000000000000, 'empty', 'w@test')`,
+      ),
+    ).rejects.toThrow(/check|winner_email/i);
+
+    // status='ok' WITH winner_email must succeed.
+    await ctx.pool.query(
+      `INSERT INTO freelottery_draws (day_utc, drawn_at, total_tickets, prize_base_units, status, winner_email)
+       VALUES ('2026-05-15', now(), 5, 1000000000000, 'ok', 'w@test')`,
+    );
+
+    // status='empty' with NULL winner_email must succeed.
+    await ctx.pool.query(
+      `INSERT INTO freelottery_draws (day_utc, drawn_at, total_tickets, prize_base_units, status)
+       VALUES ('2026-05-16', now(), 0, 1000000000000, 'empty')`,
+    );
   });
 });
