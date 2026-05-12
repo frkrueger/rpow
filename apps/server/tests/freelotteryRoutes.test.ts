@@ -8,21 +8,7 @@ describe('freelottery routes', () => {
     cleanup = null;
   });
 
-  it('POST /api/freelottery/entry/start returns 501 (stub)', async () => {
-    const ctx = await makeTestApp();
-    cleanup = ctx.cleanup;
-    const r = await ctx.app.inject({ method: 'POST', url: '/api/freelottery/entry/start' });
-    expect(r.statusCode).toBe(501);
-    expect(r.json()).toEqual({ error: 'not_implemented' });
-  });
-
-  it('POST /api/freelottery/entry/verify returns 501 (stub)', async () => {
-    const ctx = await makeTestApp();
-    cleanup = ctx.cleanup;
-    const r = await ctx.app.inject({ method: 'POST', url: '/api/freelottery/entry/verify' });
-    expect(r.statusCode).toBe(501);
-    expect(r.json()).toEqual({ error: 'not_implemented' });
-  });
+  // /entry/start and /entry/verify are real handlers as of slice 2 — see freelotteryEntry.test.ts.
 
   it('GET /api/freelottery/today returns 501 (stub)', async () => {
     const ctx = await makeTestApp();
