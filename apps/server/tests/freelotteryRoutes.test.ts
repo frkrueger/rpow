@@ -9,13 +9,14 @@ describe('freelottery routes', () => {
   });
 
   // /entry/start and /entry/verify are real handlers as of slice 2 — see freelotteryEntry.test.ts.
+  // /today is a real handler as of slice 4 — see freelotteryTodayWinners.test.ts.
 
-  it('GET /api/freelottery/today returns 501 (stub)', async () => {
+  it('GET /api/freelottery/today returns 404 FEATURE_DISABLED when no start date', async () => {
     const ctx = await makeTestApp();
     cleanup = ctx.cleanup;
     const r = await ctx.app.inject({ method: 'GET', url: '/api/freelottery/today' });
-    expect(r.statusCode).toBe(501);
-    expect(r.json()).toEqual({ error: 'not_implemented' });
+    expect(r.statusCode).toBe(404);
+    expect(r.json().error).toBe('FEATURE_DISABLED');
   });
 
   it('GET /api/freelottery/winners returns 501 (stub)', async () => {
