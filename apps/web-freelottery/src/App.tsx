@@ -1,36 +1,29 @@
 import { useEffect, useState } from 'react';
+import { Enter } from './Enter.js';
+import { api, FreelotteryStatus } from './api.js';
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? '';
-
-interface Status {
-  enabled: boolean;
-  startUtcDate: string | null;
-  totalDays: number;
-  prizeBaseUnits: string;
-  drawHourUtc: number;
-  dayIndex: number | null;
-  currentDayUtc: string | null;
-  nextDrawAt: string | null;
-  ended: boolean;
-}
-
-export function App() {
-  const [status, setStatus] = useState<Status | null>(null);
+function PublicPlaceholder() {
+  const [status, setStatus] = useState<FreelotteryStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/freelottery/status`)
-      .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
-      .then(setStatus)
-      .catch(e => setError(String(e)));
+    api.status().then(setStatus).catch(e => setError(String(e)));
   }, []);
 
   return (
     <main>
       <h1>RPOW Free Lottery</h1>
-      <p>Coming soon — 100 days of 1,000 RPOW giveaways.</p>
+      <p>100 days · 1,000 RPOW · daily draw at 19:00 UTC.</p>
+      <p><a className="tweet-cta" href="/enter">Enter today's free lottery →</a></p>
       {error ? <pre className="error">{error}</pre> : null}
       {status ? <pre>{JSON.stringify(status, null, 2)}</pre> : null}
     </main>
   );
+}
+
+export function App() {
+  // Tiny path-based router. The marketing public page is slice 4.
+  const path = window.location.pathname;
+  if (path === '/enter') return <Enter />;
+  return <PublicPlaceholder />;
 }
