@@ -14,6 +14,11 @@ const ENTRIES: Entry[] = [
   },
   {
     when: 'Mon May 11',
+    title: 'RPOW Trivia launches',
+    body: 'Trivia game mode goes live alongside Gladiator.',
+  },
+  {
+    when: 'Mon May 11',
     title: '75K users',
     body: 'Three quarters of the way to the next milestone.',
   },
