@@ -147,7 +147,7 @@ A scheduled job (mechanism resolved in implementation plan based on existing sch
 ### 5.3 Public reads
 
 - `GET /api/freelottery/today` → `{ day_utc, draws_at, prize_base_units, entries: [...], total_entries, total_tickets }`. In-process cache, 5s TTL.
-- `GET /api/freelottery/winners` → array of all `freelottery_draws` rows from `start_date` to today, joined with the winner's `x_handle` / `x_avatar_url`. In-process cache, 60s TTL.
+- `GET /api/freelottery/winners` → array of all `freelottery_draws` rows from `start_date` to today, joined with the winner's `x_handle` / `x_avatar_url`. Each row exposes `total_tickets` for that day so the page can show the size of the pool. In-process cache, 60s TTL.
 - `GET /api/freelottery/status` → `{ start_date, day_index, total_days: 100, prize_remaining_base_units, ended }`.
 
 ## 6. UI
@@ -164,7 +164,7 @@ The landing page is the marketing surface for this campaign and the trust artifa
 
 **Required below-the-fold elements:**
 - Today's entrants gallery: X avatars + handles, ordered by `verified_at`. New entries appear via polling every ~5s (no websocket needed). Visually highlight users with 2 tickets (RPOW-holder badge).
-- Previous winners feed: avatar + handle + date + link to the verifying tweet + Solana slot/blockhash that drew them (cryptographic-receipt vibe — reinforces the public-fairness story).
+- Previous winners feed: avatar + handle + date + link to the verifying tweet + Solana slot/blockhash that drew them (cryptographic-receipt vibe — reinforces the public-fairness story). Each row also displays the total number of tickets issued that day (the size of the pool the winner won against).
 - Empty-day rows shown explicitly ("Day 14 — no entries, prize skipped").
 - "How it works" — 3 short steps; show the tweet template verbatim.
 
