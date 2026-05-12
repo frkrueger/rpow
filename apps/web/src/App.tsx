@@ -12,6 +12,8 @@ import { LedgerPage } from './pages/Ledger.js';
 import { WrapPage } from './pages/WrapPage.js';
 import { AppsPage } from './pages/Apps.js';
 import { AuthCallbackPage } from './pages/AuthCallback.js';
+import { NewsPage } from './pages/News.js';
+import { CelebrationBanner } from './components/CelebrationBanner.js';
 
 const UsdcDeposit = lazy(() => import('./pages/UsdcDeposit'));
 
@@ -28,6 +30,7 @@ export default function App() {
   return (
     <HashRouter>
       <div className="app-shell">
+        <CelebrationBanner />
         <header className="app-header">
           <pre style={{ margin: 0 }}>{'+======================================================================+\n|                   RPOW2 - Reusable Proofs of Work                  '}<span onClick={() => setTheme(nextTheme(theme))} title="cycle theme" style={{ cursor: 'pointer', fontSize: 13, color: 'var(--accent)' }}>{'\u25cf'}</span>{' |\n+======================================================================+'}</pre>
           <div className="tagline">a modern tribute to a tribute to the original rpow by hal finney</div>
@@ -77,6 +80,7 @@ export default function App() {
             <Route path="/ledger" element={<LedgerPage />} />
             <Route path="/wrap" element={<WrapPage />} />
             <Route path="/apps" element={<AppsPage />} />
+            <Route path="/news" element={<NewsPage />} />
             <Route path="/auth-callback" element={<AuthCallbackPage />} />
             <Route path="/usdc/deposit" element={
               <Suspense fallback={<div style={{ padding: 24 }}>loading…</div>}>
