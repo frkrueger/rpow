@@ -67,7 +67,10 @@ function PageInner() {
   }, [phase, sig, amount, setPhase]);
 
   if (termsAccepted === false) {
-    return <TermsModal onAccepted={() => setTermsAccepted(true)} />;
+    return <TermsModal onAccepted={async () => {
+      try { setStatus(await getWalletStatus()); } catch { /* show error UI below */ }
+      setTermsAccepted(true);
+    }} />;
   }
 
   return (
