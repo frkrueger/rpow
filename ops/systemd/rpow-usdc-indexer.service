@@ -1,0 +1,19 @@
+# ops/systemd/rpow-usdc-indexer.service
+[Unit]
+Description=RPOW USDC deposit indexer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=rpow
+WorkingDirectory=/opt/rpow
+EnvironmentFile=/etc/rpow/.env
+ExecStart=/usr/bin/node --enable-source-maps /opt/rpow/apps/server/dist/amm/usdc-indexer-main.js
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
