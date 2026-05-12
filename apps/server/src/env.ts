@@ -70,6 +70,13 @@ const Schema = z.object({
   AMM_USDC_WALLET_ATA: z.string().min(32).max(44).optional(), // derived if missing
   USDC_MINT_ADDRESS: z.string().min(32).max(44)
     .default('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'),
+  // Freelottery — daily free lottery. Disabled when FREELOTTERY_START_UTC_DATE is unset.
+  FREELOTTERY_START_UTC_DATE: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  FREELOTTERY_TOTAL_DAYS: z.coerce.number().int().positive().default(100),
+  FREELOTTERY_PRIZE_BASE_UNITS: z.coerce.number().int().positive().default(1_000_000_000_000),
+  FREELOTTERY_DRAW_HOUR_UTC: z.coerce.number().int().min(0).max(23).default(19),
+  FREELOTTERY_ALLOWED_EMAILS: z.string().default('*'),
+  FREELOTTERY_WEB_ORIGIN: z.string().url().default('https://freelottery.rpow2.com'),
   INDEXER_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(15000),
   INDEXER_BOOTSTRAP_LIMIT: z.coerce.number().int().positive().default(1000),
 }).superRefine((v, ctx) => {

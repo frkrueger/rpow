@@ -152,4 +152,27 @@ describe('parseEnv', () => {
       TRIVIA_MAX_BANKROLL_BASE_UNITS: '500',
     })).toThrow();
   });
+
+  it('parses FREELOTTERY_* with expected defaults', () => {
+    const env = parseEnv({ ...BASE_ENV });
+    expect(env.FREELOTTERY_START_UTC_DATE).toBeUndefined();
+    expect(env.FREELOTTERY_TOTAL_DAYS).toBe(100);
+    expect(env.FREELOTTERY_PRIZE_BASE_UNITS).toBe(1_000_000_000_000);
+    expect(env.FREELOTTERY_DRAW_HOUR_UTC).toBe(19);
+    expect(env.FREELOTTERY_ALLOWED_EMAILS).toBe('*');
+    expect(env.FREELOTTERY_WEB_ORIGIN).toBe('https://freelottery.rpow2.com');
+  });
+
+  it('accepts FREELOTTERY_START_UTC_DATE in YYYY-MM-DD form', () => {
+    const env = parseEnv({ ...BASE_ENV, FREELOTTERY_START_UTC_DATE: '2026-05-13' });
+    expect(env.FREELOTTERY_START_UTC_DATE).toBe('2026-05-13');
+  });
+
+  it('rejects FREELOTTERY_START_UTC_DATE in wrong format', () => {
+    expect(() => parseEnv({ ...BASE_ENV, FREELOTTERY_START_UTC_DATE: 'May 13' })).toThrow(/FREELOTTERY_START_UTC_DATE/);
+  });
+
+  it('rejects FREELOTTERY_DRAW_HOUR_UTC out of range', () => {
+    expect(() => parseEnv({ ...BASE_ENV, FREELOTTERY_DRAW_HOUR_UTC: '24' })).toThrow(/FREELOTTERY_DRAW_HOUR_UTC/);
+  });
 });
