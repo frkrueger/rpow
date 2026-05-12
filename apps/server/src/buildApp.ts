@@ -178,6 +178,8 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   await app.register(triviaRoutes);
   await app.register(favoritesRoutes);
   await app.register(ammRoutes);
+  const { solanaRpcRoutes } = await import('./routes/solanaRpc.js');
+  await app.register(solanaRpcRoutes);
 
   app.get('/.well-known/rpow-pubkey.pem', async (_req, reply) => {
     const pubDer = Buffer.concat([
