@@ -34,4 +34,15 @@ export async function walletRoutes(app: FastifyInstance) {
     await app.pool.query(`UPDATE users SET solana_pubkey = NULL WHERE email = $1`, [email]);
     reply.code(200).send({ unlinked_pubkey: priorPk });
   });
+
+  app.post('/amm/wallet/link-challenge', async (req, reply) => {
+    const email = await gate(app, req, reply); if (!email) return;
+    const nonce = (await import('node:crypto'))
+      .randomBytes(16).toString('base64url');
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+    const { sealEnvelope, buildLinkMessage } = await import('../../amm/wallet-link.js');
+    const nonce_envelope = sealEnvelope(app.config.ammLinkHmacSecret, { email, nonce, expiresAt });
+    const message = buildLinkMessage({ email, nonce, expiresAt });
+    reply.code(200).send({ message, nonce_envelope });
+  });
 }
