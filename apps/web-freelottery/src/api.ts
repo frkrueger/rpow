@@ -64,6 +64,39 @@ export interface XHandleVerifyResponse {
   x_avatar_url: string;
 }
 
+export interface TodayEntry {
+  x_handle: string;
+  x_avatar_url: string | null;
+  ticket_count: 1 | 2;
+  verified_at: string;
+}
+
+export interface TodayResponse {
+  day_utc: string;
+  draws_at: string;
+  prize_base_units: string;
+  entries: TodayEntry[];
+  total_entries: number;
+  total_tickets: number;
+}
+
+export interface WinnerRow {
+  day_utc: string;
+  status: 'ok' | 'empty';
+  x_handle: string | null;
+  x_avatar_url: string | null;
+  prize_base_units: string;
+  total_tickets: number;
+  solana_slot: string | null;
+  solana_blockhash: string | null;
+  mint_credited_at: string | null;
+  tweet_url: string | null;
+}
+
+export interface WinnersResponse {
+  winners: WinnerRow[];
+}
+
 export const api = {
   me: () => jsonFetch<Me>('/me'),
   status: () => jsonFetch<FreelotteryStatus>('/api/freelottery/status'),
@@ -73,6 +106,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ tweet_url }),
     }),
+  today: () => jsonFetch<TodayResponse>('/api/freelottery/today'),
+  winners: () => jsonFetch<WinnersResponse>('/api/freelottery/winners'),
 };
 
 // Named bindings to match the X-handle bind modal copied verbatim from web-gladiator.
