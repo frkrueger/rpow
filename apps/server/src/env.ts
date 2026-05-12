@@ -62,6 +62,13 @@ const Schema = z.object({
   // Admin allowlist — subset that can call admin endpoints (USDC credit, pool seed).
   AMM_ADMIN_EMAILS: z.string().default(''),
   AMM_USDC_POOL_CAP_BASE_UNITS: z.coerce.number().int().nonnegative().default(1_000_000_000),
+  AMM_LINK_HMAC_SECRET: z.string().regex(/^[0-9a-f]{64,}$/),  // hex, ≥32 bytes
+  AMM_USDC_WALLET_PUBKEY: z.string().min(32).max(44),
+  AMM_USDC_WALLET_ATA: z.string().min(32).max(44).optional(), // derived if missing
+  USDC_MINT_ADDRESS: z.string().min(32).max(44)
+    .default('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'),
+  INDEXER_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(15000),
+  INDEXER_BOOTSTRAP_LIMIT: z.coerce.number().int().positive().default(1000),
 }).superRefine((v, ctx) => {
   if (v.MAILER === 'resend' && !v.RESEND_API_KEY) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['RESEND_API_KEY'], message: 'required when MAILER=resend' });

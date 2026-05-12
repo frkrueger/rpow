@@ -1,16 +1,23 @@
 import { describe, it, expect } from 'vitest';
 import { parseEnv } from '../src/env.js';
 
+// Shared required fields for all parseEnv test fixtures.
+const BASE_ENV = {
+  DATABASE_URL: 'postgres://u:p@h/db',
+  RESEND_API_KEY: 'rk_test',
+  EMAIL_FROM: 'no-reply@rpow2.com',
+  SESSION_SECRET: 'a'.repeat(32),
+  MAGIC_LINK_BASE_URL: 'http://localhost:8080',
+  RPOW_SIGNING_PRIVATE_KEY_HEX: '00'.repeat(32),
+  RPOW_SIGNING_PUBLIC_KEY_HEX: '00'.repeat(32),
+  AMM_LINK_HMAC_SECRET: 'a'.repeat(64),
+  AMM_USDC_WALLET_PUBKEY: '4dqpFtkMJjtt94egCLVESYWxnZm9f7icLLMC3qTzzpdU',
+};
+
 describe('parseEnv', () => {
   it('parses a valid env', () => {
     const env = parseEnv({
-      DATABASE_URL: 'postgres://u:p@h/db',
-      RESEND_API_KEY: 'rk_test',
-      EMAIL_FROM: 'no-reply@rpow2.com',
-      SESSION_SECRET: 'a'.repeat(32),
-      MAGIC_LINK_BASE_URL: 'http://localhost:8080',
-      RPOW_SIGNING_PRIVATE_KEY_HEX: '00'.repeat(32),
-      RPOW_SIGNING_PUBLIC_KEY_HEX: '00'.repeat(32),
+      ...BASE_ENV,
       DIFFICULTY_BITS: '8',
     });
     expect(env.DIFFICULTY_BITS).toBe(8);
@@ -20,147 +27,80 @@ describe('parseEnv', () => {
   });
   it('rejects MAILER=postmark without POSTMARK_TOKEN', () => {
     expect(() => parseEnv({
-      DATABASE_URL: 'postgres://u:p@h/db',
+      ...BASE_ENV,
+      RESEND_API_KEY: undefined,
       MAILER: 'postmark',
-      EMAIL_FROM: 'no-reply@rpow2.com',
-      SESSION_SECRET: 'a'.repeat(32),
-      MAGIC_LINK_BASE_URL: 'http://localhost:8080',
-      RPOW_SIGNING_PRIVATE_KEY_HEX: '00'.repeat(32),
-      RPOW_SIGNING_PUBLIC_KEY_HEX: '00'.repeat(32),
     })).toThrow(/POSTMARK_TOKEN/);
   });
   it('rejects MAILER=resend without RESEND_API_KEY', () => {
     expect(() => parseEnv({
-      DATABASE_URL: 'postgres://u:p@h/db',
-      EMAIL_FROM: 'no-reply@rpow2.com',
-      SESSION_SECRET: 'a'.repeat(32),
-      MAGIC_LINK_BASE_URL: 'http://localhost:8080',
-      RPOW_SIGNING_PRIVATE_KEY_HEX: '00'.repeat(32),
-      RPOW_SIGNING_PUBLIC_KEY_HEX: '00'.repeat(32),
+      ...BASE_ENV,
+      RESEND_API_KEY: undefined,
     })).toThrow(/RESEND_API_KEY/);
   });
   it('rejects MAILER=smtp without SMTP_HOST/USER/PASS', () => {
     expect(() => parseEnv({
-      DATABASE_URL: 'postgres://u:p@h/db',
+      ...BASE_ENV,
+      RESEND_API_KEY: undefined,
       MAILER: 'smtp',
-      EMAIL_FROM: 'no-reply@rpow2.com',
-      SESSION_SECRET: 'a'.repeat(32),
-      MAGIC_LINK_BASE_URL: 'http://localhost:8080',
-      RPOW_SIGNING_PRIVATE_KEY_HEX: '00'.repeat(32),
-      RPOW_SIGNING_PUBLIC_KEY_HEX: '00'.repeat(32),
     })).toThrow(/SMTP_HOST|SMTP_USER|SMTP_PASS/);
   });
   it('accepts MAILER=smtp with all SMTP_* set', () => {
     const env = parseEnv({
-      DATABASE_URL: 'postgres://u:p@h/db',
+      ...BASE_ENV,
+      RESEND_API_KEY: undefined,
       MAILER: 'smtp',
       SMTP_HOST: 'smtp.gmail.com',
       SMTP_USER: 'test@gmail.com',
       SMTP_PASS: 'app-password',
-      EMAIL_FROM: 'no-reply@rpow2.com',
-      SESSION_SECRET: 'a'.repeat(32),
-      MAGIC_LINK_BASE_URL: 'http://localhost:8080',
-      RPOW_SIGNING_PRIVATE_KEY_HEX: '00'.repeat(32),
-      RPOW_SIGNING_PUBLIC_KEY_HEX: '00'.repeat(32),
     });
     expect(env.MAILER).toBe('smtp');
     expect(env.SMTP_PORT).toBe(587);
   });
   it('accepts MAILER=postmark with POSTMARK_TOKEN', () => {
     const env = parseEnv({
-      DATABASE_URL: 'postgres://u:p@h/db',
+      ...BASE_ENV,
+      RESEND_API_KEY: undefined,
       MAILER: 'postmark',
       POSTMARK_TOKEN: 'pm_test',
-      EMAIL_FROM: 'no-reply@rpow2.com',
-      SESSION_SECRET: 'a'.repeat(32),
-      MAGIC_LINK_BASE_URL: 'http://localhost:8080',
-      RPOW_SIGNING_PRIVATE_KEY_HEX: '00'.repeat(32),
-      RPOW_SIGNING_PUBLIC_KEY_HEX: '00'.repeat(32),
     });
     expect(env.MAILER).toBe('postmark');
     expect(env.POSTMARK_MESSAGE_STREAM).toBe('outbound');
   });
   it('defaults SRPOW envs sensibly', () => {
-    const env = parseEnv({
-      DATABASE_URL: 'postgres://u:p@h/db',
-      RESEND_API_KEY: 'rk',
-      EMAIL_FROM: 'no-reply@rpow2.com',
-      SESSION_SECRET: 'a'.repeat(32),
-      MAGIC_LINK_BASE_URL: 'http://localhost:8080',
-      RPOW_SIGNING_PRIVATE_KEY_HEX: '00'.repeat(32),
-      RPOW_SIGNING_PUBLIC_KEY_HEX: '00'.repeat(32),
-    });
+    const env = parseEnv({ ...BASE_ENV });
     expect(env.WRAP_ALLOWED_EMAILS).toBe('');
     expect(env.SRPOW_COMMITMENT).toBe('confirmed');
     expect(env.SRPOW_WRAP_TIMEOUT_MS).toBe(60_000);
   });
 
   it('parses LONGSHOT_MIN_BASE_UNITS and LONGSHOT_MAX_BASE_UNITS with defaults', () => {
-    const env = parseEnv({
-      DATABASE_URL: 'postgres://u:p@h/db',
-      RESEND_API_KEY: 'rk_test',
-      EMAIL_FROM: 'no-reply@rpow2.com',
-      SESSION_SECRET: 'a'.repeat(32),
-      MAGIC_LINK_BASE_URL: 'http://localhost:8080',
-      RPOW_SIGNING_PRIVATE_KEY_HEX: '00'.repeat(32),
-      RPOW_SIGNING_PUBLIC_KEY_HEX: '00'.repeat(32),
-    });
+    const env = parseEnv({ ...BASE_ENV });
     // Defaults: 0.01 RPOW = 10_000_000 base units, 10 RPOW = 10_000_000_000 base units
     expect(env.LONGSHOT_MIN_BASE_UNITS).toBe(10_000_000);
     expect(env.LONGSHOT_MAX_BASE_UNITS).toBe(10_000_000_000);
   });
 
   it('LONGSHOT_ALLOWED_EMAILS defaults to frkrueger@mac.com', () => {
-    const env = parseEnv({
-      DATABASE_URL: 'postgres://u:p@h/db',
-      RESEND_API_KEY: 'rk_test',
-      EMAIL_FROM: 'no-reply@rpow2.com',
-      SESSION_SECRET: 'a'.repeat(32),
-      MAGIC_LINK_BASE_URL: 'http://localhost:8080',
-      RPOW_SIGNING_PRIVATE_KEY_HEX: '00'.repeat(32),
-      RPOW_SIGNING_PUBLIC_KEY_HEX: '00'.repeat(32),
-    });
+    const env = parseEnv({ ...BASE_ENV });
     expect(env.LONGSHOT_ALLOWED_EMAILS).toBe('frkrueger@mac.com');
   });
 
   it('LONGSHOT_ALLOWED_EMAILS = * opens access to all', () => {
-    const env = parseEnv({
-      DATABASE_URL: 'postgres://u:p@h/db',
-      RESEND_API_KEY: 'rk_test',
-      EMAIL_FROM: 'no-reply@rpow2.com',
-      SESSION_SECRET: 'a'.repeat(32),
-      MAGIC_LINK_BASE_URL: 'http://localhost:8080',
-      RPOW_SIGNING_PRIVATE_KEY_HEX: '00'.repeat(32),
-      RPOW_SIGNING_PUBLIC_KEY_HEX: '00'.repeat(32),
-      LONGSHOT_ALLOWED_EMAILS: '*',
-    });
+    const env = parseEnv({ ...BASE_ENV, LONGSHOT_ALLOWED_EMAILS: '*' });
     expect(env.LONGSHOT_ALLOWED_EMAILS).toBe('*');
   });
 
   it('rejects LONGSHOT_MAX_BASE_UNITS less than LONGSHOT_MIN_BASE_UNITS', () => {
     expect(() => parseEnv({
-      DATABASE_URL: 'postgres://u:p@h/db',
-      RESEND_API_KEY: 'rk_test',
-      EMAIL_FROM: 'no-reply@rpow2.com',
-      SESSION_SECRET: 'a'.repeat(32),
-      MAGIC_LINK_BASE_URL: 'http://localhost:8080',
-      RPOW_SIGNING_PRIVATE_KEY_HEX: '00'.repeat(32),
-      RPOW_SIGNING_PUBLIC_KEY_HEX: '00'.repeat(32),
+      ...BASE_ENV,
       LONGSHOT_MIN_BASE_UNITS: '1000000000',
       LONGSHOT_MAX_BASE_UNITS: '100',
     })).toThrow();
   });
 
   it('parses GLADIATOR_* vars with defaults', () => {
-    const env = parseEnv({
-      DATABASE_URL: 'postgres://u:p@h/db',
-      RESEND_API_KEY: 'rk_test',
-      EMAIL_FROM: 'no-reply@rpow2.com',
-      SESSION_SECRET: 'a'.repeat(32),
-      MAGIC_LINK_BASE_URL: 'http://localhost:8080',
-      RPOW_SIGNING_PRIVATE_KEY_HEX: '00'.repeat(32),
-      RPOW_SIGNING_PUBLIC_KEY_HEX: '00'.repeat(32),
-    });
+    const env = parseEnv({ ...BASE_ENV });
     expect(env.GLADIATOR_MIN_BET_BASE_UNITS).toBe(10_000_000);
     expect(env.GLADIATOR_MAX_BET_BASE_UNITS).toBe(10_000_000_000);
     expect(env.GLADIATOR_MAX_BANKROLL_BASE_UNITS).toBe(100_000_000_000);
@@ -172,13 +112,7 @@ describe('parseEnv', () => {
 
   it('rejects GLADIATOR_MAX_BET_BASE_UNITS less than GLADIATOR_MIN_BET_BASE_UNITS', () => {
     expect(() => parseEnv({
-      DATABASE_URL: 'postgres://u:p@h/db',
-      RESEND_API_KEY: 'rk_test',
-      EMAIL_FROM: 'no-reply@rpow2.com',
-      SESSION_SECRET: 'a'.repeat(32),
-      MAGIC_LINK_BASE_URL: 'http://localhost:8080',
-      RPOW_SIGNING_PRIVATE_KEY_HEX: '00'.repeat(32),
-      RPOW_SIGNING_PUBLIC_KEY_HEX: '00'.repeat(32),
+      ...BASE_ENV,
       GLADIATOR_MIN_BET_BASE_UNITS: '1000000000',
       GLADIATOR_MAX_BET_BASE_UNITS: '100',
     })).toThrow();
@@ -186,28 +120,14 @@ describe('parseEnv', () => {
 
   it('rejects GLADIATOR_MAX_BANKROLL_BASE_UNITS less than GLADIATOR_MAX_BET_BASE_UNITS', () => {
     expect(() => parseEnv({
-      DATABASE_URL: 'postgres://u:p@h/db',
-      RESEND_API_KEY: 'rk_test',
-      EMAIL_FROM: 'no-reply@rpow2.com',
-      SESSION_SECRET: 'a'.repeat(32),
-      MAGIC_LINK_BASE_URL: 'http://localhost:8080',
-      RPOW_SIGNING_PRIVATE_KEY_HEX: '00'.repeat(32),
-      RPOW_SIGNING_PUBLIC_KEY_HEX: '00'.repeat(32),
+      ...BASE_ENV,
       GLADIATOR_MAX_BET_BASE_UNITS: '1000000000',
       GLADIATOR_MAX_BANKROLL_BASE_UNITS: '100',
     })).toThrow();
   });
 
   it('parses TRIVIA defaults', () => {
-    const env = parseEnv({
-      DATABASE_URL: 'postgres://x/y',
-      RESEND_API_KEY: 'rk_test',
-      SESSION_SECRET: 'x'.repeat(32),
-      MAGIC_LINK_BASE_URL: 'http://x/',
-      RPOW_SIGNING_PRIVATE_KEY_HEX: 'a'.repeat(64),
-      RPOW_SIGNING_PUBLIC_KEY_HEX: 'b'.repeat(64),
-      EMAIL_FROM: 'a@b.com',
-    });
+    const env = parseEnv({ ...BASE_ENV });
     expect(env.TRIVIA_MIN_BET_BASE_UNITS).toBe(10_000_000);
     expect(env.TRIVIA_MAX_BET_BASE_UNITS).toBe(10_000_000_000);
     expect(env.TRIVIA_MAX_BANKROLL_BASE_UNITS).toBe(100_000_000_000);
@@ -219,13 +139,7 @@ describe('parseEnv', () => {
 
   it('rejects TRIVIA_MAX_BET < TRIVIA_MIN_BET', () => {
     expect(() => parseEnv({
-      DATABASE_URL: 'postgres://x/y',
-      RESEND_API_KEY: 'rk_test',
-      SESSION_SECRET: 'x'.repeat(32),
-      MAGIC_LINK_BASE_URL: 'http://x/',
-      RPOW_SIGNING_PRIVATE_KEY_HEX: 'a'.repeat(64),
-      RPOW_SIGNING_PUBLIC_KEY_HEX: 'b'.repeat(64),
-      EMAIL_FROM: 'a@b.com',
+      ...BASE_ENV,
       TRIVIA_MIN_BET_BASE_UNITS: '100',
       TRIVIA_MAX_BET_BASE_UNITS: '50',
     })).toThrow();
@@ -233,13 +147,7 @@ describe('parseEnv', () => {
 
   it('rejects TRIVIA_MAX_BANKROLL < TRIVIA_MAX_BET', () => {
     expect(() => parseEnv({
-      DATABASE_URL: 'postgres://x/y',
-      RESEND_API_KEY: 'rk_test',
-      SESSION_SECRET: 'x'.repeat(32),
-      MAGIC_LINK_BASE_URL: 'http://x/',
-      RPOW_SIGNING_PRIVATE_KEY_HEX: 'a'.repeat(64),
-      RPOW_SIGNING_PUBLIC_KEY_HEX: 'b'.repeat(64),
-      EMAIL_FROM: 'a@b.com',
+      ...BASE_ENV,
       TRIVIA_MAX_BET_BASE_UNITS: '1000',
       TRIVIA_MAX_BANKROLL_BASE_UNITS: '500',
     })).toThrow();

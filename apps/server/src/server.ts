@@ -122,6 +122,10 @@ const app = await buildApp({
     ammAllowedEmails: env.AMM_ALLOWED_EMAILS,
     ammAdminEmails: env.AMM_ADMIN_EMAILS,
     ammUsdcPoolCapBaseUnits: env.AMM_USDC_POOL_CAP_BASE_UNITS,
+    ammLinkHmacSecret: env.AMM_LINK_HMAC_SECRET,
+    ammUsdcWalletPubkey: env.AMM_USDC_WALLET_PUBKEY,
+    ammUsdcWalletAta: env.AMM_USDC_WALLET_ATA ?? '',  // empty → derived later if needed
+    usdcMintAddress: env.USDC_MINT_ADDRESS,
     secureCookies: env.NODE_ENV === 'production',
     turnstileSecret: env.TURNSTILE_SECRET,
     operatorEmails: new Set(

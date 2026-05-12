@@ -3,7 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Panel } from '../components/Panel.js';
 import { useMe } from '../hooks/useMe.js';
 import { api } from '../api.js';
-import { formatRpow, parseRpowToBaseUnits } from '../lib/format.js';
+import { formatRpow, formatUsdc, parseRpowToBaseUnits } from '../lib/format.js';
+import { AMM_PILOT_EMAILS } from '../lib/ammPilot.js';
 
 /** Best-effort safety check on a return_url. Accept http(s) only. Reject
  *  data:, javascript:, file:, etc. Reject malformed URLs. The displayed
@@ -184,6 +185,12 @@ export function WalletPage() {
             <div className="stat-label">DAILY REMAINING</div>
             <div className="stat-value">{me.daily_remaining_base_units ? formatRpow(me.daily_remaining_base_units) : '—'}</div>
           </div>
+          {AMM_PILOT_EMAILS.has(me.email) && (
+            <div className="stat-cell">
+              <div className="stat-label">USDC</div>
+              <div className="stat-value">{formatUsdc(me.usdc_base_units)}</div>
+            </div>
+          )}
         </div>
         <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           <Link to="/mine"><button className="primary">[ MINE ]</button></Link>

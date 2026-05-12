@@ -30,3 +30,17 @@ export function parseRpowToBaseUnits(rpow: string): string {
   const result = BigInt(whole) * 1_000_000_000n + BigInt(fracPadded);
   return result.toString();
 }
+
+// USDC base units use 6 decimals (Solana SPL convention), unlike RPOW's 9.
+//   formatUsdc('1000000')    → '1'
+//   formatUsdc('1500000')    → '1.5'
+//   formatUsdc('0')          → '0'
+export function formatUsdc(baseUnits: string | bigint): string {
+  const bu = typeof baseUnits === 'bigint' ? baseUnits : BigInt(baseUnits);
+  const denom = 1_000_000n;
+  const whole = bu / denom;
+  const frac = bu % denom;
+  if (frac === 0n) return whole.toString();
+  const fracStr = frac.toString().padStart(6, '0').replace(/0+$/, '');
+  return `${whole.toString()}.${fracStr}`;
+}

@@ -120,4 +120,66 @@ export async function adminRoutes(app: FastifyInstance) {
       new_balance_base_units: txResult.newBalance,
     });
   });
+
+  // ---------------------------------------------------------------
+  // POST /amm/admin/claim-unattributed { solana_signature, target_email }
+  //
+  // Atomically promotes a usdc_unattributed_deposits row into usdc_deposits,
+  // credits the target user's balance, and stamps claimed_by_email + claimed_at
+  // on the audit row (row is preserved, not deleted).
+  //
+  // Idempotency: a second call with the same signature returns 409 ALREADY_CLAIMED.
+  // ---------------------------------------------------------------
+  app.post('/amm/admin/claim-unattributed', async (req, reply) => {
+    const s = readSession(req as any, app.config.sessionSecret);
+    if (!s) return reply.code(401).send({ error: 'UNAUTHORIZED' });
+    if (!isAmmAdmin(app, s.email)) return reply.code(403).send({ error: 'NOT_ADMIN' });
+
+    const body = req.body as { solana_signature?: string; target_email?: string };
+    if (!body?.solana_signature || !body?.target_email) {
+      return reply.code(400).send({ error: 'BAD_REQUEST' });
+    }
+
+    try {
+      const result = await withTx(app.pool, async (c) => {
+        const u = await c.query<{
+          id: string; amount_base_units: string; sender_pubkey: string; block_time: Date | null;
+          claimed_by_email: string | null;
+        }>(
+          `SELECT id, amount_base_units::text, sender_pubkey, block_time, claimed_by_email
+             FROM usdc_unattributed_deposits
+            WHERE solana_signature = $1
+            FOR UPDATE`,
+          [body.solana_signature],
+        );
+        if (u.rows.length === 0) throw new Error('NOT_FOUND');
+        if (u.rows[0].claimed_by_email) throw new Error('ALREADY_CLAIMED');
+
+        // Verify target user exists.
+        const user = await c.query(`SELECT 1 FROM users WHERE email = $1`, [body.target_email]);
+        if (user.rows.length === 0) throw new Error('USER_NOT_FOUND');
+
+        const row = u.rows[0];
+        await c.query(`
+          INSERT INTO usdc_deposits(account_email, amount_base_units, solana_signature, sender_pubkey, block_time)
+          VALUES ($1, $2, $3, $4, $5)
+        `, [body.target_email, row.amount_base_units, body.solana_signature, row.sender_pubkey, row.block_time]);
+        await c.query(
+          `UPDATE users SET usdc_base_units = usdc_base_units + $1 WHERE email = $2`,
+          [row.amount_base_units, body.target_email],
+        );
+        await c.query(
+          `UPDATE usdc_unattributed_deposits SET claimed_by_email = $1, claimed_at = now() WHERE id = $2`,
+          [body.target_email, row.id],
+        );
+        return { credited_email: body.target_email!, amount_base_units: row.amount_base_units };
+      });
+      reply.code(200).send(result);
+    } catch (e: any) {
+      if (e.message === 'NOT_FOUND') return reply.code(404).send({ error: 'NOT_FOUND' });
+      if (e.message === 'ALREADY_CLAIMED') return reply.code(409).send({ error: 'ALREADY_CLAIMED' });
+      if (e.message === 'USER_NOT_FOUND') return reply.code(404).send({ error: 'USER_NOT_FOUND' });
+      throw e;
+    }
+  });
 }

@@ -19,6 +19,7 @@ export async function makeTestApp(opts: {
   pool: Pool;
   mailer: FakeMailer;
   bridgeClient: FakeBridgeClient;
+  config: Parameters<typeof buildApp>[0]['config'];
   cleanup: () => Promise<void>;
 }> {
   const url = process.env.TEST_DATABASE_URL;
@@ -41,48 +42,53 @@ export async function makeTestApp(opts: {
   await runMigrations(pool);
   const mailer = new FakeMailer();
   const bridgeClient = opts.bridgeClient ?? new FakeBridgeClient();
+  const config = {
+    sessionSecret: 'x'.repeat(32),
+    magicLinkBaseUrl: 'http://test',
+    difficultyBits: 8,
+    difficultyFloor: 4,
+    mintMaxSupply: 21,
+    signingPrivateKeyHex: '11'.repeat(32),
+    signingPublicKeyHex: 'd04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737',
+    webOrigin: 'http://web.test',
+    longShotWebOrigin: 'http://longshot.test',
+    longShotMinBaseUnits: 10,
+    longShotMaxBaseUnits: 1_000_000_000,
+    longShotAllowedEmails: '*',
+    gladiatorMinBetBaseUnits: 10,
+    gladiatorMaxBetBaseUnits: 1_000_000_000,
+    gladiatorMaxBankrollBaseUnits: 10_000_000_000,
+    gladiatorSessionTtlHours: 48,
+    gladiatorChatRetentionDays: 30,
+    gladiatorAllowedEmails: '*',
+    gladiatorWebOrigin: 'http://gladiator.test',
+    triviaMinBetBaseUnits: 10,
+    triviaMaxBetBaseUnits: 1_000_000_000,
+    triviaMaxBankrollBaseUnits: 10_000_000_000,
+    triviaMatchDeadlineSeconds: 10,
+    triviaSessionTtlHours: 48,
+    triviaAllowedEmails: opts?.triviaAllowedEmails ?? '*',
+    triviaWebOrigin: 'http://trivia.test',
+    ammAllowedEmails: opts?.ammAllowedEmails ?? '*',
+    ammAdminEmails: opts?.ammAdminEmails ?? '',
+    ammUsdcPoolCapBaseUnits: opts?.ammUsdcPoolCapBaseUnits ?? 1_000_000_000,
+    ammLinkHmacSecret: 'a'.repeat(64),
+    ammUsdcWalletPubkey: '4dqpFtkMJjtt94egCLVESYWxnZm9f7icLLMC3qTzzpdU',
+    ammUsdcWalletAta: '9wVgJE1iKnBS8FiSnHc7jXv5Lz6uD819UYxwu7QAxxSp',
+    usdcMintAddress: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+    secureCookies: false,
+    operatorEmails: new Set<string>(),
+  };
   const app = await buildApp({
     pool,
     mailer,
     bridgeClient,
     wrapAllowlistCsv: opts.wrapAllowlistCsv ?? '',
     test: true,
-    config: {
-      sessionSecret: 'x'.repeat(32),
-      magicLinkBaseUrl: 'http://test',
-      difficultyBits: 8,
-      difficultyFloor: 4,
-      mintMaxSupply: 21,
-      signingPrivateKeyHex: '11'.repeat(32),
-      signingPublicKeyHex: 'd04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737',
-      webOrigin: 'http://web.test',
-      longShotWebOrigin: 'http://longshot.test',
-      longShotMinBaseUnits: 10,
-      longShotMaxBaseUnits: 1_000_000_000,
-      longShotAllowedEmails: '*',
-      gladiatorMinBetBaseUnits: 10,
-      gladiatorMaxBetBaseUnits: 1_000_000_000,
-      gladiatorMaxBankrollBaseUnits: 10_000_000_000,
-      gladiatorSessionTtlHours: 48,
-      gladiatorChatRetentionDays: 30,
-      gladiatorAllowedEmails: '*',
-      gladiatorWebOrigin: 'http://gladiator.test',
-      triviaMinBetBaseUnits: 10,
-      triviaMaxBetBaseUnits: 1_000_000_000,
-      triviaMaxBankrollBaseUnits: 10_000_000_000,
-      triviaMatchDeadlineSeconds: 10,
-      triviaSessionTtlHours: 48,
-      triviaAllowedEmails: opts?.triviaAllowedEmails ?? '*',
-      triviaWebOrigin: 'http://trivia.test',
-      ammAllowedEmails: opts?.ammAllowedEmails ?? '*',
-      ammAdminEmails: opts?.ammAdminEmails ?? '',
-      ammUsdcPoolCapBaseUnits: opts?.ammUsdcPoolCapBaseUnits ?? 1_000_000_000,
-      secureCookies: false,
-      operatorEmails: new Set<string>(),
-    },
+    config,
   });
   return {
-    app, pool, mailer, bridgeClient,
+    app, pool, mailer, bridgeClient, config,
     /**
      * Forge a session cookie for `email` and ensure the user row exists.
      * Bypasses /auth/request → /auth/verify since /auth/verify now redirects

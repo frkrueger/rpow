@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { HashRouter, Route, Routes, NavLink } from 'react-router-dom';
 import { applyTheme, loadTheme, nextTheme, type Theme } from './theme.js';
 import { useMe } from './hooks/useMe.js';
@@ -12,6 +12,8 @@ import { LedgerPage } from './pages/Ledger.js';
 import { WrapPage } from './pages/WrapPage.js';
 import { AppsPage } from './pages/Apps.js';
 import { AuthCallbackPage } from './pages/AuthCallback.js';
+
+const UsdcDeposit = lazy(() => import('./pages/UsdcDeposit'));
 
 export default function App() {
   const [theme, setTheme] = useState<Theme>(loadTheme());
@@ -76,6 +78,11 @@ export default function App() {
             <Route path="/wrap" element={<WrapPage />} />
             <Route path="/apps" element={<AppsPage />} />
             <Route path="/auth-callback" element={<AuthCallbackPage />} />
+            <Route path="/usdc/deposit" element={
+              <Suspense fallback={<div style={{ padding: 24 }}>loading…</div>}>
+                <UsdcDeposit />
+              </Suspense>
+            } />
           </Routes>
         </main>
       </div>
