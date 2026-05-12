@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>rpow2 — incident timeline 2026-05-11</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<style>
+:root {
+  --bg: #08080a;
+  --bg-2: #0d0d10;
+  --fg: #e8e3d3;
+  --accent: #6ee7b7;
+  --accent-dim: rgba(110, 231, 183, 0.18);
+  --dim: #6b6b6b;
+  --dimmer: #3a3a3a;
+  --error: #f87171;
+  --glow: rgba(110, 231, 183, 0.06);
+  --amber: #fbbf24;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: radial-gradient(ellipse at top, rgba(110,231,183,0.04), transparent 60%), var(--bg);
+  color: var(--fg);
+  font-family: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  position: relative;
+  padding: 24px;
+}
+body::before {
+  content: '';
+  position: fixed; inset: 0; pointer-events: none; z-index: 100;
+  background-image: repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 3px);
+}
+body::after {
+  content: '';
+  position: fixed; inset: 0; pointer-events: none; z-index: 99;
+  background: radial-gradient(ellipse at center, transparent 65%, rgba(0,0,0,0.35) 100%);
+}
+.wrap { max-width: 1280px; margin: 0 auto; position: relative; z-index: 1; }
+h1, h2, h3 { color: var(--accent); font-weight: 500; letter-spacing: 0.5px; margin: 0 0 8px; }
+h1 { font-size: 20px; }
+h2 { font-size: 14px; margin-top: 28px; }
+.dim { color: var(--dim); }
+.amber { color: var(--amber); }
+.err { color: var(--error); }
+.acc { color: var(--accent); }
+hr { border: 0; border-top: 1px dashed var(--dimmer); margin: 18px 0; }
+.panel {
+  background: var(--bg-2);
+  border: 1px solid var(--dimmer);
+  padding: 16px;
+  margin-bottom: 16px;
+  position: relative;
+}
+.panel::before {
+  content: '> ' attr(data-title);
+  position: absolute; top: -10px; left: 12px;
+  background: var(--bg); padding: 0 8px;
+  color: var(--accent); font-size: 12px;
+}
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+.chart-box { height: 280px; position: relative; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th, td { text-align: left; padding: 4px 8px; border-bottom: 1px dashed var(--dimmer); }
+th { color: var(--dim); font-weight: 400; }
+td.time { color: var(--accent); white-space: nowrap; }
+td.evt { color: var(--fg); }
+td.bad { color: var(--error); }
+td.good { color: var(--accent); }
+.kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+.kpi { padding: 12px; background: var(--bg-2); border: 1px solid var(--dimmer); }
+.kpi .label { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+.kpi .val { color: var(--accent); font-size: 22px; margin-top: 4px; }
+.kpi .delta { color: var(--dim); font-size: 11px; margin-top: 2px; }
+pre.note {
+  background: var(--bg-2); border-left: 2px solid var(--accent); padding: 8px 12px;
+  margin: 0; white-space: pre-wrap; font-size: 12px; color: var(--fg);
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>rpow2 // incident timeline</h1>
+<div class="dim">2026-05-11 21:00 → 2026-05-12 01:30 UTC · VPS upgrade, optimization series, deadlock event, recovery</div>
+
+<div class="kpi-row" style="margin-top:20px">
+  <div class="kpi">
+    <div class="label">peak load (1m)</div>
+    <div class="val">130</div>
+    <div class="delta">on 16 cores · during runaway query</div>
+  </div>
+  <div class="kpi">
+    <div class="label">peak deadlocks</div>
+    <div class="val">~50/min</div>
+    <div class="delta">trigger contention storm</div>
+  </div>
+  <div class="kpi">
+    <div class="label">peak req/sec</div>
+    <div class="val">10,900</div>
+    <div class="delta">/challenge alone · botnets</div>
+  </div>
+  <div class="kpi">
+    <div class="label">unique IPs / 60s</div>
+    <div class="val">19,371</div>
+    <div class="delta">distributed bot sources</div>
+  </div>
+</div>
+
+<div class="panel" data-title="server load avg (1-min)">
+  <div class="chart-box"><canvas id="loadChart"></canvas></div>
+</div>
+
+<div class="grid">
+  <div class="panel" data-title="endpoint success rate (%)">
+    <div class="chart-box"><canvas id="successChart"></canvas></div>
+  </div>
+  <div class="panel" data-title="/ledger latency (ms, log scale)">
+    <div class="chart-box"><canvas id="ledgerChart"></canvas></div>
+  </div>
+</div>
+
+<div class="grid">
+  <div class="panel" data-title="deadlocks per minute">
+    <div class="chart-box"><canvas id="deadlockChart"></canvas></div>
+  </div>
+  <div class="panel" data-title="postgres state">
+    <div class="chart-box"><canvas id="pgChart"></canvas></div>
+  </div>
+</div>
+
+<div class="panel" data-title="event timeline">
+  <table id="eventTable">
+    <thead><tr><th>time (UTC)</th><th>event</th><th>impact</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<div class="panel" data-title="lessons">
+<pre class="note">+ sharded counters cut /mint lock contention but TRIGGER-based maintenance
+  re-introduces the same contention pattern under high concurrency
++ even 128 shards deadlock cyclically when concurrent UPDATE bursts push
+  through the random-shard pick — bug or feature of MVCC tuple locking
++ dropping the trigger entirely is the surgical fix; counter goes stale
+  but everything else recovers immediately
++ runaway exploratory queries (GROUP BY on 57M rows) can take down a
+  healthy system by hogging buffer cache → lwlock contention everywhere
++ single-process auth worker is a SPOF when one route gets bot-flooded;
+  cluster mode with 4 workers absorbs the burst
++ free-tier CF page rules force 4-hour edge cache (no honor for origin
+  max-age=30); page rules removed, origin's in-process 60s cache covers</pre>
+</div>
+
+<div class="dim" style="margin-top:24px;text-align:center">
+  generated 2026-05-12 · timeline based on terminal session telemetry · approximate timings
+</div>
+
+</div>
+
+<script>
+const ACCENT='#6ee7b7', AMBER='#fbbf24', ERR='#f87171', DIM='#6b6b6b';
+
+Chart.defaults.color = '#e8e3d3';
+Chart.defaults.font.family = "'IBM Plex Mono', monospace";
+Chart.defaults.font.size = 11;
+Chart.defaults.borderColor = 'rgba(110,231,183,0.08)';
+
+const events = [
+  ['21:12', 'VPS resize: 8c/24G → 16c/64G', 'good'],
+  ['21:15', 'mining workers 8 → 12', 'good'],
+  ['21:31', 'nginx workers 4 → 8', 'good'],
+  ['22:00', 'CF proxy + bot /16 bans (Oracle Cloud, breezein)', 'good'],
+  ['22:03', 'pgbouncer pool 150→280, PG max_conn 200→300', 'good'],
+  ['22:13', 'CF page rules created (later removed — TTL too long)', ''],
+  ['22:44', 'migration 027: transferred_total trigger counter', 'good'],
+  ['23:07', 'killed runaway GROUP BY query (caused load spike)', 'bad'],
+  ['23:10', 'shared_buffers 4GB → 16GB', 'good'],
+  ['23:33', 'fix /activity microsecond cursor bug (financial)', 'good'],
+  ['23:42', '/mint perf change → 50+/min deadlocks', 'bad'],
+  ['23:46', 'reverted /mint', 'good'],
+  ['00:18', 'DROPPED trigger tokens_adjust_supply (stop deadlocks)', 'good'],
+  ['00:25', 'auth worker single → cluster (4 workers)', 'good'],
+];
+const tbody = document.querySelector('#eventTable tbody');
+events.forEach(([t,e,k])=>{
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td class="time">${t}</td><td class="evt">${e}</td><td class="${k}">${k==='good'?'✓':k==='bad'?'✗':'·'}</td>`;
+  tbody.appendChild(tr);
+});
+
+// Time series (UTC). Times are approximate from terminal observations.
+const t = (h,m) => `2026-05-11T${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00Z`;
+// after midnight = next day
+const tn = (h,m) => `2026-05-12T${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:00Z`;
+
+const loadData = [
+  {x:t(21,12), y:39}, {x:t(21,15), y:47}, {x:t(21,16), y:47}, {x:t(21,20), y:47},
+  {x:t(21,31), y:42}, {x:t(21,46), y:43}, {x:t(21,51), y:54}, {x:t(21,54), y:64},
+  {x:t(22,3), y:70}, {x:t(22,9), y:88}, {x:t(22,14), y:105}, {x:t(22,16), y:130},
+  {x:t(22,40), y:90}, {x:t(23,1), y:88}, {x:t(23,7), y:32}, {x:t(23,10), y:92},
+  {x:t(23,15), y:105}, {x:t(23,46), y:35}, {x:t(23,47), y:31}, {x:t(23,52), y:46},
+  {x:t(23,56), y:25}, {x:tn(0,38), y:19}, {x:tn(0,41), y:66}, {x:tn(0,55), y:65},
+  {x:tn(1,22), y:84},
+];
+
+const successMint = [
+  {x:t(21,15), y:75}, {x:t(22,9), y:91}, {x:t(23,1), y:84}, {x:t(23,46), y:91},
+  {x:tn(0,38), y:22}, {x:tn(0,41), y:84},
+];
+const successChall = [
+  {x:t(21,15), y:24}, {x:t(22,9), y:54}, {x:t(23,1), y:64}, {x:t(23,46), y:36},
+  {x:t(23,52), y:47}, {x:t(23,56), y:18}, {x:tn(0,41), y:35},
+];
+const successOverall = [
+  {x:t(22,9), y:72}, {x:t(23,1), y:80}, {x:t(23,46), y:65}, {x:tn(0,38), y:30},
+  {x:tn(0,41), y:75}, {x:tn(1,22), y:80},
+];
+
+const ledgerLatency = [
+  {x:t(22,3), y:33}, {x:t(22,9), y:230}, {x:t(22,16), y:1800}, {x:t(22,44), y:200},
+  {x:t(23,7), y:42}, {x:t(23,10), y:37}, {x:t(23,15), y:530}, {x:t(23,42), y:40},
+  {x:t(23,46), y:32}, {x:tn(0,18), y:10000}, {x:tn(0,25), y:47}, {x:tn(1,22), y:50},
+];
+
+const deadlocks = [
+  {x:t(22,9), y:0}, {x:t(23,40), y:0}, {x:t(23,42), y:50}, {x:t(23,45), y:30},
+  {x:t(23,46), y:1}, {x:tn(0,18), y:8}, {x:tn(0,25), y:0}, {x:tn(1,22), y:0},
+];
+
+const pgActive = [
+  {x:t(21,51), y:111}, {x:t(22,3), y:191}, {x:t(22,9), y:62}, {x:t(23,7), y:217},
+  {x:t(23,46), y:152}, {x:tn(0,38), y:217}, {x:tn(0,41), y:71}, {x:tn(1,22), y:151},
+];
+const pgIIT = [
+  {x:t(21,51), y:38}, {x:t(22,3), y:9}, {x:t(22,9), y:104}, {x:t(23,7), y:78},
+  {x:t(23,46), y:9}, {x:tn(0,38), y:104}, {x:tn(0,41), y:78}, {x:tn(1,22), y:44},
+];
+
+const baseTimeAxis = {
+  type: 'time',
+  time: { unit: 'minute', displayFormats: { minute: 'HH:mm' }, tooltipFormat: 'HH:mm' },
+  ticks: { color: DIM, maxTicksLimit: 12 },
+  grid: { color: 'rgba(110,231,183,0.05)' },
+};
+
+new Chart(document.getElementById('loadChart'), {
+  type: 'line',
+  data: {
+    datasets: [
+      { label: 'load avg (1m)', data: loadData, borderColor: ACCENT, backgroundColor: 'rgba(110,231,183,0.1)', tension: 0.3, pointRadius: 2, fill: true },
+    ],
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: baseTimeAxis,
+      y: { beginAtZero: true, ticks: { color: DIM }, grid: { color: 'rgba(110,231,183,0.05)' } },
+    },
+  },
+});
+
+new Chart(document.getElementById('successChart'), {
+  type: 'line',
+  data: {
+    datasets: [
+      { label: '/mint', data: successMint, borderColor: ACCENT, tension: 0.3, pointRadius: 3 },
+      { label: '/challenge', data: successChall, borderColor: AMBER, tension: 0.3, pointRadius: 3 },
+      { label: 'overall', data: successOverall, borderColor: DIM, borderDash: [4,4], tension: 0.3, pointRadius: 2 },
+    ],
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#e8e3d3' } } },
+    scales: {
+      x: baseTimeAxis,
+      y: { min: 0, max: 100, ticks: { color: DIM, callback: v => v + '%' }, grid: { color: 'rgba(110,231,183,0.05)' } },
+    },
+  },
+});
+
+new Chart(document.getElementById('ledgerChart'), {
+  type: 'line',
+  data: {
+    datasets: [
+      { label: '/ledger latency', data: ledgerLatency, borderColor: ACCENT, backgroundColor: 'rgba(110,231,183,0.1)', tension: 0.2, pointRadius: 3, fill: true },
+    ],
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: baseTimeAxis,
+      y: { type: 'logarithmic', ticks: { color: DIM, callback: v => v + 'ms' }, grid: { color: 'rgba(110,231,183,0.05)' } },
+    },
+  },
+});
+
+new Chart(document.getElementById('deadlockChart'), {
+  type: 'bar',
+  data: {
+    datasets: [
+      { label: 'deadlocks/min', data: deadlocks, backgroundColor: ERR, borderColor: ERR },
+    ],
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: baseTimeAxis,
+      y: { beginAtZero: true, ticks: { color: DIM }, grid: { color: 'rgba(110,231,183,0.05)' } },
+    },
+  },
+});
+
+new Chart(document.getElementById('pgChart'), {
+  type: 'line',
+  data: {
+    datasets: [
+      { label: 'active', data: pgActive, borderColor: ACCENT, tension: 0.3, pointRadius: 2 },
+      { label: 'idle in tx', data: pgIIT, borderColor: AMBER, tension: 0.3, pointRadius: 2 },
+    ],
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#e8e3d3' } } },
+    scales: {
+      x: baseTimeAxis,
+      y: { beginAtZero: true, ticks: { color: DIM }, grid: { color: 'rgba(110,231,183,0.05)' } },
+    },
+  },
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>rpow2 // metrics history</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<style>
+:root {
+  --bg: #08080a;
+  --bg-2: #0d0d10;
+  --fg: #e8e3d3;
+  --accent: #6ee7b7;
+  --accent-dim: rgba(110, 231, 183, 0.18);
+  --dim: #6b6b6b;
+  --dimmer: #3a3a3a;
+  --error: #f87171;
+  --amber: #fbbf24;
+  --cyan: #67e8f9;
+  --violet: #c4b5fd;
+  --rose: #fda4af;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: radial-gradient(ellipse at top, rgba(110,231,183,0.04), transparent 60%), var(--bg);
+  color: var(--fg);
+  font-family: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  position: relative;
+  padding: 24px;
+}
+body::before {
+  content: '';
+  position: fixed; inset: 0; pointer-events: none; z-index: 100;
+  background-image: repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0 1px, transparent 1px 3px);
+}
+body::after {
+  content: '';
+  position: fixed; inset: 0; pointer-events: none; z-index: 99;
+  background: radial-gradient(ellipse at center, transparent 65%, rgba(0,0,0,0.35) 100%);
+}
+.wrap { max-width: 1400px; margin: 0 auto; position: relative; z-index: 1; }
+h1, h2, h3 { color: var(--accent); font-weight: 500; letter-spacing: 0.5px; margin: 0 0 8px; }
+h1 { font-size: 20px; }
+h2 { font-size: 14px; margin-top: 28px; }
+.dim { color: var(--dim); }
+.amber { color: var(--amber); }
+.err { color: var(--error); }
+.acc { color: var(--accent); }
+.panel {
+  background: var(--bg-2);
+  border: 1px solid var(--dimmer);
+  padding: 16px;
+  margin-bottom: 16px;
+  position: relative;
+}
+.panel::before {
+  content: '> ' attr(data-title);
+  position: absolute; top: -10px; left: 12px;
+  background: var(--bg); padding: 0 8px;
+  color: var(--accent); font-size: 12px;
+}
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+.chart-box { height: 320px; position: relative; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th, td { text-align: left; padding: 4px 8px; border-bottom: 1px dashed var(--dimmer); }
+th { color: var(--dim); font-weight: 400; }
+td.time { color: var(--accent); white-space: nowrap; }
+td.evt { color: var(--fg); }
+td.bad { color: var(--error); }
+td.good { color: var(--accent); }
+.kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+.kpi { padding: 12px; background: var(--bg-2); border: 1px solid var(--dimmer); }
+.kpi .label { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+.kpi .val { color: var(--accent); font-size: 22px; margin-top: 4px; }
+.kpi .delta { color: var(--dim); font-size: 11px; margin-top: 2px; }
+pre.note {
+  background: var(--bg-2); border-left: 2px solid var(--accent); padding: 8px 12px;
+  margin: 0; white-space: pre-wrap; font-size: 12px; color: var(--fg);
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>rpow2 // metrics history</h1>
+<div class="dim">hourly aggregates from nginx access logs · 2026-05-09 18:00 → 2026-05-12 16:00 UTC</div>
+
+<div class="kpi-row" style="margin-top:20px">
+  <div class="kpi">
+    <div class="label">peak reqs/hour</div>
+    <div class="val" id="kpi-peak-reqs">—</div>
+    <div class="delta" id="kpi-peak-reqs-when">—</div>
+  </div>
+  <div class="kpi">
+    <div class="label">total reqs (window)</div>
+    <div class="val" id="kpi-total">—</div>
+    <div class="delta">across all observed hours</div>
+  </div>
+  <div class="kpi">
+    <div class="label">overall success</div>
+    <div class="val" id="kpi-success">—</div>
+    <div class="delta">aggregate across window</div>
+  </div>
+  <div class="kpi">
+    <div class="label">peak 504/hr</div>
+    <div class="val" id="kpi-peak-504">—</div>
+    <div class="delta" id="kpi-peak-504-when">—</div>
+  </div>
+</div>
+
+<div class="panel" data-title="total requests per hour">
+  <div class="chart-box"><canvas id="totalChart"></canvas></div>
+</div>
+
+<div class="grid">
+  <div class="panel" data-title="overall success %">
+    <div class="chart-box"><canvas id="successChart"></canvas></div>
+  </div>
+  <div class="panel" data-title="504s per hour (gateway timeouts)">
+    <div class="chart-box"><canvas id="t504Chart"></canvas></div>
+  </div>
+</div>
+
+<div class="grid">
+  <div class="panel" data-title="per-route 200 throughput">
+    <div class="chart-box"><canvas id="okChart"></canvas></div>
+  </div>
+  <div class="panel" data-title="per-route 504 rate %">
+    <div class="chart-box"><canvas id="route504Chart"></canvas></div>
+  </div>
+</div>
+
+<div class="panel" data-title="status code distribution per hour">
+  <div class="chart-box"><canvas id="stackChart"></canvas></div>
+</div>
+
+<div class="panel" data-title="event timeline">
+  <table id="eventTable">
+    <thead><tr><th>time (UTC)</th><th>event</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<div class="panel" data-title="notes">
+<pre class="note">data gap 2026-05-10 → 2026-05-11 00:00 caused by old log-truncate cron
+  (/etc/cron.d/rpow-log-truncate) destroying access.log every 2 hours.
+  Removed and replaced with hourly logrotate on 2026-05-11 ~23:06.
+
+hour buckets are time-of-event end (e.g. "2026-05-12T01" covers 01:00-01:59).
+the last bucket (2026-05-12T16) is partial — only ~1 minute of data.
+
+green dashed lines on the timeline mark interventions; spikes in 504s
+typically follow bot waves, and improvements follow shard/pool changes
+and CF Pro bot-fight-mode rollout at ~2026-05-12T02.</pre>
+</div>
+
+<div class="dim" style="margin-top:24px;text-align:center">
+  generated from /var/log/nginx/api.rpow2.com.access.log* · regenerate via /tmp/agg3.sh on origin
+</div>
+
+</div>
+
+<script>
+const ACCENT='#6ee7b7', AMBER='#fbbf24', ERR='#f87171', DIM='#6b6b6b',
+      CYAN='#67e8f9', VIOLET='#c4b5fd', ROSE='#fda4af';
+
+Chart.defaults.color = '#e8e3d3';
+Chart.defaults.font.family = "'IBM Plex Mono', monospace";
+Chart.defaults.font.size = 11;
+Chart.defaults.borderColor = 'rgba(110,231,183,0.08)';
+
+// Embedded hourly metrics (May 9 18:00 → May 12 16:00 UTC)
+const DATA = [{"t":"2026-05-09T18","total":8512311,"ok":1729260,"s4xx":4382785,"s5xx":2370128,"ledger_t":29884,"ledger_ok":29193,"ledger_504":0,"mint_t":1332427,"mint_ok":493887,"mint_504":0,"me_t":277619,"me_ok":65393,"me_504":0,"activity_t":2319,"activity_ok":605,"activity_504":0,"send_t":511,"send_ok":439,"send_504":0,"challenge_t":6839258,"challenge_ok":1136906,"challenge_504":98},{"t":"2026-05-09T19","total":8863889,"ok":2273529,"s4xx":4194956,"s5xx":2357770,"ledger_t":37913,"ledger_ok":37369,"ledger_504":0,"mint_t":1491407,"mint_ok":764160,"mint_504":0,"me_t":299023,"me_ok":78464,"me_504":0,"activity_t":2267,"activity_ok":1148,"activity_504":0,"send_t":622,"send_ok":584,"send_504":0,"challenge_t":7002111,"challenge_ok":1390000,"challenge_504":0},{"t":"2026-05-09T20","total":8683898,"ok":2296286,"s4xx":4001873,"s5xx":2343468,"ledger_t":42463,"ledger_ok":42100,"ledger_504":0,"mint_t":1549142,"mint_ok":780370,"mint_504":0,"me_t":301659,"me_ok":76324,"me_504":0,"activity_t":2386,"activity_ok":1388,"activity_504":0,"send_t":761,"send_ok":709,"send_504":0,"challenge_t":6759664,"challenge_ok":1394046,"challenge_504":0},{"t":"2026-05-09T21","total":10628178,"ok":1342015,"s4xx":8031050,"s5xx":1209194,"ledger_t":47220,"ledger_ok":46651,"ledger_504":0,"mint_t":854495,"mint_ok":441627,"mint_504":0,"me_t":395777,"me_ok":91920,"me_504":0,"activity_t":2285,"activity_ok":1228,"activity_504":0,"send_t":1367,"send_ok":1288,"send_504":0,"challenge_t":9297286,"challenge_ok":758086,"challenge_504":0},{"t":"2026-05-09T22","total":10899867,"ok":1117683,"s4xx":8462845,"s5xx":1267663,"ledger_t":52882,"ledger_ok":51975,"ledger_504":0,"mint_t":714378,"mint_ok":335047,"mint_504":0,"me_t":371171,"me_ok":132557,"me_504":0,"activity_t":2197,"activity_ok":1222,"activity_504":0,"send_t":1018,"send_ok":895,"send_504":0,"challenge_t":9728780,"challenge_ok":595164,"challenge_504":0},{"t":"2026-05-09T23","total":9872295,"ok":1297149,"s4xx":7405866,"s5xx":1106953,"ledger_t":64869,"ledger_ok":63581,"ledger_504":0,"mint_t":772127,"mint_ok":419619,"mint_504":0,"me_t":362850,"me_ok":152652,"me_504":0,"activity_t":2295,"activity_ok":1308,"activity_504":0,"send_t":1089,"send_ok":1000,"send_504":0,"challenge_t":8637908,"challenge_ok":657782,"challenge_504":0},{"t":"2026-05-10T00","total":2901113,"ok":398572,"s4xx":2153062,"s5xx":327044,"ledger_t":22903,"ledger_ok":22585,"ledger_504":0,"mint_t":230592,"mint_ok":135147,"mint_504":0,"me_t":96095,"me_ok":46201,"me_504":0,"activity_t":752,"activity_ok":455,"activity_504":0,"send_t":622,"send_ok":559,"send_504":0,"challenge_t":2541751,"challenge_ok":193075,"challenge_504":0},{"t":"2026-05-11T00","total":1204039,"ok":153088,"s4xx":575985,"s5xx":472716,"ledger_t":1957,"ledger_ok":1852,"ledger_504":2,"mint_t":77682,"mint_ok":41700,"mint_504":72,"me_t":71897,"me_ok":42556,"me_504":42,"activity_t":476,"activity_ok":158,"activity_504":0,"send_t":522,"send_ok":486,"send_504":0,"challenge_t":1042046,"challenge_ok":61587,"challenge_504":19496},{"t":"2026-05-11T22","total":11523597,"ok":8629838,"s4xx":1234758,"s5xx":1623985,"ledger_t":5282,"ledger_ok":4987,"ledger_504":68,"mint_t":4330927,"mint_ok":3628952,"mint_504":211625,"me_t":791443,"me_ok":667412,"me_504":7350,"activity_t":9838,"activity_ok":9485,"activity_504":91,"send_t":629,"send_ok":534,"send_504":6,"challenge_t":6319535,"challenge_ok":4266677,"challenge_504":760143},{"t":"2026-05-11T23","total":11509431,"ok":4257815,"s4xx":1187412,"s5xx":6047591,"ledger_t":6457,"ledger_ok":6287,"ledger_504":24,"mint_t":3141753,"mint_ok":1528340,"mint_504":1028454,"me_t":643289,"me_ok":475556,"me_504":21158,"activity_t":11372,"activity_ok":10956,"activity_504":151,"send_t":3106,"send_ok":1291,"send_504":31,"challenge_t":7637278,"challenge_ok":2185707,"challenge_504":2731594},{"t":"2026-05-12T00","total":10241984,"ok":3976775,"s4xx":1179567,"s5xx":5079381,"ledger_t":5606,"ledger_ok":5249,"ledger_504":243,"mint_t":2804052,"mint_ok":1507775,"mint_504":925137,"me_t":594276,"me_ok":424640,"me_504":24408,"activity_t":10439,"activity_ok":9898,"activity_504":288,"send_t":4543,"send_ok":1117,"send_504":1797,"challenge_t":6763802,"challenge_ok":1985274,"challenge_504":3347828},{"t":"2026-05-12T01","total":10353582,"ok":3432617,"s4xx":2288554,"s5xx":4622510,"ledger_t":6551,"ledger_ok":4677,"ledger_504":975,"mint_t":2522399,"mint_ok":1315225,"mint_504":633323,"me_t":575921,"me_ok":302175,"me_504":69647,"activity_t":9677,"activity_ok":7474,"activity_504":631,"send_t":7287,"send_ok":4498,"send_504":620,"challenge_t":7165513,"challenge_ok":1753040,"challenge_504":3299169},{"t":"2026-05-12T02","total":6050041,"ok":4557844,"s4xx":1072841,"s5xx":394892,"ledger_t":13247,"ledger_ok":13236,"ledger_504":1,"mint_t":2266444,"mint_ok":1945485,"mint_504":33768,"me_t":523241,"me_ok":447885,"me_504":6,"activity_t":12808,"activity_ok":12680,"activity_504":0,"send_t":3319,"send_ok":3120,"send_504":0,"challenge_t":3166621,"challenge_ok":2079276,"challenge_504":279608},{"t":"2026-05-12T03","total":4486471,"ok":3692013,"s4xx":427867,"s5xx":327672,"ledger_t":17662,"ledger_ok":17572,"ledger_504":0,"mint_t":1711773,"mint_ok":1560901,"mint_504":21423,"me_t":474112,"me_ok":414921,"me_504":0,"activity_t":12574,"activity_ok":12456,"activity_504":0,"send_t":459,"send_ok":372,"send_504":1,"challenge_t":2210691,"challenge_ok":1633230,"challenge_504":279200},{"t":"2026-05-12T04","total":5150789,"ok":4450455,"s4xx":546697,"s5xx":88322,"ledger_t":27575,"ledger_ok":27543,"ledger_504":0,"mint_t":2172737,"mint_ok":1877057,"mint_504":0,"me_t":500008,"me_ok":445243,"me_504":0,"activity_t":12120,"activity_ok":12101,"activity_504":0,"send_t":1265,"send_ok":1220,"send_504":0,"challenge_t":2383116,"challenge_ok":2040903,"challenge_504":0},{"t":"2026-05-12T05","total":5365850,"ok":4526680,"s4xx":632294,"s5xx":134269,"ledger_t":31034,"ledger_ok":31011,"ledger_504":0,"mint_t":2249638,"mint_ok":1855077,"mint_504":0,"me_t":537524,"me_ok":478968,"me_504":0,"activity_t":13113,"activity_ok":12904,"activity_504":0,"send_t":1388,"send_ok":1132,"send_504":0,"challenge_t":2475812,"challenge_ok":2097489,"challenge_504":0},{"t":"2026-05-12T06","total":6680404,"ok":5639577,"s4xx":787510,"s5xx":152783,"ledger_t":34572,"ledger_ok":34539,"ledger_504":0,"mint_t":2828478,"mint_ok":2359524,"mint_504":0,"me_t":612301,"me_ok":553721,"me_504":0,"activity_t":12948,"activity_ok":12835,"activity_504":0,"send_t":5691,"send_ok":5418,"send_504":0,"challenge_t":3125561,"challenge_ok":2624886,"challenge_504":0},{"t":"2026-05-12T07","total":7518107,"ok":6416057,"s4xx":848695,"s5xx":148274,"ledger_t":34337,"ledger_ok":34313,"ledger_504":0,"mint_t":3109132,"mint_ok":2667213,"mint_504":1,"me_t":760540,"me_ok":710789,"me_504":0,"activity_t":13235,"activity_ok":13021,"activity_504":0,"send_t":5799,"send_ok":5085,"send_504":0,"challenge_t":3537909,"challenge_ok":2940322,"challenge_504":11971},{"t":"2026-05-12T08","total":7202058,"ok":6377872,"s4xx":623759,"s5xx":87614,"ledger_t":37331,"ledger_ok":37315,"ledger_504":0,"mint_t":2949239,"mint_ok":2700392,"mint_504":0,"me_t":800826,"me_ok":754300,"me_504":0,"activity_t":13266,"activity_ok":13045,"activity_504":0,"send_t":4608,"send_ok":3730,"send_504":0,"challenge_t":3338055,"challenge_ok":2822512,"challenge_504":0},{"t":"2026-05-12T09","total":6906865,"ok":5654454,"s4xx":682522,"s5xx":485749,"ledger_t":28925,"ledger_ok":28913,"ledger_504":0,"mint_t":2596392,"mint_ok":2325424,"mint_504":63978,"me_t":823540,"me_ok":783463,"me_504":0,"activity_t":12025,"activity_ok":11804,"activity_504":0,"send_t":11145,"send_ok":10783,"send_504":0,"challenge_t":3385119,"challenge_ok":2456253,"challenge_504":361788},{"t":"2026-05-12T10","total":7600507,"ok":6520839,"s4xx":647293,"s5xx":348460,"ledger_t":24269,"ledger_ok":24253,"ledger_504":0,"mint_t":2919307,"mint_ok":2641241,"mint_504":50549,"me_t":987793,"me_ok":923569,"me_504":2738,"activity_t":12286,"activity_ok":11516,"activity_504":36,"send_t":28546,"send_ok":24341,"send_504":13,"challenge_t":3564424,"challenge_ok":2850655,"challenge_504":233216},{"t":"2026-05-12T11","total":8020685,"ok":6999527,"s4xx":621871,"s5xx":312545,"ledger_t":26026,"ledger_ok":26016,"ledger_504":0,"mint_t":3051093,"mint_ok":2831253,"mint_504":32290,"me_t":1157097,"me_ok":1106731,"me_504":0,"activity_t":11659,"activity_ok":11494,"activity_504":1,"send_t":28679,"send_ok":26910,"send_504":0,"challenge_t":3693879,"challenge_ok":2961337,"challenge_504":235125},{"t":"2026-05-12T12","total":6491246,"ok":4217082,"s4xx":868667,"s5xx":1362869,"ledger_t":19047,"ledger_ok":16483,"ledger_504":110,"mint_t":2060612,"mint_ok":1608611,"mint_504":225116,"me_t":843886,"me_ok":619948,"me_504":57315,"activity_t":7373,"activity_ok":6896,"activity_504":331,"send_t":24474,"send_ok":22273,"send_504":179,"challenge_t":3451898,"challenge_ok":1876479,"challenge_504":1050509},{"t":"2026-05-12T13","total":7504811,"ok":6124038,"s4xx":830634,"s5xx":496871,"ledger_t":12537,"ledger_ok":8925,"ledger_504":925,"mint_t":3046382,"mint_ok":2735043,"mint_504":42288,"me_t":698612,"me_ok":317603,"me_504":183713,"activity_t":5719,"activity_ok":4782,"activity_504":875,"send_t":13556,"send_ok":8820,"send_504":4414,"challenge_t":3655114,"challenge_ok":2992717,"challenge_504":209141},{"t":"2026-05-12T14","total":5284847,"ok":2146724,"s4xx":963207,"s5xx":2162859,"ledger_t":5595,"ledger_ok":2863,"ledger_504":402,"mint_t":1482297,"mint_ok":787858,"mint_504":428982,"me_t":580224,"me_ok":214736,"me_504":179771,"activity_t":4057,"activity_ok":3252,"activity_504":743,"send_t":9774,"send_ok":8684,"send_504":104,"challenge_t":3169202,"challenge_ok":1109079,"challenge_504":1523570},{"t":"2026-05-12T15","total":5347070,"ok":4227579,"s4xx":600826,"s5xx":478853,"ledger_t":5802,"ledger_ok":5624,"ledger_504":22,"mint_t":1799897,"mint_ok":1563304,"mint_504":12240,"me_t":784042,"me_ok":738290,"me_504":3399,"activity_t":9948,"activity_ok":9434,"activity_504":21,"send_t":58466,"send_ok":55311,"send_504":0,"challenge_t":2660096,"challenge_ok":1836332,"challenge_504":135851},{"t":"2026-05-12T16","total":1031318,"ok":919728,"s4xx":98844,"s5xx":6743,"ledger_t":1042,"ledger_ok":1038,"ledger_504":0,"mint_t":328183,"mint_ok":291478,"mint_504":0,"me_t":229100,"me_ok":214797,"me_504":0,"activity_t":1105,"activity_ok":984,"activity_504":5,"send_t":18516,"send_ok":17407,"send_504":246,"challenge_t":445953,"challenge_ok":389675,"challenge_504":0}];
+
+// Convert each row's "t" to ISO8601 (append :00:00 minute/second)
+const toISO = t => t + ":00:00Z";
+
+// Compute derived KPIs
+const peakReqs = DATA.reduce((m, r) => r.total > m.v ? {v: r.total, t: r.t} : m, {v: 0, t: ''});
+const peak504 = DATA.reduce((m, r) => (r.s5xx||0) > m.v ? {v: r.s5xx, t: r.t} : m, {v: 0, t: ''});
+const totalReqs = DATA.reduce((s, r) => s + r.total, 0);
+const totalOk = DATA.reduce((s, r) => s + (r.ok||0), 0);
+const fmt = n => n >= 1e6 ? (n/1e6).toFixed(1) + 'M' : n >= 1e3 ? (n/1e3).toFixed(1) + 'K' : String(n);
+
+document.getElementById('kpi-peak-reqs').textContent = fmt(peakReqs.v);
+document.getElementById('kpi-peak-reqs-when').textContent = peakReqs.t + ' UTC';
+document.getElementById('kpi-total').textContent = fmt(totalReqs);
+document.getElementById('kpi-success').textContent = ((totalOk/totalReqs)*100).toFixed(1) + '%';
+document.getElementById('kpi-peak-504').textContent = fmt(peak504.v);
+document.getElementById('kpi-peak-504-when').textContent = peak504.t + ' UTC';
+
+// Event annotations (UTC). Times approximate based on the session.
+const events = [
+  ['2026-05-11T21', 'VPS resize 8c→16c, workers 8→12'],
+  ['2026-05-11T22', 'pgbouncer pool 150→280, PG max_conn 200→300'],
+  ['2026-05-11T22', 'migration 027: transferred_total trigger'],
+  ['2026-05-11T23', 'shared_buffers 4GB → 16GB'],
+  ['2026-05-12T00', 'DROP trigger tokens_adjust_supply'],
+  ['2026-05-12T00', 'auth single→cluster (4 workers)'],
+  ['2026-05-12T01', '/16 datacenter bans added in nginx'],
+  ['2026-05-12T02', 'CF Pro + Super Bot Fight Mode enabled'],
+  ['2026-05-12T02', 'CF rate-limit: /challenge 10/min /mint 20/min'],
+];
+const tbody = document.querySelector('#eventTable tbody');
+events.forEach(([t,e])=>{
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td class="time">${t}</td><td class="evt">${e}</td>`;
+  tbody.appendChild(tr);
+});
+
+// Time ranges where logs were destroyed by old /etc/cron.d/rpow-log-truncate
+// before the cron was removed and proper hourly logrotate installed on 2026-05-11 ~23:06.
+const dataGaps = [
+  ['2026-05-10T01:00:00Z', '2026-05-11T22:00:00Z', 'log data lost'],
+];
+
+// Annotation plugin: shade data-gap regions + dashed vertical lines for events
+const eventAnnotationPlugin = {
+  id: 'eventAnnotations',
+  beforeDatasetsDraw(chart) {
+    const {ctx, chartArea, scales} = chart;
+    if (!chartArea) return;
+    ctx.save();
+    dataGaps.forEach(([from, to, label]) => {
+      const x1 = scales.x.getPixelForValue(from);
+      const x2 = scales.x.getPixelForValue(to);
+      if (x2 < chartArea.left || x1 > chartArea.right) return;
+      const lx = Math.max(x1, chartArea.left);
+      const rx = Math.min(x2, chartArea.right);
+      // Hatched fill via repeating diagonal pattern (manual)
+      ctx.fillStyle = 'rgba(248,113,113,0.08)';
+      ctx.fillRect(lx, chartArea.top, rx - lx, chartArea.bottom - chartArea.top);
+      ctx.strokeStyle = 'rgba(248,113,113,0.35)';
+      ctx.lineWidth = 0.5;
+      const step = 6;
+      ctx.beginPath();
+      for (let xx = lx - (chartArea.bottom - chartArea.top); xx < rx; xx += step) {
+        ctx.moveTo(xx, chartArea.top);
+        ctx.lineTo(xx + (chartArea.bottom - chartArea.top), chartArea.bottom);
+      }
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(lx, chartArea.top, rx - lx, chartArea.bottom - chartArea.top);
+      ctx.clip();
+      ctx.stroke();
+      ctx.restore();
+      // Label
+      ctx.fillStyle = 'rgba(248,113,113,0.8)';
+      ctx.font = "10px 'IBM Plex Mono', monospace";
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const cx = (lx + rx) / 2;
+      const cy = (chartArea.top + chartArea.bottom) / 2;
+      ctx.fillText(label, cx, cy);
+    });
+    ctx.restore();
+  },
+  afterDraw(chart) {
+    const {ctx, chartArea, scales} = chart;
+    if (!chartArea) return;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(110,231,183,0.35)';
+    ctx.fillStyle = 'rgba(110,231,183,0.5)';
+    ctx.setLineDash([3,3]);
+    ctx.lineWidth = 1;
+    ctx.font = "9px 'IBM Plex Mono', monospace";
+    const seen = new Set();
+    events.forEach(([t]) => {
+      if (seen.has(t)) return;
+      seen.add(t);
+      const x = scales.x.getPixelForValue(toISO(t));
+      if (x < chartArea.left || x > chartArea.right) return;
+      ctx.beginPath();
+      ctx.moveTo(x, chartArea.top);
+      ctx.lineTo(x, chartArea.bottom);
+      ctx.stroke();
+    });
+    ctx.restore();
+  }
+};
+
+const baseTimeAxis = {
+  type: 'time',
+  time: { unit: 'hour', displayFormats: { hour: 'MM-dd HH:mm' }, tooltipFormat: 'yyyy-MM-dd HH:mm' },
+  ticks: { color: DIM, maxRotation: 0, autoSkipPadding: 12 },
+  grid: { color: 'rgba(110,231,183,0.05)' },
+};
+
+const labels = DATA.map(r => toISO(r.t));
+
+new Chart(document.getElementById('totalChart'), {
+  type: 'line',
+  data: {
+    labels,
+    datasets: [{
+      label: 'total reqs',
+      data: DATA.map(r => r.total),
+      borderColor: ACCENT,
+      backgroundColor: 'rgba(110,231,183,0.1)',
+      tension: 0.2, pointRadius: 2, fill: true,
+    }],
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: baseTimeAxis,
+      y: { beginAtZero: true, ticks: { color: DIM, callback: v => fmt(v) }, grid: { color: 'rgba(110,231,183,0.05)' } },
+    },
+  },
+  plugins: [eventAnnotationPlugin],
+});
+
+new Chart(document.getElementById('successChart'), {
+  type: 'line',
+  data: {
+    labels,
+    datasets: [{
+      label: 'success %',
+      data: DATA.map(r => +((r.ok/r.total)*100).toFixed(1)),
+      borderColor: ACCENT,
+      backgroundColor: 'rgba(110,231,183,0.1)',
+      tension: 0.2, pointRadius: 2, fill: true,
+    }],
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: baseTimeAxis,
+      y: { min: 0, max: 100, ticks: { color: DIM, callback: v => v + '%' }, grid: { color: 'rgba(110,231,183,0.05)' } },
+    },
+  },
+  plugins: [eventAnnotationPlugin],
+});
+
+new Chart(document.getElementById('t504Chart'), {
+  type: 'line',
+  data: {
+    labels,
+    datasets: [{
+      label: '5xx total',
+      data: DATA.map(r => r.s5xx||0),
+      borderColor: ERR,
+      backgroundColor: 'rgba(248,113,113,0.1)',
+      tension: 0.2, pointRadius: 2, fill: true,
+    }],
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: baseTimeAxis,
+      y: { beginAtZero: true, ticks: { color: DIM, callback: v => fmt(v) }, grid: { color: 'rgba(110,231,183,0.05)' } },
+    },
+  },
+  plugins: [eventAnnotationPlugin],
+});
+
+const routes = [
+  { name: 'challenge', color: ACCENT },
+  { name: 'mint',      color: AMBER  },
+  { name: 'me',        color: CYAN   },
+  { name: 'ledger',    color: VIOLET },
+  { name: 'send',      color: ROSE   },
+  { name: 'activity',  color: DIM    },
+];
+
+new Chart(document.getElementById('okChart'), {
+  type: 'line',
+  data: {
+    labels,
+    datasets: routes.map(r => ({
+      label: r.name,
+      data: DATA.map(d => d[r.name + '_ok'] || 0),
+      borderColor: r.color,
+      tension: 0.2, pointRadius: 1.5, borderWidth: 1.5,
+    })),
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#e8e3d3', boxWidth: 10 } } },
+    scales: {
+      x: baseTimeAxis,
+      y: { beginAtZero: true, ticks: { color: DIM, callback: v => fmt(v) }, grid: { color: 'rgba(110,231,183,0.05)' } },
+    },
+  },
+  plugins: [eventAnnotationPlugin],
+});
+
+new Chart(document.getElementById('route504Chart'), {
+  type: 'line',
+  data: {
+    labels,
+    datasets: routes.map(r => ({
+      label: r.name,
+      data: DATA.map(d => {
+        const t = d[r.name + '_t'] || 0;
+        const x = d[r.name + '_504'] || 0;
+        return t > 0 ? +((x/t)*100).toFixed(2) : 0;
+      }),
+      borderColor: r.color,
+      tension: 0.2, pointRadius: 1.5, borderWidth: 1.5,
+    })),
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#e8e3d3', boxWidth: 10 } } },
+    scales: {
+      x: baseTimeAxis,
+      y: { beginAtZero: true, max: 100, ticks: { color: DIM, callback: v => v + '%' }, grid: { color: 'rgba(110,231,183,0.05)' } },
+    },
+  },
+  plugins: [eventAnnotationPlugin],
+});
+
+new Chart(document.getElementById('stackChart'), {
+  type: 'bar',
+  data: {
+    labels,
+    datasets: [
+      { label: '200', data: DATA.map(r => r.ok||0),   backgroundColor: ACCENT, stack: 's' },
+      { label: '4xx', data: DATA.map(r => r.s4xx||0), backgroundColor: AMBER,  stack: 's' },
+      { label: '5xx', data: DATA.map(r => r.s5xx||0), backgroundColor: ERR,    stack: 's' },
+    ],
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#e8e3d3', boxWidth: 10 } } },
+    scales: {
+      x: { ...baseTimeAxis, stacked: true },
+      y: { stacked: true, beginAtZero: true, ticks: { color: DIM, callback: v => fmt(v) }, grid: { color: 'rgba(110,231,183,0.05)' } },
+    },
+  },
+  plugins: [eventAnnotationPlugin],
+});
+</script>
+
+</body>
+</html>
