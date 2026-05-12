@@ -49,7 +49,12 @@ export function CelebrationBanner() {
           color: #ffd700;
           text-shadow: 0 0 4px rgba(255, 215, 0, 0.45);
           white-space: pre;
-          overflow-x: auto;
+          /* Art is 74 columns wide. Scale font with viewport so it always
+             fits — ~0.6em per char in monospace × 74 cols ≈ font-size × 44.
+             Hidden overflow prevents a flicker scrollbar from sub-pixel
+             rounding on browsers where monospace is slightly wider. */
+          font-size: clamp(8px, 2.1vw, 14px);
+          overflow: hidden;
         }
         .celebration-headline {
           color: #ffec80;
