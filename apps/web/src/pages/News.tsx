@@ -25,7 +25,7 @@ const ENTRIES: Entry[] = [
   {
     when: 'Sun May 10',
     title: 'Community games arrive',
-    body: 'Adam McBride ships RPOWMarket and RPOWSwap. Thousands of RPOW trades happen OTC.',
+    body: 'Adam McBride ships RPOWSwap. His friend ships RPOWMarket. Thousands of RPOW trades happen OTC.',
   },
   {
     when: 'Sat May 9',
