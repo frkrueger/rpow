@@ -5,6 +5,7 @@ import { seedRoutes } from './seed.js';
 import { poolReadRoutes } from './pool.js';
 import { swapRoutes } from './swap.js';
 import { lpRoutes } from './lp.js';
+import { walletRoutes } from './wallet.js';
 
 export async function ammRoutes(app: FastifyInstance) {
   await termsRoutes(app);
@@ -13,4 +14,5 @@ export async function ammRoutes(app: FastifyInstance) {
   await poolReadRoutes(app);
   await swapRoutes(app);
   await lpRoutes(app);
+  await walletRoutes(app);
 }
