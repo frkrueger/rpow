@@ -85,6 +85,14 @@ export interface AppConfig {
   turnstileSecret?: string;
   /** Lowercased emails that bypass per-user rate limits (operator/admin). */
   operatorEmails: Set<string>;
+  /** HMAC key for /amm/wallet/link-challenge envelope. Required. */
+  ammLinkHmacSecret: string;
+  /** AMM hot wallet pubkey (base58). Used by /amm/config. */
+  ammUsdcWalletPubkey: string;
+  /** AMM hot wallet's USDC ATA (base58). Used by /amm/config + indexer. */
+  ammUsdcWalletAta: string;
+  /** USDC mint address. Default = mainnet. */
+  usdcMintAddress: string;
 }
 
 export interface BuildAppOptions {
