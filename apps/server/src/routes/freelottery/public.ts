@@ -103,9 +103,64 @@ export async function publicRoutes(app: FastifyInstance) {
   });
 
   // ---------------------------------------------------------------------
-  // GET /api/freelottery/winners — implemented in Task 2
+  // GET /api/freelottery/winners — fully public, no auth
   // ---------------------------------------------------------------------
+  let winnersCache: { ts: number; body: { winners: WinnerRow[] } } | null = null;
+
   app.get('/api/freelottery/winners', async (_req, reply) => {
-    return reply.code(501).send({ error: 'not_implemented' });
+    const sched = scheduleFor(app);
+    if (!sched.startUtcDate) {
+      return reply.code(404).send({ error: 'FEATURE_DISABLED', message: 'freelottery is not enabled' });
+    }
+    if (winnersCache && Date.now() - winnersCache.ts < WINNERS_CACHE_MS) {
+      return winnersCache.body;
+    }
+
+    const { rows } = await app.pool.query<{
+      day_utc: string;
+      status: 'ok' | 'empty' | 'pending_blockhash';
+      winner_x_handle: string | null;
+      x_avatar_url: string | null;
+      prize_base_units: string;
+      total_tickets: number;
+      solana_slot: string | null;
+      solana_blockhash: string | null;
+      mint_credited_at: Date | null;
+      tweet_url: string | null;
+    }>(
+      `SELECT
+         d.day_utc::text AS day_utc,
+         d.status,
+         d.winner_x_handle,
+         u.x_avatar_url,
+         d.prize_base_units::text AS prize_base_units,
+         d.total_tickets,
+         d.solana_slot::text AS solana_slot,
+         d.solana_blockhash,
+         d.mint_credited_at,
+         e.tweet_url
+       FROM freelottery_draws d
+       LEFT JOIN users u ON u.email = d.winner_email
+       LEFT JOIN freelottery_entries e
+         ON e.account_email = d.winner_email AND e.day_utc = d.day_utc
+       WHERE d.status IN ('ok', 'empty')
+       ORDER BY d.day_utc DESC`,
+    );
+
+    const winners: WinnerRow[] = rows.map(r => ({
+      day_utc: r.day_utc,
+      status: r.status as 'ok' | 'empty',
+      x_handle: r.winner_x_handle,
+      x_avatar_url: r.x_avatar_url,
+      prize_base_units: r.prize_base_units,
+      total_tickets: r.total_tickets,
+      solana_slot: r.solana_slot,
+      solana_blockhash: r.solana_blockhash,
+      mint_credited_at: r.mint_credited_at ? r.mint_credited_at.toISOString() : null,
+      tweet_url: r.tweet_url,
+    }));
+    const body = { winners };
+    winnersCache = { ts: Date.now(), body };
+    return body;
   });
 }

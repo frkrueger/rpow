@@ -105,3 +105,134 @@ describe('GET /api/freelottery/today', () => {
     expect(r.json().entries[0].x_handle).toBe('alice');
   });
 });
+
+async function seedDraw(
+  ctx: Awaited<ReturnType<typeof makeTestApp>>,
+  opts: {
+    dayUtc: string;
+    status: 'ok' | 'empty';
+    winnerEmail?: string;
+    winnerXHandle?: string;
+    totalTickets: number;
+    solanaSlot?: number;
+    solanaBlockhash?: string;
+    tweetUrl?: string;
+  },
+) {
+  if (opts.winnerEmail) {
+    await ctx.pool.query(`INSERT INTO users (email) VALUES ($1) ON CONFLICT DO NOTHING`, [opts.winnerEmail]);
+    await ctx.pool.query(
+      `UPDATE users SET x_handle = $1, x_avatar_url = $2 WHERE email = $3`,
+      [opts.winnerXHandle, `https://unavatar.io/twitter/${opts.winnerXHandle}`, opts.winnerEmail],
+    );
+    if (opts.tweetUrl) {
+      await ctx.pool.query(
+        `INSERT INTO freelottery_entries
+           (account_email, day_utc, x_handle, tweet_url, ticket_count, balance_base_units_at_entry, verified_at)
+         VALUES ($1, $2, $3, $4, 1, 0, now())`,
+        [opts.winnerEmail, opts.dayUtc, opts.winnerXHandle, opts.tweetUrl],
+      );
+    }
+  }
+  await ctx.pool.query(
+    `INSERT INTO freelottery_draws
+       (day_utc, drawn_at, total_tickets, prize_base_units, status,
+        winner_email, winner_x_handle, solana_slot, solana_blockhash, mint_credited_at)
+     VALUES ($1, now(), $2, 1000000000000, $3, $4, $5, $6, $7, ${opts.status === 'ok' ? 'now()' : 'NULL'})`,
+    [
+      opts.dayUtc,
+      opts.totalTickets,
+      opts.status,
+      opts.winnerEmail ?? null,
+      opts.winnerXHandle ?? null,
+      opts.solanaSlot ?? null,
+      opts.solanaBlockhash ?? null,
+    ],
+  );
+}
+
+describe('GET /api/freelottery/winners', () => {
+  let cleanup: (() => Promise<void>) | null = null;
+  afterEach(async () => {
+    if (cleanup) await cleanup();
+    cleanup = null;
+  });
+
+  it('404 when feature is disabled', async () => {
+    const ctx = await makeTestApp();
+    cleanup = ctx.cleanup;
+    const r = await ctx.app.inject({ method: 'GET', url: '/api/freelottery/winners' });
+    expect(r.statusCode).toBe(404);
+    expect(r.json().error).toBe('FEATURE_DISABLED');
+  });
+
+  it('returns [] when no draws have been processed', async () => {
+    const ctx = await makeTestApp({ freelotteryStartUtcDate: TODAY });
+    cleanup = ctx.cleanup;
+    const r = await ctx.app.inject({ method: 'GET', url: '/api/freelottery/winners' });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toEqual({ winners: [] });
+  });
+
+  it('returns ok draws with winner profile + slot/blockhash receipts', async () => {
+    const ctx = await makeTestApp({ freelotteryStartUtcDate: TODAY });
+    cleanup = ctx.cleanup;
+    await seedDraw(ctx, {
+      dayUtc: '2026-05-10',
+      status: 'ok',
+      winnerEmail: 'a@b.com',
+      winnerXHandle: 'alice',
+      totalTickets: 3,
+      solanaSlot: 123_456_789,
+      solanaBlockhash: 'a'.repeat(64),
+      tweetUrl: 'https://twitter.com/alice/status/1',
+    });
+    const r = await ctx.app.inject({ method: 'GET', url: '/api/freelottery/winners' });
+    expect(r.statusCode).toBe(200);
+    const winners = r.json().winners;
+    expect(winners).toHaveLength(1);
+    expect(winners[0]).toMatchObject({
+      day_utc: '2026-05-10',
+      status: 'ok',
+      x_handle: 'alice',
+      x_avatar_url: 'https://unavatar.io/twitter/alice',
+      total_tickets: 3,
+      prize_base_units: '1000000000000',
+      solana_slot: '123456789',
+      solana_blockhash: 'a'.repeat(64),
+      tweet_url: 'https://twitter.com/alice/status/1',
+    });
+    expect(winners[0].mint_credited_at).not.toBeNull();
+  });
+
+  it('includes empty-day rows with null winner', async () => {
+    const ctx = await makeTestApp({ freelotteryStartUtcDate: TODAY });
+    cleanup = ctx.cleanup;
+    await seedDraw(ctx, {
+      dayUtc: '2026-05-09',
+      status: 'empty',
+      totalTickets: 0,
+    });
+    const r = await ctx.app.inject({ method: 'GET', url: '/api/freelottery/winners' });
+    const winners = r.json().winners;
+    expect(winners).toHaveLength(1);
+    expect(winners[0]).toMatchObject({
+      day_utc: '2026-05-09',
+      status: 'empty',
+      x_handle: null,
+      x_avatar_url: null,
+      total_tickets: 0,
+    });
+    expect(winners[0].mint_credited_at).toBeNull();
+  });
+
+  it('returns most-recent first', async () => {
+    const ctx = await makeTestApp({ freelotteryStartUtcDate: TODAY });
+    cleanup = ctx.cleanup;
+    await seedDraw(ctx, { dayUtc: '2026-05-08', status: 'empty', totalTickets: 0 });
+    await seedDraw(ctx, { dayUtc: '2026-05-10', status: 'empty', totalTickets: 0 });
+    await seedDraw(ctx, { dayUtc: '2026-05-09', status: 'empty', totalTickets: 0 });
+    const winners = (await ctx.app.inject({ method: 'GET', url: '/api/freelottery/winners' })).json().winners;
+    expect(winners.map((w: any) => w.day_utc)).toEqual(['2026-05-10', '2026-05-09', '2026-05-08']);
+  });
+});
