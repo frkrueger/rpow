@@ -20,14 +20,16 @@
     "@metaplex-foundation/mpl-token-metadata": "^2.13.0",
     "@rpow/shared": "*",
     "@rpow/solana-bridge": "^0.1.0",
+    "@solana/spl-token": "^0.4.14",
+    "@solana/web3.js": "^1.98.4",
     "bs58": "^6.0.0",
     "fastify": "^4.27.0",
+    "nodemailer": "^6.10.1",
     "pg": "^8.11.5",
     "pino": "^9.1.0",
     "postmark": "^4.0.7",
     "resend": "^3.2.0",
     "tweetnacl": "^1.0.3",
-    "nodemailer": "^6.10.1",
     "zod": "^3.23.0"
   },
   "devDependencies": {
