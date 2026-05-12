@@ -9,6 +9,7 @@ Type=simple
 User=rpow
 WorkingDirectory=/opt/rpow/repo
 EnvironmentFile=/etc/rpow/server.env
+EnvironmentFile=/etc/rpow/amm-wallet.env
 ExecStart=/usr/bin/node --enable-source-maps /opt/rpow/repo/apps/server/dist/amm/usdc-indexer-main.js
 Restart=on-failure
 RestartSec=5
