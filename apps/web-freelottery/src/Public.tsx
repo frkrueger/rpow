@@ -127,7 +127,13 @@ export function Public() {
     return (
       <div className="bulletin">
         <header className="masthead">
-          <span className="brand"><span className="dot" />RPOW · FREE LOTTERY</span>
+          <span className="brand">
+            <span className="dot" />
+            <a className="brand-back" href="https://rpow2.com" title="Back to rpow2.com">
+              <span className="brand-back-arrow">←</span> RPOW
+            </a>
+            <span className="brand-sep"> · FREE LOTTERY</span>
+          </span>
           <span className="meta">LOADING…</span>
         </header>
       </div>
@@ -184,7 +190,13 @@ function RunningView({ status, today, winners }: RunningProps) {
   return (
     <div className="bulletin">
       <header className="masthead">
-        <span className="brand"><span className="dot" />RPOW · FREE LOTTERY</span>
+        <span className="brand">
+          <span className="dot" />
+          <a className="brand-back" href="https://rpow2.com" title="Back to rpow2.com">
+            <span className="brand-back-arrow">←</span> RPOW
+          </a>
+          <span className="brand-sep"> · FREE LOTTERY</span>
+        </span>
         <span className="meta">{ended ? 'FINAL · CLOSED' : `LIVE · DRAW DAILY ${String(status.drawHourUtc).padStart(2, '0')}:00 UTC`}</span>
       </header>
 

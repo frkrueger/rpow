@@ -6,7 +6,13 @@ function EnterShell({ title, children }: { title: string; children: ReactNode })
   return (
     <div className="bulletin">
       <header className="masthead">
-        <span className="brand"><span className="dot" />RPOW · FREE LOTTERY</span>
+        <span className="brand">
+          <span className="dot" />
+          <a className="brand-back" href="https://rpow2.com" title="Back to rpow2.com">
+            <span className="brand-back-arrow">←</span> RPOW
+          </a>
+          <span className="brand-sep"> · FREE LOTTERY</span>
+        </span>
         <span className="meta">ENTER · DRAW DAILY 19:00 UTC</span>
       </header>
       <section className="section">
