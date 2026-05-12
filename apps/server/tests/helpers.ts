@@ -47,6 +47,7 @@ export async function makeTestApp(opts: {
     magicLinkBaseUrl: 'http://test',
     difficultyBits: 8,
     difficultyFloor: 4,
+    baseRewardBaseUnits: 10_000_000n,
     mintMaxSupply: 21,
     signingPrivateKeyHex: '11'.repeat(32),
     signingPublicKeyHex: 'd04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737',

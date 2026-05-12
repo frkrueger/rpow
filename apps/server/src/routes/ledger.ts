@@ -43,6 +43,7 @@ export async function ledgerRoutes(app: FastifyInstance) {
 
     const info = scheduleInfo(counterBaseUnits, {
       difficultyBits: app.config.difficultyBits,
+      baseRewardBaseUnits: app.config.baseRewardBaseUnits,
       maxSupplyRpow: app.config.mintMaxSupply,
     });
 

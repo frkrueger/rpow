@@ -114,6 +114,7 @@ export async function mintRoutes(app: FastifyInstance) {
       const mintedBaseUnits = counterRows[0] ? BigInt(counterRows[0].value) : 0n;
 
       const reward = currentRewardBaseUnits(mintedBaseUnits, {
+        baseRewardBaseUnits: app.config.baseRewardBaseUnits,
         maxSupplyRpow: app.config.mintMaxSupply,
       });
       if (reward === 0n) {

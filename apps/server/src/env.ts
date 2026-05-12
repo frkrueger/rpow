@@ -19,6 +19,9 @@ const Schema = z.object({
   RPOW_SIGNING_PUBLIC_KEY_HEX: z.string().regex(/^[0-9a-f]{64}$/),
   DIFFICULTY_BITS: z.coerce.number().int().min(4).max(40).default(28),
   DIFFICULTY_FLOOR: z.coerce.number().int().min(4).max(40).default(20),
+  // Base mint reward in BASE_UNITS_PER_RPOW units (default 10_000_000 = 0.01 RPOW).
+  // Bumping this scales every successful mint until the next code change.
+  MINT_BASE_REWARD_BASE_UNITS: z.coerce.number().int().positive().default(10_000_000),
   MINT_MAX_SUPPLY: z.coerce.number().int().positive().default(19_000_000),
   WEB_ORIGIN: z.string().url().default('http://localhost:5173'),
   LONGSHOT_WEB_ORIGIN: z.string().url().default('https://longshot.rpow2.com'),

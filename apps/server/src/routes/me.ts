@@ -77,7 +77,10 @@ export async function meRoutes(app: FastifyInstance) {
     ]);
 
     const mintedSupply = counterRow[0] ? BigInt(counterRow[0].value) : 0n;
-    const reward = currentRewardBaseUnits(mintedSupply, { maxSupplyRpow: app.config.mintMaxSupply });
+    const reward = currentRewardBaseUnits(mintedSupply, {
+      baseRewardBaseUnits: app.config.baseRewardBaseUnits,
+      maxSupplyRpow: app.config.mintMaxSupply,
+    });
     const dailyCap = reward * SOLUTIONS_PER_DAY_PER_HUMAN;
     const dailyMintedToday = bucketRow[0] ? BigInt(bucketRow[0].total_base_units) : 0n;
 

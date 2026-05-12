@@ -28,6 +28,8 @@ export interface AppConfig {
   magicLinkBaseUrl: string;
   difficultyBits: number;
   difficultyFloor: number;
+  /** Base mint reward in BASE_UNITS_PER_RPOW units (10_000_000 = 0.01 RPOW). */
+  baseRewardBaseUnits: bigint;
   mintMaxSupply: number;
   signingPrivateKeyHex: string;
   signingPublicKeyHex: string;

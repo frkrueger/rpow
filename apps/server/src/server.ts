@@ -96,6 +96,7 @@ const app = await buildApp({
     magicLinkBaseUrl: env.MAGIC_LINK_BASE_URL,
     difficultyBits: env.DIFFICULTY_BITS,
     difficultyFloor: env.DIFFICULTY_FLOOR,
+    baseRewardBaseUnits: BigInt(env.MINT_BASE_REWARD_BASE_UNITS),
     mintMaxSupply: env.MINT_MAX_SUPPLY,
     signingPrivateKeyHex: env.RPOW_SIGNING_PRIVATE_KEY_HEX,
     signingPublicKeyHex: env.RPOW_SIGNING_PUBLIC_KEY_HEX,
