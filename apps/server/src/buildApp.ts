@@ -84,6 +84,8 @@ export interface AppConfig {
   freelotteryAllowedEmails: string;
   /** CORS origin for the Freelottery frontend. */
   freelotteryWebOrigin: string;
+  /** Solana JSON-RPC endpoint for fetching draw entropy. When unset, draws cannot run and the scheduler tick logs a warning. */
+  solanaRpcUrl?: string;
   /** AMM alpha allowlist — CSV of emails that can hit any /amm/* endpoint. */
   ammAllowedEmails: string;
   /** AMM admin allowlist — subset that can call admin endpoints (credit, seed). */

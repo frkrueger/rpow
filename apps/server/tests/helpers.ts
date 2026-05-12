@@ -77,6 +77,7 @@ export async function makeTestApp(opts: {
     freelotteryDrawHourUtc: 19,
     freelotteryAllowedEmails: '*',
     freelotteryWebOrigin: 'http://freelottery.test',
+    solanaRpcUrl: undefined,
     ammAllowedEmails: opts?.ammAllowedEmails ?? '*',
     ammAdminEmails: opts?.ammAdminEmails ?? '',
     ammUsdcPoolCapBaseUnits: opts?.ammUsdcPoolCapBaseUnits ?? 1_000_000_000,
