@@ -411,7 +411,15 @@ main code { background: rgba(110,231,183,0.06); padding: 1px 5px; border: 1px so
   background: var(--bg-2);
   text-align: center;
   position: relative;
+  color: inherit;
+  text-decoration: none;
+  transition: background 120ms ease, transform 120ms ease;
 }
+a.entrant:hover {
+  background: rgba(110,231,183,0.06);
+  transform: translateY(-1px);
+}
+a.entrant:hover .entrant-handle { color: var(--accent); }
 .entrant-avatar {
   width: 44px;
   height: 44px;
@@ -521,6 +529,18 @@ main code { background: rgba(110,231,183,0.06); padding: 1px 5px; border: 1px so
   font-size: 14px;
   color: var(--fg);
   font-weight: 500;
+  text-decoration: none;
+  display: inline-block;
+}
+a.ledger-handle:hover { color: var(--accent); }
+.ledger-avatar-link {
+  display: inline-flex;
+  line-height: 0;
+  text-decoration: none;
+}
+.ledger-avatar-link:hover .ledger-avatar {
+  border-color: var(--accent);
+  box-shadow: 0 0 6px rgba(110,231,183,0.25);
 }
 .ledger-prize {
   font-size: 12px;

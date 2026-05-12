@@ -64,6 +64,12 @@ function avatarOrPlaceholder(url: string | null, handle: string | null, cls: str
   return <span className={`${cls} placeholder`} aria-hidden="true">{letter}</span>;
 }
 
+function xProfileUrl(handle: string | null): string | null {
+  if (!handle) return null;
+  const clean = handle.replace(/^@/, '');
+  return `https://x.com/${encodeURIComponent(clean)}`;
+}
+
 function useInterval(cb: () => void, ms: number) {
   const ref = useRef(cb);
   useEffect(() => { ref.current = cb; }, [cb]);
@@ -291,11 +297,18 @@ function EntrantsGallery({ entries }: { entries: TodayEntry[] }) {
   return (
     <div className="entrants">
       {entries.map((e) => (
-        <div className="entrant fade-in" key={e.x_handle}>
+        <a
+          className="entrant fade-in"
+          key={e.x_handle}
+          href={xProfileUrl(e.x_handle) ?? '#'}
+          target="_blank"
+          rel="noreferrer"
+          title={`@${e.x_handle} on X`}
+        >
           {e.ticket_count === 2 && <span className="entrant-badge">+1 Holder</span>}
           {avatarOrPlaceholder(e.x_avatar_url, e.x_handle, 'entrant-avatar')}
           <span className="entrant-handle">@{e.x_handle}</span>
-        </div>
+        </a>
       ))}
     </div>
   );
@@ -339,9 +352,25 @@ function WinnerRowView({ row, startUtc }: { row: WinnerRow; startUtc: string | n
       ) : (
         <div className="ledger-body">
           <div className="ledger-winner">
-            {avatarOrPlaceholder(row.x_avatar_url, row.x_handle, 'ledger-avatar')}
+            <a
+              className="ledger-avatar-link"
+              href={xProfileUrl(row.x_handle) ?? '#'}
+              target="_blank"
+              rel="noreferrer"
+              title={`@${row.x_handle} on X`}
+              aria-label={`@${row.x_handle} on X`}
+            >
+              {avatarOrPlaceholder(row.x_avatar_url, row.x_handle, 'ledger-avatar')}
+            </a>
             <div>
-              <div className="ledger-handle">@{row.x_handle}</div>
+              <a
+                className="ledger-handle"
+                href={xProfileUrl(row.x_handle) ?? '#'}
+                target="_blank"
+                rel="noreferrer"
+              >
+                @{row.x_handle}
+              </a>
               <p className="ledger-prize">
                 Won <strong>{formatPrize(row.prize_base_units)} RPOW</strong> · Drew from {row.total_tickets} ticket{row.total_tickets === 1 ? '' : 's'}
               </p>
