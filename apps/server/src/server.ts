@@ -7,6 +7,7 @@ import { SolanaBridgeClient, FakeBridgeClient, type BridgeClient, SRPOW_BASE_UNI
 import { loadBridgeKeypair } from './bridge-keys.js';
 import { reconcilePendingWraps } from './srpow-reconcile.js';
 import { refillTriviaQuestions } from './trivia/questions.js';
+import { runDraw } from './freelottery/draw.js';
 
 const env = parseEnv();
 const pool = createPool(env.DATABASE_URL, env.PG_POOL_MAX);
@@ -157,6 +158,14 @@ setInterval(() => {
   refillTriviaQuestions(app.pool, { low: 50, high: 200 })
     .catch(err => app.log.warn({ err }, 'trivia: periodic refill failed'));
 }, 10 * 60 * 1000);
+
+// Freelottery draw runner: every 60s, check for past-due days and process them.
+// Non-blocking; errors are logged so the next tick re-attempts. When
+// freelotteryStartUtcDate is unset, runDraw short-circuits cheaply.
+setInterval(() => {
+  runDraw({ pool: app.pool, config: app.config })
+    .catch(err => app.log.warn({ err }, 'freelottery: scheduled draw failed'));
+}, 60 * 1000);
 
 await app.listen({ host: '0.0.0.0', port: env.PORT });
 app.log.info(`rpow2 server listening on :${env.PORT}`);
