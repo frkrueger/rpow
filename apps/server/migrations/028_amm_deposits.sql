@@ -1,7 +1,7 @@
 -- AMM slice 5: USDC deposit indexer schema (Phantom-link model).
 
 ALTER TABLE users
-  ADD COLUMN solana_pubkey TEXT UNIQUE NULL;
+  ADD COLUMN IF NOT EXISTS solana_pubkey TEXT UNIQUE NULL;
 
 CREATE TABLE usdc_deposits (
   id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -27,6 +27,9 @@ CREATE TABLE usdc_unattributed_deposits (
 );
 CREATE INDEX usdc_unattributed_unclaimed_idx
   ON usdc_unattributed_deposits(observed_at DESC)
+  WHERE claimed_by_email IS NULL;
+CREATE INDEX usdc_unattributed_sender_idx
+  ON usdc_unattributed_deposits(sender_pubkey)
   WHERE claimed_by_email IS NULL;
 
 CREATE TABLE amm_indexer_state (
