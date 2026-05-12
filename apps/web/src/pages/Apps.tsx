@@ -1,12 +1,19 @@
+import { Link } from 'react-router-dom';
 import { Panel } from '../components/Panel.js';
+import { useMe } from '../hooks/useMe.js';
+import { AMM_PILOT_EMAILS } from '../lib/ammPilot.js';
 
 type ProtocolApp = {
   name: string;
   url: string;
   description: string;
+  /** Internal in-app route — render with react-router <Link>. External (default) opens in a new tab. */
+  internal?: boolean;
   /** If set, the click handler forwards the rpow_session cookie via URL fragment.
    *  Sidesteps Chrome quirks where the .rpow2.com cookie doesn't reach subdomain fetches. */
   forwardSession?: boolean;
+  /** If set, only render for users whose email is in this allowlist (pilot gating). */
+  visibleTo?: Set<string>;
 };
 
 const protocolApps: ProtocolApp[] = [
@@ -26,6 +33,13 @@ const protocolApps: ProtocolApp[] = [
     url: 'https://trivia.rpow2.com/',
     description: 'PvP trivia matches against X-verified opponents. 4 choices, 10 seconds, faster-correct wins. Zero rake, winner takes both bets. Signed audit per match.',
     forwardSession: true,
+  },
+  {
+    name: 'AMM',
+    url: '/usdc/deposit',
+    description: 'Deposit USDC from Phantom into RPOW Pool. Experimental, pilot-only.',
+    internal: true,
+    visibleTo: AMM_PILOT_EMAILS,
   },
 ];
 
@@ -73,24 +87,32 @@ const communityApps = [
 ];
 
 export function AppsPage() {
+  const { me } = useMe();
+  const visibleProtocolApps = protocolApps.filter(
+    app => !app.visibleTo || (me && app.visibleTo.has(me.email)),
+  );
   return (
     <>
       <Panel title="PROTOCOL APPS">
         <p style={{ marginTop: 0, fontSize: 12, color: '#888', marginBottom: 16 }}>
           Built and operated by rpow.
         </p>
-        {protocolApps.map(app => (
+        {visibleProtocolApps.map(app => (
           <div key={app.url} style={{ borderTop: '1px solid #222', padding: '12px 0' }}>
             <div>
-              <a
-                href={app.url}
-                target={app.forwardSession ? undefined : '_blank'}
-                rel="noreferrer"
-                style={{ color: 'var(--accent)', fontWeight: 700 }}
-                onClick={app.forwardSession ? (e) => onForwardSessionClick(e, app.url) : undefined}
-              >
-                {app.name}
-              </a>
+              {app.internal ? (
+                <Link to={app.url} style={{ color: 'var(--accent)', fontWeight: 700 }}>{app.name}</Link>
+              ) : (
+                <a
+                  href={app.url}
+                  target={app.forwardSession ? undefined : '_blank'}
+                  rel="noreferrer"
+                  style={{ color: 'var(--accent)', fontWeight: 700 }}
+                  onClick={app.forwardSession ? (e) => onForwardSessionClick(e, app.url) : undefined}
+                >
+                  {app.name}
+                </a>
+              )}
             </div>
             <div style={{ fontSize: 12, marginTop: 4, color: '#aaa' }}>{app.description}</div>
           </div>
