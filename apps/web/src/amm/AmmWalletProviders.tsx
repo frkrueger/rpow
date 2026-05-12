@@ -9,7 +9,7 @@ import '@solana/wallet-adapter-react-ui/styles.css';
 export function AmmWalletProviders({ children }: { children: ReactNode }) {
   const endpoint =
     (import.meta.env.VITE_SOLANA_RPC_URL as string | undefined) ??
-    'https://solana-rpc.publicnode.com';
+    'https://api.rpow2.com/solana-rpc';
   const wallets = useMemo(
     () => [new PhantomWalletAdapter(), new SolflareWalletAdapter()],
     [],

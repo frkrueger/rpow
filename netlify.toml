@@ -36,9 +36,9 @@
   VITE_API_BASE_URL = "https://api.rpow2.com"
   # Public Solana mainnet RPC. Pilot-scale; swap for Helius via Netlify
   # dashboard env if/when rate limits start biting.
-  VITE_SOLANA_RPC_URL = "https://solana-rpc.publicnode.com"
+  VITE_SOLANA_RPC_URL = "https://api.rpow2.com/solana-rpc"
 
 # Branch deploys default to the same API
 [context.deploy-preview.environment]
   VITE_API_BASE_URL = "https://api.rpow2.com"
-  VITE_SOLANA_RPC_URL = "https://solana-rpc.publicnode.com"
+  VITE_SOLANA_RPC_URL = "https://api.rpow2.com/solana-rpc"
