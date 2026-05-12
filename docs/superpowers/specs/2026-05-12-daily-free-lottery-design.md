@@ -8,7 +8,7 @@
 
 ## 1. Feature summary
 
-A 100-day daily free lottery awarding 1,000 RPOW per day to one verified entrant. Anyone with an RPOW account can earn a ticket by posting a public tweet on X each day and pasting the tweet URL back to the site for oEmbed-based verification (same dance as the existing gladiator X-handle flow, repeated daily). Holding ≥ 1 RPOW at entry time grants a second ticket. Each day's draw runs at 19:00 UTC and selects a winner using the hash of the first Solana block produced at-or-after that moment, weighted by ticket count. The prize is credited to the winner via the existing mint plumbing (in-DB ledger + Solana bridge mirror) and comes out of the unmined 19M cap. A fully-public landing page shows today's entrants, countdown to draw, and the running list of past winners — the page is also the trust artifact that lets anyone re-verify the draw.
+A 100-day daily free lottery awarding 1,000 RPOW per day to one verified entrant. Anyone with an RPOW account can earn a ticket by posting a public tweet on X each day and pasting the tweet URL back to the site for oEmbed-based verification (same dance as the existing gladiator X-handle flow, repeated daily). Holding ≥ 1 RPOW at entry time grants a second ticket. Each day's draw runs at 19:00 UTC and selects a winner using the hash of the first Solana block produced at-or-after that moment, weighted by ticket count. The prize is credited to the winner via the existing in-DB mint plumbing (sharded `minted_supply` counter + `tokens` row, same path as PoW mint) and comes out of the unmined 19M cap. The winner converts to on-chain sRPOW via the existing `/srpow/wrap` flow whenever they choose. A fully-public landing page shows today's entrants, countdown to draw, and the running list of past winners — the page is also the trust artifact that lets anyone re-verify the draw.
 
 ## 2. Scope and key decisions
 
@@ -20,8 +20,8 @@ A 100-day daily free lottery awarding 1,000 RPOW per day to one verified entrant
 | Per-day code | 6-digit numeric, expires at 19:00 UTC |
 | Tickets | 1 base ticket on verified entry; +1 if balance ≥ 1 RPOW at moment of verify |
 | Eligibility | Any logged-in RPOW account |
-| Prize delivery | Ledger credit + Solana bridge mint, same path as PoW mint; deducts from unmined supply |
-| Winner has no Solana wallet | Ledger credit immediate; on-chain mint fires when wallet is bound |
+| Prize delivery | In-DB mint (sharded `minted_supply` increment + `tokens` row insert), same path as PoW mint; deducts from unmined supply. On-chain conversion via `/srpow/wrap` (user-initiated). |
+| Winner has no Solana wallet | Ledger credit is unaffected; the winner can later bind a wallet and use `/srpow/wrap` to mirror on-chain. The draw never blocks on wallet state. |
 | Draw method | Hash of first Solana block at-or-after 19:00 UTC, weighted by ticket count |
 | Empty-day behavior | No winner, no mint, day is skipped — prize stays in unmined supply |
 | Calendar | 100 days, fixed window; start date in env (`FREELOTTERY_START_UTC_DATE`) |
@@ -63,7 +63,7 @@ apps/web/src/pages/News.tsx  # add launch news entry (separate edit)
 **Reuse:**
 - X-handle binding lives on `users.x_handle` (gladiator's existing schema). First-time lottery entrants without a bound handle are redirected through the existing gladiator bind UI; already-bound gladiator users skip straight to the daily code dance.
 - oEmbed verification helper from `apps/server/src/gladiator/xVerify.ts` is reused for tweet validation.
-- Mint pipeline: `minted_supply` shard counter increment, `tokens` row insert (`source = 'freelottery'`), Solana bridge enqueue — same path as the PoW mint flow.
+- Mint pipeline: `minted_supply` shard counter increment plus `tokens` row insert (server-signed, `parent_token_id IS NULL`) — same path as the PoW mint flow. The winner converts to on-chain sRPOW themselves via `/srpow/wrap`; the draw runner does not auto-enqueue a bridge mint.
 
 ## 4. Data model
 
@@ -141,8 +141,8 @@ A scheduled job (mechanism resolved in implementation plan based on existing sch
    - For each entry, repeat its index `ticket_count` times.
 5. Compute `winning_index = bigint_of_first_8_bytes(blockhash) mod total_tickets`. Pick the entry at that index.
 6. Insert `freelottery_draws` row with winner info, `status = 'ok'`.
-7. Credit the prize: increment `minted_supply` by `prize_base_units` (1,000 RPOW = 10^12 base units), insert `tokens` row tagged `source = 'freelottery'`, enqueue Solana bridge mint to the winner's wallet. Update `freelottery_draws.mint_credited_at`.
-8. The Solana bridge writes back `on_chain_signature` asynchronously via its existing crash-recovery path.
+7. Credit the prize ledger-side, matching the existing PoW mint: increment `minted_supply` (sharded) by `prize_base_units` (1,000 RPOW = 10^12 base units) under the 19M cap, then insert a `tokens` row owned by the winner with `parent_token_id IS NULL` and a server-signed payload. Set `freelottery_draws.mint_credited_at = now()`.
+8. The winner converts in-DB RPOW to on-chain sRPOW themselves via the existing `/srpow/wrap` flow whenever they choose — this matches how every other RPOW mint in the system reaches on-chain form. `freelottery_draws.on_chain_signature` stays NULL; the column is reserved for a future automation pass that could auto-wrap on the winner's behalf.
 
 ### 5.3 Public reads
 
@@ -200,7 +200,7 @@ A new entry in `apps/web/src/pages/News.tsx` for the launch date, mirroring the 
 ### 7.2 Draw time
 
 - Solana RPC failure fetching the post-19:00 block — retry with backoff for up to 10 minutes; on continued failure, insert `freelottery_draws` row with `status = 'pending_blockhash'` and surface on the page ("Draw pending — Solana network issue"). Admin-triggered re-run completes it. Do **not** fall back to a different RNG.
-- Ledger credit succeeds, bridge enqueue fails — ledger credit stands; bridge retries via its existing recovery. Page shows "Paid (on-chain pending)".
+- The draw runner does not enqueue a bridge mint, so there's no bridge-enqueue failure path to consider in slice 3. Winners convert via `/srpow/wrap` themselves.
 - Server outage across one or more 19:00 UTC boundaries — on next startup, find each `day_utc` in `[start, today−1]` with no `freelottery_draws` row and run them in order. Block-hash logic still uses each day's original 19:00 UTC moment, so missed draws are still verifiable.
 - Same user wins multiple days — allowed. No uniqueness constraint on `winner_email`.
 
@@ -235,7 +235,7 @@ If `FREELOTTERY_START_UTC_DATE` is unset, all routes return 404 and the schedule
 - `selection.ts` determinism: given fixed entry list + fixed blockhash, winner is deterministic; same inputs in a different process produce the same winner.
 
 ### 9.2 Integration tests
-- End-to-end: register → bind X (mocked oEmbed via gladiator test harness) → enter → close window → run draw (mocked Solana block) → assert mint credited + bridge enqueued.
+- End-to-end: register → bind X (mocked oEmbed via gladiator test harness) → enter → close window → run draw (mocked Solana block) → assert in-DB mint credited (sharded supply + token row).
 - Missed-day recovery: simulate two 19:00 UTC boundaries while scheduler is paused; on resume, both daily draws execute in order and produce expected winners.
 - Empty-day: zero entries → draw row inserted with `status = 'empty'`, no mint, `minted_supply` unchanged.
 - Pending-blockhash path: Solana RPC failure → draw row inserted with `status = 'pending_blockhash'`; subsequent retry completes the draw.
@@ -245,7 +245,7 @@ If `FREELOTTERY_START_UTC_DATE` is unset, all routes return 404 and the schedule
 - `Enter.tsx` flow tests: bind-required redirect, tweet-intent button, paste-and-verify, all error toasts.
 
 ### 9.4 Manual / staging
-- One full live cycle in staging using a real X account, with a mock blockhash via env override; verify ledger credit + bridge enqueue.
+- One full live cycle in staging using a real X account, with a mock blockhash via env override; verify ledger credit lands and the winner can wrap to on-chain via `/srpow/wrap`.
 - Load test public endpoints behind the in-process cache (e.g., `wrk -c 200 -d 30s`).
 
 ## 10. Open items deferred to the plan
