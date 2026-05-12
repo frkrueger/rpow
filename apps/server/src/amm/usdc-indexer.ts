@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
 import { withTx } from '../db.js';
+import { extractUsdcTransfersTo } from './usdc-indexer-classifier.js';
 
 export interface TransferRecord {
   sig: string;
@@ -55,4 +56,87 @@ export async function persistTransfer(pool: Pool, r: TransferRecord): Promise<vo
       ON CONFLICT (solana_signature) DO NOTHING
     `, [r.amount.toString(), r.sig, r.authority, r.blockTime]);
   });
+}
+
+export interface IndexerDeps {
+  pool: Pool;
+  rpc: {
+    getSignaturesForAddress: (
+      address: string,
+      opts?: { until?: string; before?: string; limit?: number; commitment?: string }
+    ) => Promise<Array<{ signature: string; err: any; blockTime: number | null }>>;
+    getParsedTransaction: (sig: string, opts?: any) => Promise<any | null>;
+  };
+  ammAta: string;
+  usdcMint: string;
+  log: { debug: (...a: any[]) => void; info: (...a: any[]) => void; warn: (...a: any[]) => void; error: (...a: any[]) => void };
+  bootstrapLimit: number;
+}
+
+async function fetchNewSignatures(
+  rpc: IndexerDeps['rpc'],
+  ata: string,
+  cursor: string | null,
+  bootstrapLimit: number,
+): Promise<Array<{ signature: string; err: any; blockTime: number | null }>> {
+  const out: Array<{ signature: string; err: any; blockTime: number | null }> = [];
+  let before: string | undefined = undefined;
+  while (true) {
+    const opts: any = { commitment: 'finalized', limit: 1000 };
+    if (cursor) opts.until = cursor;
+    if (before) opts.before = before;
+    const page = await rpc.getSignaturesForAddress(ata, opts);
+    if (!page || page.length === 0) break;
+    out.push(...page);
+    if (page.length < 1000) break;
+    if (!cursor && out.length >= bootstrapLimit) {
+      // bootstrap cap
+      return out.slice(0, bootstrapLimit);
+    }
+    before = page[page.length - 1].signature;
+  }
+  return out;
+}
+
+export async function tick(deps: IndexerDeps): Promise<void> {
+  const { pool, rpc, log, ammAta, usdcMint, bootstrapLimit } = deps;
+  const cursor = await loadCursor(pool);
+  let sigs: Array<{ signature: string; err: any; blockTime: number | null }>;
+  try {
+    sigs = await fetchNewSignatures(rpc, ammAta, cursor, bootstrapLimit);
+  } catch (e) {
+    log.warn({ err: String(e) }, 'indexer: getSignaturesForAddress failed; retry next tick');
+    return;
+  }
+  if (sigs.length === 0) {
+    await touchCursorTimestamp(pool);
+    return;
+  }
+
+  // RPC returns newest-first; process oldest-first so the cursor advances monotonically.
+  sigs.reverse();
+  for (const si of sigs) {
+    if (si.err) {
+      log.debug({ sig: si.signature }, 'indexer: skip failed tx');
+      await advanceCursor(pool, si.signature);
+      continue;
+    }
+    let tx: any;
+    try {
+      tx = await rpc.getParsedTransaction(si.signature, { maxSupportedTransactionVersion: 0, commitment: 'finalized' });
+    } catch (e) {
+      log.warn({ sig: si.signature, err: String(e) }, 'indexer: getParsedTransaction threw; will retry');
+      break;
+    }
+    if (!tx) {
+      log.warn({ sig: si.signature }, 'indexer: parsed tx null; will retry next tick');
+      break;
+    }
+    const transfers = extractUsdcTransfersTo(tx, ammAta, usdcMint);
+    const blockTime = si.blockTime ? new Date(si.blockTime * 1000) : null;
+    for (const t of transfers) {
+      await persistTransfer(pool, { sig: si.signature, amount: t.amount, authority: t.authority, blockTime });
+    }
+    await advanceCursor(pool, si.signature);
+  }
 }
