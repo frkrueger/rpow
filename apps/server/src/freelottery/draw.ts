@@ -9,6 +9,10 @@ import { fetchDrawEntropy } from './solanaBlock.js';
 import { pickWinner, type Entry } from './selection.js';
 import { type ScheduleConfig } from './schedule.js';
 
+class AlreadyProcessedSignal extends Error {
+  constructor() { super('already processed by another tick'); }
+}
+
 export interface RunOneDayOpts {
   pool: Pool;
   config: AppConfig;
@@ -95,6 +99,7 @@ export async function runOneDay(opts: RunOneDayOpts): Promise<RunOneDayResult> {
   const winnerXHandle = userRes.rows[0]?.x_handle ?? null;
 
   // Single transaction: increment supply (sharded, cap-guarded) + insert token + insert draw row.
+  try {
   await withTx(opts.pool, async (c) => {
     const mintRes = await c.query(
       `WITH inc AS (
@@ -121,11 +126,13 @@ export async function runOneDay(opts: RunOneDayOpts): Promise<RunOneDayResult> {
     if (mintRes.rowCount === 0) {
       throw new Error('SUPPLY_EXHAUSTED — minted_supply cap reached before freelottery draw');
     }
-    await c.query(
+    const drawInsertRes = await c.query(
       `INSERT INTO freelottery_draws
          (day_utc, drawn_at, solana_slot, solana_blockhash, total_tickets,
           winner_email, winner_x_handle, prize_base_units, mint_credited_at, status)
-       VALUES ($1, now(), $2, $3, $4, $5, $6, $7, now(), 'ok')`,
+       VALUES ($1, now(), $2, $3, $4, $5, $6, $7, now(), 'ok')
+       ON CONFLICT (day_utc) DO NOTHING
+       RETURNING day_utc`,
       [
         opts.dayUtc,
         entropy.slot,
@@ -136,7 +143,18 @@ export async function runOneDay(opts: RunOneDayOpts): Promise<RunOneDayResult> {
         prizeBaseUnits.toString(),
       ],
     );
+    if (drawInsertRes.rowCount === 0) {
+      // Another tick processed this day between our pre-flight SELECT and now.
+      // Throw to roll back the supply/token insert; runOneDay catches this.
+      throw new AlreadyProcessedSignal();
+    }
   });
+  } catch (e) {
+    if (e instanceof AlreadyProcessedSignal) {
+      return { status: 'already_processed' };
+    }
+    throw e;
+  }
 
   return {
     status: 'ok',

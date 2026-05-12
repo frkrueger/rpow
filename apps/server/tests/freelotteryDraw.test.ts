@@ -173,4 +173,40 @@ describe('runOneDay', () => {
     // FakeBridgeClient records every mintTo call in `calls: MintToArgs[]`.
     expect(ctx.bridgeClient.calls).toEqual([]);
   });
+
+  it('Solana RPC failure leaves no draws row — defers to next tick', async () => {
+    const ctx = await makeTestApp();
+    cleanup = ctx.cleanup;
+    await seedEntry(ctx, 'a@b.com', PAST_DAY, 1, '2026-05-10T10:00:00Z');
+
+    const failingFetch: typeof fetch = (async () => {
+      throw new Error('network down');
+    }) as unknown as typeof fetch;
+
+    await expect(
+      runOneDay({
+        pool: ctx.pool,
+        config: { ...ctx.config, ...DRAW_CONFIG_OVERRIDES, solanaRpcUrl: 'http://test.local' },
+        dayUtc: PAST_DAY,
+        fetchImpl: failingFetch,
+      }),
+    ).rejects.toThrow(/network|fetch/i);
+
+    // No draws row written.
+    const { rows: drawRows } = await ctx.pool.query(
+      `SELECT 1 FROM freelottery_draws WHERE day_utc = $1`,
+      [PAST_DAY],
+    );
+    expect(drawRows.length).toBe(0);
+
+    // No token minted.
+    const { rows: tokenRows } = await ctx.pool.query(`SELECT COUNT(*)::int AS c FROM tokens`);
+    expect(tokenRows[0].c).toBe(0);
+
+    // Supply counter unchanged.
+    const { rows: supplyRows } = await ctx.pool.query<{ value: string }>(
+      `SELECT COALESCE(SUM(value), 0)::text AS value FROM app_counters WHERE name='minted_supply'`,
+    );
+    expect(supplyRows[0].value).toBe('0');
+  });
 });
