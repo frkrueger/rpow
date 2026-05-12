@@ -14,6 +14,7 @@ export async function makeTestApp(opts: {
   ammAllowedEmails?: string;
   ammAdminEmails?: string;
   ammUsdcPoolCapBaseUnits?: number;
+  freelotteryStartUtcDate?: string;
 } = {}): Promise<{
   app: Awaited<ReturnType<typeof buildApp>>;
   pool: Pool;
@@ -70,7 +71,7 @@ export async function makeTestApp(opts: {
     triviaSessionTtlHours: 48,
     triviaAllowedEmails: opts?.triviaAllowedEmails ?? '*',
     triviaWebOrigin: 'http://trivia.test',
-    freelotteryStartUtcDate: undefined,
+    freelotteryStartUtcDate: opts?.freelotteryStartUtcDate,
     freelotteryTotalDays: 100,
     freelotteryPrizeBaseUnits: 1_000_000_000_000n,
     freelotteryDrawHourUtc: 19,

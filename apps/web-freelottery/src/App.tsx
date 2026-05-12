@@ -9,6 +9,7 @@ interface Status {
   prizeBaseUnits: string;
   drawHourUtc: number;
   dayIndex: number | null;
+  currentDayUtc: string | null;
   nextDrawAt: string | null;
   ended: boolean;
 }
