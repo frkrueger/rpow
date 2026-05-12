@@ -4,6 +4,7 @@ import { Panel } from '../components/Panel.js';
 import { useMe } from '../hooks/useMe.js';
 import { api } from '../api.js';
 import { formatRpow, parseRpowToBaseUnits } from '../lib/format.js';
+import { formatUsdc } from '../lib/amm.js';
 
 /** Best-effort safety check on a return_url. Accept http(s) only. Reject
  *  data:, javascript:, file:, etc. Reject malformed URLs. The displayed
@@ -167,6 +168,10 @@ export function WalletPage() {
           <div className="stat-cell full">
             <div className="stat-label">BALANCE</div>
             <div className="stat-value highlight">{formatRpow(me.balance_base_units)} RPOW</div>
+          </div>
+          <div className="stat-cell full">
+            <div className="stat-label">USDC</div>
+            <div className="stat-value">{formatUsdc(me.usdc_base_units)} USDC</div>
           </div>
           <div className="stat-cell">
             <div className="stat-label">MINTED</div>

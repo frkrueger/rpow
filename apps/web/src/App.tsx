@@ -12,6 +12,8 @@ import { LedgerPage } from './pages/Ledger.js';
 import { WrapPage } from './pages/WrapPage.js';
 import { AppsPage } from './pages/Apps.js';
 import { AuthCallbackPage } from './pages/AuthCallback.js';
+import { SwapPage } from './pages/Swap.js';
+import { PoolPage } from './pages/Pool.js';
 
 export default function App() {
   const [theme, setTheme] = useState<Theme>(loadTheme());
@@ -39,6 +41,8 @@ export default function App() {
             <NavLink to="/">wallet</NavLink>
             <NavLink to="/mine">mine</NavLink>
             <NavLink to="/send">send</NavLink>
+            <NavLink to="/swap">swap</NavLink>
+            <NavLink to="/pool">pool</NavLink>
             <NavLink to="/activity">activity</NavLink>
             <NavLink to="/ledger">ledger</NavLink>
             {me?.wrap_allowed && <NavLink to="/wrap">wrap</NavLink>}
@@ -68,6 +72,8 @@ export default function App() {
           <Routes>
             <Route path="/" element={<WalletPage />} />
             <Route path="/wallet" element={<WalletPage />} />
+            <Route path="/swap" element={<SwapPage />} />
+            <Route path="/pool" element={<PoolPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/mine" element={<MinePage />} />
             <Route path="/send" element={<SendPage />} />
