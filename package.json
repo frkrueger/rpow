@@ -3,14 +3,15 @@
   "private": true,
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
-    "build": "tsc -b apps/server packages/shared packages/solana-bridge && npm --workspace apps/web run build && npm --workspace apps/web-longshot run build && npm --workspace apps/web-gladiator run build && npm --workspace apps/web-trivia run build",
-    "test": "npm --workspace packages/shared test && npm --workspace packages/solana-bridge test && npm --workspace apps/server test && npm --workspace apps/web test && npm --workspace apps/web-longshot test && npm --workspace apps/web-gladiator test && npm --workspace apps/web-trivia test",
+    "build": "tsc -b apps/server packages/shared packages/solana-bridge && npm --workspace apps/web run build && npm --workspace apps/web-longshot run build && npm --workspace apps/web-gladiator run build && npm --workspace apps/web-trivia run build && npm --workspace apps/web-freelottery run build",
+    "test": "npm --workspace packages/shared test && npm --workspace packages/solana-bridge test && npm --workspace apps/server test && npm --workspace apps/web test && npm --workspace apps/web-longshot test && npm --workspace apps/web-gladiator test && npm --workspace apps/web-trivia test && npm --workspace apps/web-freelottery test",
     "lint": "tsc -b --noEmit && eslint .",
     "dev:server": "npm --workspace apps/server run dev",
     "dev:web": "npm --workspace apps/web run dev",
     "dev:longshot": "npm --workspace apps/web-longshot run dev",
     "dev:gladiator": "npm --workspace apps/web-gladiator run dev",
-    "dev:trivia": "npm --workspace apps/web-trivia run dev"
+    "dev:trivia": "npm --workspace apps/web-trivia run dev",
+    "dev:freelottery": "npm --workspace apps/web-freelottery run dev"
   },
   "engines": { "node": ">=22.0.0" },
   "overrides": {

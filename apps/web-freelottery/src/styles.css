@@ -1,0 +1,10 @@
+:root {
+  font-family: 'IBM Plex Mono', monospace;
+  background: #0a0a0a;
+  color: #f0f0f0;
+}
+body { margin: 0; }
+main { max-width: 720px; margin: 4rem auto; padding: 0 1rem; }
+h1 { font-weight: 700; letter-spacing: -0.02em; }
+pre { background: #111; padding: 1rem; border-radius: 6px; overflow-x: auto; font-size: 12px; }
+.error { color: #ff6b6b; }
