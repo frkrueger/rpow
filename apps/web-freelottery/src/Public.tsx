@@ -16,11 +16,11 @@ const POLL_STATUS_MS = 60_000;
 const POLL_WINNERS_MS = 60_000;
 
 function formatPrize(baseUnitsStr: string | undefined): string {
-  // base-units convention: 1 RPOW = 1_000_000 base units. Show as integer RPOW.
+  // RPOW uses 9 decimals: 10^9 base units = 1 RPOW.
   if (!baseUnitsStr) return '1,000';
   try {
     const n = BigInt(baseUnitsStr);
-    const rpow = n / 1_000_000n;
+    const rpow = n / 1_000_000_000n;
     return rpow.toLocaleString('en-US');
   } catch {
     return '1,000';
