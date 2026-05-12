@@ -730,6 +730,17 @@ main code { background: rgba(110,231,183,0.06); padding: 1px 5px; border: 1px so
   margin: 0 auto;
 }
 
+/* ──────── /enter page body ──────── */
+.enter-body {
+  padding: 18px 18px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.enter-body p { margin: 0; }
+.enter-body input { margin-top: 4px; }
+.enter-body button { align-self: flex-start; margin-top: 2px; }
+
 /* ──────── Error banner ──────── */
 .error-banner, .error {
   border: 1px solid rgba(248,113,113,0.4);

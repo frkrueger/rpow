@@ -1,6 +1,23 @@
-import { useEffect, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { api, Me, StartResponse, VerifyResponse } from './api.js';
 import { XHandleClaimModal } from './XHandleClaimModal.js';
+
+function EnterShell({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="bulletin">
+      <header className="masthead">
+        <span className="brand"><span className="dot" />RPOW · FREE LOTTERY</span>
+        <span className="meta">ENTER · DRAW DAILY 19:00 UTC</span>
+      </header>
+      <section className="section">
+        <div className="section-head">
+          <h2 className="section-title">{title}</h2>
+        </div>
+        <div className="enter-body">{children}</div>
+      </section>
+    </div>
+  );
+}
 
 type View =
   | { stage: 'loading' }
@@ -56,48 +73,50 @@ export function Enter() {
     }
   }
 
-  if (view.stage === 'loading') return <main><p>Loading…</p></main>;
+  if (view.stage === 'loading') {
+    return <EnterShell title="Loading…"><p>Fetching your entry status.</p></EnterShell>;
+  }
   if (view.stage === 'login_required') {
     return (
-      <main>
-        <h1>Sign in to enter</h1>
+      <EnterShell title="Sign in to enter">
         <p>You need an RPOW account to enter the daily free lottery.</p>
-        <p><a href="https://rpow2.com">Go to rpow2.com to sign in →</a></p>
-      </main>
+        <p style={{ marginTop: '1rem' }}>
+          <a className="cta-primary" href="https://rpow2.com" style={{ display: 'inline-flex', width: 'auto' }}>
+            <span>Go to rpow2.com to sign in</span>
+            <span className="arrow">→</span>
+          </a>
+        </p>
+      </EnterShell>
     );
   }
   if (view.stage === 'bind_required') {
     return (
-      <main>
-        <h1>Link your X account</h1>
+      <EnterShell title="Link your X account">
         <p>To enter the lottery you first need to verify an X (Twitter) handle.</p>
         <XHandleClaimModal onVerified={() => void init()} />
-      </main>
+      </EnterShell>
     );
   }
   if (view.stage === 'already_entered') {
     return (
-      <main>
-        <h1>You're already in today.</h1>
+      <EnterShell title="You're already in today.">
         <p>Come back tomorrow after 19:00 UTC for the next draw.</p>
-        <p><a href="/">← Back to the lottery</a></p>
-      </main>
+        <p style={{ marginTop: '1rem' }}><a href="/">← Back to the lottery</a></p>
+      </EnterShell>
     );
   }
   if (view.stage === 'done') {
     return (
-      <main>
-        <h1>You're in.</h1>
+      <EnterShell title="You're in.">
         <p>Ticket count: {view.result.ticket_count}. Draw at 19:00 UTC.</p>
-        <p><a href="/">← Back to the lottery</a></p>
-      </main>
+        <p style={{ marginTop: '1rem' }}><a href="/">← Back to the lottery</a></p>
+      </EnterShell>
     );
   }
 
   // ready_to_tweet or verifying
   return (
-    <main>
-      <h1>Enter today's free lottery</h1>
+    <EnterShell title="Enter today's free lottery">
       <p>1. Click the button below to post the verification tweet.</p>
       <p>
         <a className="tweet-cta" href={view.start.tweet_intent_url} target="_blank" rel="noreferrer">
@@ -117,6 +136,6 @@ export function Enter() {
       </button>
       {error ? <p className="error">{error}</p> : null}
       <p className="small">Your code: {view.start.code} · expires {new Date(view.start.expires_at).toUTCString()}</p>
-    </main>
+    </EnterShell>
   );
 }
