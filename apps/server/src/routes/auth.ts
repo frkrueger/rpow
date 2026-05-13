@@ -5,6 +5,7 @@ import { hashToken, issueMagicLink } from '../magic.js';
 import { signSession, SESSION_COOKIE, SESSION_TTL_SECONDS, verifySession } from '../session.js';
 import { makeUnsubToken } from '../unsub.js';
 import { magicLinkEmail } from '../email-template.js';
+import { isDisposableEmail } from '../disposable-domains.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -57,6 +58,13 @@ export async function authRoutes(app: FastifyInstance) {
     const email = parsed.data.email.toLowerCase().trim();
     const ip = (req.ip ?? '0.0.0.0');
     const isOperator = app.config.operatorEmails.has(email);
+
+    // Disposable / bot-farm domain gate. Reject before turnstile/rate-limit
+    // so these don't burn DB writes; logged for visibility.
+    if (!isOperator && isDisposableEmail(email)) {
+      app.log.info({ email, ip }, 'rejected disposable email domain');
+      return reply.code(403).send({ error: 'DOMAIN_BLOCKED', message: 'this email domain is not accepted' });
+    }
 
     // Turnstile gate: only enforced when the server is configured with a
     // secret. In dev/test envs without TURNSTILE_SECRET the route stays open.
