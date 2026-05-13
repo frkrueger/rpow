@@ -58,12 +58,12 @@ api.rpow2.com (existing Fastify, apps/server)
    apps/server/src/chat/
      routes/         ← Fastify handlers
      hub.ts          ← in-process EventEmitter for SSE fan-out
-     store.ts        ← SQLite reads/writes
+     store.ts        ← Postgres reads/writes (via app.pool: pg.Pool)
      sweeper.ts      ← 5-min rolling-window prune (boot-tick pattern)
      rateLimit.ts    ← per-user token buckets
      blockFilter.ts  ← per-recipient block check before fan-out
    ▼
-SQLite (single existing DB, new migration 020_chat.sql)
+Postgres (single existing DB, new migration 030_chat.sql)
 ```
 
 - Single Node process (existing `cluster-entry.ts`).
@@ -73,71 +73,71 @@ SQLite (single existing DB, new migration 020_chat.sql)
 
 ## Data Model
 
-Migration: `apps/server/migrations/020_chat.sql`.
+Migration: `apps/server/migrations/030_chat.sql`. Postgres syntax matching the existing freelottery/gladiator migrations.
 
 ```sql
 CREATE TABLE chat_rooms (
   slug         TEXT PRIMARY KEY,
   title        TEXT NOT NULL,
   description  TEXT NOT NULL,
-  disabled     INTEGER NOT NULL DEFAULT 0,
-  created_at   TEXT NOT NULL
+  disabled     BOOLEAN NOT NULL DEFAULT false,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Rolling window. Sweeper trims to last 200 per room OR 24h.
 CREATE TABLE chat_room_messages (
-  id           INTEGER PRIMARY KEY,
+  id           BIGSERIAL PRIMARY KEY,
   room_slug    TEXT NOT NULL REFERENCES chat_rooms(slug),
-  user_email   TEXT NOT NULL,
+  user_email   TEXT NOT NULL REFERENCES users(email),
   x_handle     TEXT NOT NULL,
   x_avatar_url TEXT,
   body         TEXT NOT NULL,
-  created_at   TEXT NOT NULL,
-  deleted_at   TEXT
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted_at   TIMESTAMPTZ
 );
-CREATE INDEX idx_room_messages_room_time ON chat_room_messages(room_slug, created_at DESC);
+CREATE INDEX idx_chat_room_messages_room_time ON chat_room_messages(room_slug, created_at DESC);
 
 CREATE TABLE chat_dm_threads (
-  id            INTEGER PRIMARY KEY,
-  user_a_email  TEXT NOT NULL,  -- lexicographically smaller of the pair
-  user_b_email  TEXT NOT NULL,  -- lexicographically larger
-  created_at    TEXT NOT NULL,
+  id            BIGSERIAL PRIMARY KEY,
+  user_a_email  TEXT NOT NULL REFERENCES users(email),  -- lexicographically smaller of the pair
+  user_b_email  TEXT NOT NULL REFERENCES users(email),  -- lexicographically larger
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE(user_a_email, user_b_email)
 );
 
 CREATE TABLE chat_dm_messages (
-  id            INTEGER PRIMARY KEY,
-  thread_id     INTEGER NOT NULL REFERENCES chat_dm_threads(id),
-  sender_email  TEXT NOT NULL,
+  id            BIGSERIAL PRIMARY KEY,
+  thread_id     BIGINT NOT NULL REFERENCES chat_dm_threads(id),
+  sender_email  TEXT NOT NULL REFERENCES users(email),
   x_handle      TEXT NOT NULL,
   body          TEXT NOT NULL,
-  created_at    TEXT NOT NULL,
-  deleted_at    TEXT
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted_at    TIMESTAMPTZ
 );
-CREATE INDEX idx_dm_messages_thread_time ON chat_dm_messages(thread_id, created_at DESC);
+CREATE INDEX idx_chat_dm_messages_thread_time ON chat_dm_messages(thread_id, created_at DESC);
 
 CREATE TABLE chat_user_blocks (
-  blocker_email  TEXT NOT NULL,
-  blocked_email  TEXT NOT NULL,
-  created_at     TEXT NOT NULL,
+  blocker_email  TEXT NOT NULL REFERENCES users(email),
+  blocked_email  TEXT NOT NULL REFERENCES users(email),
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (blocker_email, blocked_email)
 );
 
 CREATE TABLE chat_bans (
-  user_email   TEXT PRIMARY KEY,
+  user_email   TEXT PRIMARY KEY REFERENCES users(email),
   reason       TEXT,
-  banned_at    TEXT NOT NULL,
+  banned_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   banned_by    TEXT NOT NULL
 );
 
--- Initial room seeds
-INSERT INTO chat_rooms (slug, title, description, disabled, created_at) VALUES
-  ('general',    '#general',    'Catch-all lounge.',                  0, '2026-05-12T00:00:00Z'),
-  ('rpow',       '#rpow',       'rpow2 announcements + meta.',        0, '2026-05-12T00:00:00Z'),
-  ('technology', '#technology', 'Broad tech talk.',                   0, '2026-05-12T00:00:00Z'),
-  ('ai',         '#ai',         'AI, LLMs, agents.',                  0, '2026-05-12T00:00:00Z'),
-  ('bitcoin',    '#bitcoin',    'Bitcoin + Lightning.',               0, '2026-05-12T00:00:00Z'),
-  ('solana',     '#solana',     'Solana ecosystem.',                  0, '2026-05-12T00:00:00Z');
+-- Initial 6 rooms
+INSERT INTO chat_rooms (slug, title, description) VALUES
+  ('general',    '#general',    'Catch-all lounge.'),
+  ('rpow',       '#rpow',       'rpow2 announcements + meta.'),
+  ('technology', '#technology', 'Broad tech talk.'),
+  ('ai',         '#ai',         'AI, LLMs, agents.'),
+  ('bitcoin',    '#bitcoin',    'Bitcoin + Lightning.'),
+  ('solana',     '#solana',     'Solana ecosystem.');
 ```
 
 Presence and typing are **in-memory only** — kept in `hub.ts` as `Map<roomSlug, Map<userEmail, lastSeenMs>>`. SSE disconnect drops the user; typing entries decay after 10s.
@@ -346,7 +346,7 @@ Matches the project's existing Vitest + Fastify-inject integration pattern.
 - `rateLimit.ts`: token-bucket counts, burst handling, `Retry-After` value
 
 **Integration** (`apps/server/src/chat/routes.test.ts`):
-- Full HTTP round-trips against an ephemeral SQLite, including SSE (open stream, POST a message, assert event lands)
+- Full HTTP round-trips against an ephemeral Postgres test schema (existing `makeTestApp` pattern), including SSE (open stream, POST a message, assert event lands)
 - Auth matrix: anon read OK; anon post 401; signed-no-X post 412 `BIND_REQUIRED`; banned user 403
 - DM thread creation idempotent (POST same pair twice → same thread_id)
 - Reconnect: provide `Last-Event-Id`, assert missed messages replay in order
