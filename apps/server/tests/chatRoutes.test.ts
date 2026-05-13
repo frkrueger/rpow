@@ -9,7 +9,7 @@ describe('chat routes', () => {
   });
 
   describe('GET /api/chat/rooms', () => {
-    it('returns 21 English + 6 Mandarin rooms grouped by category', async () => {
+    it('returns 21 English + 12 Mandarin rooms grouped by category', async () => {
       const ctx = await makeTestApp();
       cleanup = ctx.cleanup;
       const r = await ctx.app.inject({ method: 'GET', url: '/api/chat/rooms' });
@@ -17,8 +17,8 @@ describe('chat routes', () => {
       const body = r.json() as {
         rooms: Array<{ slug: string; category: string; language: string; hostName: string }>;
       };
-      // 27 total = 21 English seeded in migration 031 + 6 Mandarin in migration 032.
-      expect(body.rooms).toHaveLength(27);
+      // 33 total = 21 English (031) + 6 Mandarin (032) + 6 more Mandarin (033).
+      expect(body.rooms).toHaveLength(33);
 
       // Spot-check a real room from each set so any seed-data typo is caught here.
       const rpow = body.rooms.find(r => r.slug === 'rpow');

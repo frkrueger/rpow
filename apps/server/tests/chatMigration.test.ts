@@ -14,15 +14,15 @@ describe('migration 031_chat.sql', () => {
     const { rows: countRows } = await ctx.pool.query<{ n: string }>(
       'SELECT count(*)::text AS n FROM chat_rooms WHERE disabled = false'
     );
-    // 21 English (031) + 6 Mandarin (032) = 27 total.
-    expect(countRows[0]?.n).toBe('27');
+    // 21 English (031) + 6 Mandarin (032) + 6 more Mandarin (033) = 33 total.
+    expect(countRows[0]?.n).toBe('33');
 
     const { rows: byCat } = await ctx.pool.query<{ category: string; n: string }>(
       `SELECT category, count(*)::text AS n FROM chat_rooms
        GROUP BY category ORDER BY category ASC`
     );
     expect(byCat).toEqual([
-      { category: 'CHINESE',     n: '6' },
+      { category: 'CHINESE',     n: '12' },
       { category: 'CRYPTO',      n: '4' },
       { category: 'CULTURE',     n: '5' },
       { category: 'GENERATIONS', n: '4' },
@@ -31,13 +31,12 @@ describe('migration 031_chat.sql', () => {
       { category: 'TECH',        n: '4' },
     ]);
 
-    // Spot-check that the language column landed and the Mandarin set has language='zh'.
     const { rows: langs } = await ctx.pool.query<{ language: string; n: string }>(
       `SELECT language, count(*)::text AS n FROM chat_rooms GROUP BY language ORDER BY language ASC`
     );
     expect(langs).toEqual([
       { language: 'en', n: '21' },
-      { language: 'zh', n: '6' },
+      { language: 'zh', n: '12' },
     ]);
 
     const { rows: hal } = await ctx.pool.query<{ host_name: string; host_persona: string }>(
