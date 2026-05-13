@@ -11,24 +11,7 @@ export function Sidebar() {
   useEffect(() => {
     let cancelled = false;
     api.rooms()
-      .then(r => {
-        if (cancelled) return;
-        setRooms(r.rooms);
-        // Warm the scrollback cache for every room in the background, so
-        // clicking any sidebar entry is a cache hit. Fires in chunks to
-        // avoid hammering the API with 21 simultaneous requests.
-        const CHUNK = 4;
-        const list = r.rooms.map(x => x.slug);
-        let i = 0;
-        const tick = () => {
-          if (cancelled || i >= list.length) return;
-          for (let k = 0; k < CHUNK && i < list.length; k++, i++) {
-            prefetchScrollback(list[i]!);
-          }
-          setTimeout(tick, 80);
-        };
-        tick();
-      })
+      .then(r => { if (!cancelled) setRooms(r.rooms); })
       .catch(e => { if (!cancelled) setError(e.message ?? String(e)); });
     return () => { cancelled = true; };
   }, []);

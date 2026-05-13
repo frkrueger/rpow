@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-do
 import { Sidebar } from './Sidebar.js';
 import { RealtimeProvider } from './RealtimeProvider.js';
 import { RoomView } from './RoomView.js';
+import { Money } from './Money.js';
 import { AuthCallback } from './AuthCallback.js';
 import { api, type Me } from './api.js';
 
@@ -54,6 +55,10 @@ export function App() {
               <Route path="*" element={<div className="enter-body"><p>Not found.</p></div>} />
             </Routes>
           </main>
+          <Routes>
+            <Route path="/r/:slug" element={<Money />} />
+            <Route path="*" element={null} />
+          </Routes>
         </div>
       </div>
     </RealtimeProvider>

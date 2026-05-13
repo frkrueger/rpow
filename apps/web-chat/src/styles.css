@@ -821,7 +821,7 @@ a.ledger-handle:hover { color: var(--accent); }
 }
 .chat-layout {
   display: grid;
-  grid-template-columns: 200px 1fr;
+  grid-template-columns: 200px 1fr 240px;
   gap: 16px;
   margin-top: 16px;
 }
@@ -1010,4 +1010,128 @@ a.ledger-handle:hover { color: var(--accent); }
 }
 .msg.is-host .msg-text {
   color: var(--fg);
+}
+
+/* ──────── ChatRooms — MONEY right rail ──────── */
+.chat-money {
+  border: 1px solid var(--accent-dim);
+  background: rgba(110,231,183,0.02);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  position: relative;
+  align-self: start;
+}
+.chat-money::before, .chat-money::after {
+  content: '+';
+  position: absolute;
+  color: var(--accent);
+  font-size: 10px;
+  opacity: 0.4;
+  line-height: 1;
+}
+.chat-money::before { top: -6px; left: -1px; }
+.chat-money::after  { bottom: -6px; right: -1px; }
+.chat-money-head {
+  color: var(--accent);
+  letter-spacing: 0.18em;
+  font-size: 10px;
+  text-transform: uppercase;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--accent-dim);
+}
+.chat-money-total {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 0 2px;
+}
+.chat-money-total-label {
+  color: var(--dim);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.chat-money-total-value {
+  color: var(--amber);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-shadow: 0 0 8px rgba(251,191,36,0.35);
+  line-height: 1.05;
+}
+.chat-money-total-value em {
+  font-style: normal;
+  font-size: 12px;
+  color: var(--amber);
+  opacity: 0.7;
+  margin-left: 4px;
+  letter-spacing: 0.14em;
+}
+.chat-money-sub {
+  color: var(--dim);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  padding-bottom: 4px;
+  border-bottom: 1px dashed var(--accent-dim);
+}
+.chat-money-list {
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+}
+.chat-money-empty {
+  color: var(--dim);
+  font-size: 12px;
+  padding: 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.chat-money-empty .empty-glyph {
+  color: var(--accent);
+  letter-spacing: 0.14em;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+.chat-money-empty p { margin: 0; color: var(--dim); font-size: 11px; }
+.chat-money-cta {
+  background: transparent;
+  border: 1px solid var(--accent-dim);
+  color: var(--dim);
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: not-allowed;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.chat-money-cta:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+  cursor: pointer;
+}
+.chat-money-cta:not(:disabled):hover {
+  background: rgba(110,231,183,0.06);
+}
+.chat-money-soon {
+  font-size: 9px;
+  color: var(--amber);
+  letter-spacing: 0.18em;
+  border: 1px solid var(--amber-dim);
+  padding: 1px 5px;
+  border-radius: 2px;
+}
+
+@media (max-width: 960px) {
+  .chat-layout { grid-template-columns: 200px 1fr; }
+  .chat-money { display: none; }
+}
+@media (max-width: 720px) {
+  .chat-layout { grid-template-columns: 1fr; }
 }
