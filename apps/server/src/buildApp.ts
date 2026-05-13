@@ -85,6 +85,8 @@ export interface AppConfig {
   freelotteryAllowedEmails: string;
   /** CORS origin for the Freelottery frontend. */
   freelotteryWebOrigin: string;
+  /** CORS origin for the ChatRooms frontend (chat.rpow2.com). */
+  chatWebOrigin: string;
   /** X (Twitter) API Bearer token. When unset, the avatar proxy returns 404 for cache misses. */
   xBearerToken?: string;
   /** Solana JSON-RPC endpoint for fetching draw entropy. When unset, draws cannot run and the scheduler tick logs a warning. */
@@ -156,7 +158,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   // Allow both the main rpow2.com frontend and the longshot.rpow2.com
   // subdomain frontend. Both share the .rpow2.com session cookie via
   // credentials=include and need credentialed-CORS to api.rpow2.com.
-  const allowedOrigins = [opts.config.webOrigin, opts.config.longShotWebOrigin, opts.config.gladiatorWebOrigin, opts.config.triviaWebOrigin, opts.config.freelotteryWebOrigin];
+  const allowedOrigins = [opts.config.webOrigin, opts.config.longShotWebOrigin, opts.config.gladiatorWebOrigin, opts.config.triviaWebOrigin, opts.config.freelotteryWebOrigin, opts.config.chatWebOrigin];
   await app.register(cors, {
     origin: (origin, cb) => {
       if (!origin || allowedOrigins.includes(origin)) return cb(null, true);

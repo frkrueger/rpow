@@ -77,6 +77,7 @@ const Schema = z.object({
   FREELOTTERY_DRAW_HOUR_UTC: z.coerce.number().int().min(0).max(23).default(19),
   FREELOTTERY_ALLOWED_EMAILS: z.string().default('*'),
   FREELOTTERY_WEB_ORIGIN: z.string().url().default('https://freelottery.rpow2.com'),
+  CHAT_WEB_ORIGIN: z.string().url().default('https://chat.rpow2.com'),
   // X (Twitter) API Bearer token. Used by the avatar proxy to resolve
   // profile_image_url. Optional in dev/test; when unset the proxy returns
   // 404 for cache misses (frontend renders a letter placeholder).
