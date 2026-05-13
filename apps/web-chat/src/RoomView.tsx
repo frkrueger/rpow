@@ -156,18 +156,17 @@ export function RoomView({ me }: Props) {
     <section className="section room-view">
       <div className="section-head">
         <h2 className="section-title">#{room}</h2>
-        <p className="section-sub">{loading ? '…' : `${messages.length} message${messages.length === 1 ? '' : 's'}`}</p>
+        <p className="section-sub">{`${messages.length} message${messages.length === 1 ? '' : 's'}`}</p>
       </div>
 
       <div className="room-scrollback" ref={scrollRef}>
-        {loading && <div className="room-loading">Loading…</div>}
         {!loading && messages.length === 0 && (
           <div className="room-empty">
             <span className="empty-glyph">no messages yet</span>
             <p>Be the first to post in #{room}.</p>
           </div>
         )}
-        {!loading && messages.map(m => (
+        {messages.map(m => (
           <div className={`msg${m.is_host ? ' is-host' : ''}`} key={m.id}>
             {m.is_host
               ? <span className="msg-avatar host-glyph" aria-hidden="true">🅷</span>
