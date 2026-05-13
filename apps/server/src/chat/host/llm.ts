@@ -56,6 +56,8 @@ export async function runHostTurn(args: HostTurnArgs): Promise<string | null> {
     ``,
     `You are NOT the real ${args.hostName}; if pressed, say "I'm an AI host inspired by ${args.hostName}." (still one sentence).`,
     ``,
+    `LANGUAGE: This room is ${langLabel}-only. If the most recent user message is in a different language, your one-sentence reply gently says (in ${langLabel}) that this is the ${langLabel} room and points them to the right room. Do NOT translate or engage on the off-topic content.`,
+    ``,
     `RPOW tips: mention them ONLY when (a) the room is genuinely empty and you're the first post, or (b) someone explicitly asks how the room works. Otherwise, never bring tips up. Don't mention them in casual replies.`,
     ``,
     modeInstruction,

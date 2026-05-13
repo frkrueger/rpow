@@ -1,6 +1,7 @@
 import type { Pool } from 'pg';
 import { publish } from '../hub.js';
 import { mentionsHost } from './detect.js';
+import { validateLanguage } from '../language.js';
 import { runHostTurn } from './llm.js';
 
 const RECENT_MESSAGES_LIMIT = 30;
@@ -42,7 +43,16 @@ export async function maybeRunHost(args: {
   const room = rows[0];
   if (!room) return;
   if (!room.host_enabled) return;
-  if (!mentionsHost(args.triggerMessageBody, room.host_name, args.roomSlug)) return;
+
+  // Two ways to trigger a host reply on POST:
+  //   (a) the message @-mentions the host (universal @host alias or the
+  //       persona's first/full name), or
+  //   (b) the message is in an obviously wrong language for the room — we
+  //       used to reject these at the route layer (HTTP 422) but now we
+  //       let them land and have the host gently redirect in-thread.
+  const wrongLanguage = !validateLanguage(args.triggerMessageBody, room.language).ok;
+  const mentioned = mentionsHost(args.triggerMessageBody, room.host_name, args.roomSlug);
+  if (!mentioned && !wrongLanguage) return;
 
   const now = Date.now();
   const last = lastPostAt.get(args.roomSlug) ?? 0;

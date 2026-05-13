@@ -10,7 +10,6 @@ import {
 } from '../../chat/store.js';
 import { publish } from '../../chat/hub.js';
 import { allowPost } from '../../chat/rateLimit.js';
-import { validateLanguage } from '../../chat/language.js';
 import { maybeRunHost } from '../../chat/host/runtime.js';
 
 const MAX_BODY = 2000;
@@ -61,13 +60,12 @@ export async function messagesRoutes(app: FastifyInstance) {
     const lang = await getRoomLanguage(app.pool, room);
     if (lang === null) return reply.code(404).send({ error: 'ROOM_NOT_FOUND' });
 
-    // Pre-AI-host language gate. Rejects obvious cross-language posts so
-    // English rooms don't fill with Mandarin (and vice versa) before the
-    // smarter host runtime arrives in slice 3.
-    const langCheck = validateLanguage(body, lang);
-    if (!langCheck.ok) {
-      return reply.code(422).send({ error: 'LANGUAGE_MISMATCH', message: langCheck.reason });
-    }
+    // Note: we used to reject obvious cross-language posts here with a 422,
+    // but the user-facing intent is now "let the message land + let the host
+    // redirect in-thread" — the host's system prompt knows the room language
+    // and gently asks off-language posters to switch. See
+    // chat/host/llm.ts → systemPrompt. The validateLanguage utility is
+    // retained for tooling but no longer gates POST.
 
     const gate = allowPost(caller.email);
     if (!gate.ok) {
