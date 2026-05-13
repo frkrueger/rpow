@@ -179,7 +179,7 @@ export async function xHandleRoutes(app: FastifyInstance) {
           return { error: 'HANDLE_TAKEN', message: 'handle was just claimed by another user', status: 409 };
         }
 
-        const avatarUrl = `https://unavatar.io/twitter/${pending_handle}`;
+        const avatarUrl = `${app.config.magicLinkBaseUrl}/api/avatars/x/${pending_handle}`;
         const now = new Date();
 
         // Update the user row
@@ -325,7 +325,7 @@ export async function xHandleRoutes(app: FastifyInstance) {
           return { error: 'HANDLE_TAKEN', message: 'handle already claimed by another user', status: 409 };
         }
 
-        const avatarUrl = `https://unavatar.io/twitter/${handle}`;
+        const avatarUrl = `${app.config.magicLinkBaseUrl}/api/avatars/x/${handle}`;
 
         // Update user FIRST — if user not found, return 404 without deleting the code
         const updateRes = await c.query(

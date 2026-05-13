@@ -23,6 +23,7 @@ import { triviaRoutes } from './routes/trivia/index.js';
 import { freelotteryRoutes } from './routes/freelottery/index.js';
 import { ammRoutes } from './routes/amm/index.js';
 import { favoritesRoutes } from './routes/favorites.js';
+import { avatarRoutes } from './routes/avatars.js';
 
 export interface AppConfig {
   sessionSecret: string;
@@ -192,6 +193,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   await app.register(gladiatorRoutes);
   await app.register(triviaRoutes);
   await app.register(freelotteryRoutes);
+  await app.register(avatarRoutes);
   await app.register(favoritesRoutes);
   await app.register(ammRoutes);
   const { solanaRpcRoutes } = await import('./routes/solanaRpc.js');

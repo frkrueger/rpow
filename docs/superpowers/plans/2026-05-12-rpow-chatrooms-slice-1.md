@@ -4,7 +4,7 @@
 
 **Goal:** Stand up `chat.rpow2.com` as a new Netlify-hosted protocol-app SPA that lists the six seeded chat rooms fetched from a new `GET /api/chat/rooms` endpoint. Zero realtime, zero posting, zero DMs — just the scaffold + first vertical slice from migration to rendered UI.
 
-**Architecture:** New backend module at `apps/server/src/chat/` with a tiny `store.ts` (rooms read) and `routes.ts` (one endpoint). New frontend app at `apps/web-chat/` mirroring the freelottery scaffold. New env var `CHAT_WEB_ORIGIN` + CORS allowlist entry. Migration `030_chat.sql` creates all chat tables (room messages, DMs, blocks, bans) but slice 1 only reads from `chat_rooms`.
+**Architecture:** New backend module at `apps/server/src/chat/` with a tiny `store.ts` (rooms read) and `routes.ts` (one endpoint). New frontend app at `apps/web-chat/` mirroring the freelottery scaffold. New env var `CHAT_WEB_ORIGIN` + CORS allowlist entry. Migration `031_chat.sql` creates all chat tables (room messages, DMs, blocks, bans) but slice 1 only reads from `chat_rooms`.
 
 **Tech Stack:** Fastify + Postgres (`pg.Pool` via `app.pool`) + zod (existing apps/server), Vite + React 18 + TypeScript (new apps/web-chat mirrors apps/web-freelottery). Tests use the existing `makeTestApp` helper (creates an isolated Postgres schema per test, runs all migrations).
 
@@ -12,21 +12,21 @@
 
 ---
 
-### Task 1: Migration 030_chat.sql (Postgres)
+### Task 1: Migration 031_chat.sql (Postgres)
 
 **Files:**
-- Create: `apps/server/migrations/030_chat.sql`
+- Create: `apps/server/migrations/031_chat.sql`
 - Test: `apps/server/tests/chatMigration.test.ts`
 
 The repo uses Postgres (`pg.Pool`). Migrations run via `runMigrations(pool)` in `apps/server/src/db.ts`. Tests use the `makeTestApp` helper (creates an isolated `t_<hex>` schema, runs all migrations, returns the pool).
 
 - [ ] **Step 1: Write the migration**
 
-`apps/server/migrations/030_chat.sql`:
+`apps/server/migrations/031_chat.sql`:
 
 ```sql
 -- ============================================================
--- Migration 030: RPOW ChatRooms.
+-- Migration 031: RPOW ChatRooms.
 -- Slice 1 creates the full schema (rooms, messages, DMs, blocks, bans,
 -- mutes, tips) and seeds the six initial rooms with their AI host metadata.
 -- Slice 1 wires only GET /api/chat/rooms — host runtime (slice 2) and
@@ -160,7 +160,7 @@ INSERT INTO chat_rooms (slug, title, description, category, sort_order, host_nam
 import { describe, it, expect, afterEach } from 'vitest';
 import { makeTestApp } from './helpers.js';
 
-describe('migration 030_chat.sql', () => {
+describe('migration 031_chat.sql', () => {
   let cleanup: (() => Promise<void>) | null = null;
   afterEach(async () => {
     if (cleanup) await cleanup();
@@ -246,7 +246,7 @@ Expected: all three tests PASS.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add apps/server/migrations/030_chat.sql apps/server/tests/chatMigration.test.ts
+git add apps/server/migrations/031_chat.sql apps/server/tests/chatMigration.test.ts
 git commit -m "feat(chat): migration 030 — chat schema + seed 6 rooms"
 ```
 
