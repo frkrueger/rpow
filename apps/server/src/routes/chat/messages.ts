@@ -10,6 +10,7 @@ import {
 } from '../../chat/store.js';
 import { publish } from '../../chat/hub.js';
 import { allowPost } from '../../chat/rateLimit.js';
+import { validateLanguage } from '../../chat/language.js';
 
 const MAX_BODY = 2000;
 const MIN_BODY = 1;
@@ -58,6 +59,14 @@ export async function messagesRoutes(app: FastifyInstance) {
 
     const lang = await getRoomLanguage(app.pool, room);
     if (lang === null) return reply.code(404).send({ error: 'ROOM_NOT_FOUND' });
+
+    // Pre-AI-host language gate. Rejects obvious cross-language posts so
+    // English rooms don't fill with Mandarin (and vice versa) before the
+    // smarter host runtime arrives in slice 3.
+    const langCheck = validateLanguage(body, lang);
+    if (!langCheck.ok) {
+      return reply.code(422).send({ error: 'LANGUAGE_MISMATCH', message: langCheck.reason });
+    }
 
     const gate = allowPost(caller.email);
     if (!gate.ok) {

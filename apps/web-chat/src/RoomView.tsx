@@ -85,6 +85,8 @@ export function RoomView({ me }: Props) {
         setError('Slow down — sending too fast.');
       } else if (err.status === 403 && err.code === 'BANNED') {
         setError('You are banned from posting.');
+      } else if (err.code === 'LANGUAGE_MISMATCH') {
+        setError(err.message ?? 'Wrong language for this room.');
       } else if (err.status === 404) {
         setError('This room no longer exists.');
       } else {
