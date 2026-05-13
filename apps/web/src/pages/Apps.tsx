@@ -18,6 +18,12 @@ type ProtocolApp = {
 
 const protocolApps: ProtocolApp[] = [
   {
+    name: 'RPOW ChatRooms',
+    url: 'https://chat.rpow2.com/',
+    description: 'AOL-style topic rooms + DMs for X-verified rpow users. AI host per room (Hal Finney for #rpow, etc.) leads discussion and tips good contributions in RPOW. English + Mandarin sets.',
+    forwardSession: true,
+  },
+  {
     name: 'RPOW Free Lottery',
     url: 'https://freelottery.rpow2.com/',
     description: '1,000 RPOW awarded daily for 100 days. Free to enter via X. Holders draw a second ticket. Draws at 19:00 UTC.',
