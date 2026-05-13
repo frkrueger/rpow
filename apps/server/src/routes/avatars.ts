@@ -7,43 +7,51 @@ const FETCH_TIMEOUT_MS = 5_000;
 // to keep the URL space tight and prevent path-traversal-style abuse.
 const HANDLE_RE = /^[A-Za-z0-9_]{1,15}$/;
 
-// 1x1 transparent PNG used as the fallback when the handle is invalid or
-// the upstream fetch fails. Short cache so we retry soon.
-const TRANSPARENT_PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
-  'base64',
-);
+// Negative-cache sentinel: when upstream returns non-OK we don't want to
+// hammer it on every request. We persist a row with content_type='__missing__'
+// and zero bytes, then re-try upstream once the row is older than this TTL.
+const MISSING_CONTENT_TYPE = '__missing__';
+const MISSING_TTL_HOURS = 24;
 
 /** Server-side X-avatar proxy with persistent Postgres cache.
  *
  *  GET /api/avatars/x/:handle
  *
  *  Lookup order:
- *    1. avatar_cache table — if a row exists, serve the cached bytes.
- *    2. unavatar.io/twitter/{handle} — fetch upstream, store, serve.
- *    3. Fallback to a 1x1 transparent PNG on any error.
+ *    1. avatar_cache hit (fresh): serve cached bytes.
+ *    2. avatar_cache hit (negative, within TTL): return 404 (browser falls
+ *       back to its <img onerror> handler).
+ *    3. avatar_cache miss OR stale negative: fetch unavatar.io, store
+ *       result (success or failure), serve.
  *
- *  Once a handle is cached, we never call upstream for it again (the row
- *  has no TTL). A future admin route can force-refresh by deleting the row.
- *
- *  Response headers: long Cache-Control + ETag so CDN/browser caches do
- *  the bulk of the work — the DB only fields the cold misses. */
+ *  Success rows have no TTL — we never re-fetch a handle whose avatar we
+ *  have. Failure rows expire after MISSING_TTL_HOURS so handles that come
+ *  back online get retried. */
 export async function avatarRoutes(app: FastifyInstance) {
   app.get<{ Params: { handle: string } }>('/api/avatars/x/:handle', async (req, reply) => {
     const { handle } = req.params;
 
     if (!HANDLE_RE.test(handle)) {
-      return sendFallback(reply);
+      return sendMissing(reply);
     }
 
-    // 1. Cache lookup.
-    const cached = await app.pool.query<{ content_type: string; bytes: Buffer }>(
-      'SELECT content_type, bytes FROM avatar_cache WHERE handle = $1',
+    // 1. Cache lookup. Treat missing-rows older than the TTL as stale.
+    const cached = await app.pool.query<{ content_type: string; bytes: Buffer; age_hours: number }>(
+      `SELECT content_type, bytes,
+              EXTRACT(EPOCH FROM (now() - fetched_at)) / 3600 AS age_hours
+         FROM avatar_cache
+         WHERE handle = $1`,
       [handle],
     );
     if (cached.rows.length > 0) {
       const row = cached.rows[0]!;
-      return sendImage(reply, row.content_type, row.bytes);
+      if (row.content_type !== MISSING_CONTENT_TYPE) {
+        return sendImage(reply, row.content_type, row.bytes);
+      }
+      if (Number(row.age_hours) < MISSING_TTL_HOURS) {
+        return sendMissing(reply);
+      }
+      // Fall through and try upstream again. The INSERT below will overwrite.
     }
 
     // 2. Upstream fetch.
@@ -60,27 +68,50 @@ export async function avatarRoutes(app: FastifyInstance) {
         },
       });
       if (!upstream.ok) {
-        return sendFallback(reply);
+        await persistMissing(app, handle);
+        return sendMissing(reply);
       }
       const contentType = upstream.headers.get('content-type') ?? 'image/jpeg';
       const bytes = Buffer.from(await upstream.arrayBuffer());
+      // unavatar.io sometimes serves a generic placeholder PNG for handles
+      // it can't resolve. Anything under 1KB is almost certainly that
+      // placeholder, not a real avatar. Treat it as a miss so we don't
+      // pollute the cache with grey squares.
+      if (bytes.length < 1024) {
+        await persistMissing(app, handle);
+        return sendMissing(reply);
+      }
 
-      // Store. ON CONFLICT no-op handles the race where two requests for
-      // the same cold handle land at once.
       await app.pool.query(
         `INSERT INTO avatar_cache (handle, content_type, bytes, fetched_at)
-         VALUES ($1, $2, $3, now())
-         ON CONFLICT (handle) DO NOTHING`,
+           VALUES ($1, $2, $3, now())
+           ON CONFLICT (handle) DO UPDATE
+             SET content_type = EXCLUDED.content_type,
+                 bytes        = EXCLUDED.bytes,
+                 fetched_at   = EXCLUDED.fetched_at`,
         [handle, contentType, bytes],
       );
 
       return sendImage(reply, contentType, bytes);
     } catch {
-      return sendFallback(reply);
+      await persistMissing(app, handle);
+      return sendMissing(reply);
     } finally {
       clearTimeout(timer);
     }
   });
+}
+
+async function persistMissing(app: FastifyInstance, handle: string) {
+  await app.pool.query(
+    `INSERT INTO avatar_cache (handle, content_type, bytes, fetched_at)
+       VALUES ($1, $2, '\\x', now())
+       ON CONFLICT (handle) DO UPDATE
+         SET content_type = EXCLUDED.content_type,
+             bytes        = EXCLUDED.bytes,
+             fetched_at   = EXCLUDED.fetched_at`,
+    [handle, MISSING_CONTENT_TYPE],
+  );
 }
 
 function sendImage(reply: any, contentType: string, bytes: Buffer) {
@@ -90,9 +121,12 @@ function sendImage(reply: any, contentType: string, bytes: Buffer) {
   return reply.send(bytes);
 }
 
-function sendFallback(reply: any) {
-  reply.header('content-type', 'image/png');
-  // Short cache so a bad fetch can recover quickly. CDN will still absorb bursts.
-  reply.header('cache-control', 'public, max-age=300');
-  return reply.send(TRANSPARENT_PNG);
+function sendMissing(reply: any) {
+  // 404 lets the frontend's <img onerror> fire so it can render its own
+  // letter-placeholder element. Short cache so failed handles recover
+  // quickly without hammering us.
+  reply.code(404);
+  reply.header('cache-control', 'public, max-age=3600');
+  reply.header('content-type', 'application/json');
+  return reply.send({ error: 'AVATAR_MISSING' });
 }

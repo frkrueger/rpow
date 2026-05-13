@@ -57,10 +57,30 @@ function formatDayUtc(dayUtc: string): { month: string; day: string; year: strin
 }
 
 function avatarOrPlaceholder(url: string | null, handle: string | null, cls: string) {
-  if (url) {
-    return <img className={cls} src={url} alt={handle ? `@${handle}` : 'avatar'} loading="lazy" />;
-  }
   const letter = (handle ?? '?').replace(/^@/, '').slice(0, 1).toUpperCase() || '·';
+  if (url) {
+    // Swap to the letter-placeholder if the proxy can't resolve the avatar
+    // (404 / network error). Inline-style hack avoids re-rendering the tree.
+    const onError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+      const img = e.currentTarget;
+      const parent = img.parentNode as HTMLElement | null;
+      if (!parent) return;
+      const span = document.createElement('span');
+      span.className = `${cls} placeholder`;
+      span.setAttribute('aria-hidden', 'true');
+      span.textContent = letter;
+      parent.replaceChild(span, img);
+    };
+    return (
+      <img
+        className={cls}
+        src={url}
+        alt={handle ? `@${handle}` : 'avatar'}
+        loading="lazy"
+        onError={onError}
+      />
+    );
+  }
   return <span className={`${cls} placeholder`} aria-hidden="true">{letter}</span>;
 }
 
