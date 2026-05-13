@@ -117,6 +117,40 @@ Sidebar groups rooms by category header (uppercase, dim color), sorted by `sort_
 
 If, in practice, some rooms stay empty for weeks, ops can flip `disabled = true` via SQL; a follow-on slice may add an admin UI to retire / promote rooms.
 
+### Language enforcement (added 2026-05-13)
+
+Every room is single-language. The `chat_rooms.language` column (added in migration 032) carries an ISO-639 code — `'en'` for the original 21 rooms, `'zh'` for the Mandarin set. The AI host is the enforcement mechanism.
+
+**Mechanics:**
+
+- The host's system prompt includes the room's `language` and instructions: *"This room is {language}-only. If a user posts in any other language, call `mute_user` with reason='wrong language' and a 5-minute window."* The same `mute_user` tool from the moderation section handles the mute — no new tool surface.
+- Language detection is delegated to the LLM. We don't run a separate `franc` or langid classifier; the model assesses each new message in context. This keeps the room responsive: short messages, code blocks, and proper nouns won't trip false positives the way a hard-rule classifier would.
+- User-facing copy calls this "kicked" but the mechanism is the soft per-room mute (read still works, post blocked for the window).
+
+**Initial Mandarin set** (seeded in migration 032 as a new `CHINESE` category):
+
+| Slug             | Title              | Host (Mandarin)                       |
+|------------------|--------------------|---------------------------------------|
+| `general-zh`     | #中文-general      | 万维网 (inspired by Vint Cerf)        |
+| `rpow-zh`        | #中文-rpow         | 哈尔 (inspired by Hal Finney)         |
+| `technology-zh`  | #中文-technology   | 艾达 (inspired by Ada Lovelace)       |
+| `ai-zh`          | #中文-ai           | 图灵 (inspired by Alan Turing)        |
+| `bitcoin-zh`     | #中文-bitcoin      | 中本聪 (Satoshi)                       |
+| `solana-zh`      | #中文-solana       | 阿纳托利 (inspired by Anatoly)         |
+
+Personas write in Mandarin. Mute reason copy from these hosts is also in Mandarin so the room remains coherent.
+
+**Schema change** (migration 032):
+
+```sql
+ALTER TABLE chat_rooms
+  ADD COLUMN language TEXT NOT NULL DEFAULT 'en';
+```
+
+Existing 21 rooms keep `language='en'` via the default. The six new Mandarin rooms set it to `'zh'` at insert.
+
+**Future-proofing**: more language sets can be added later (e.g. `ja`, `es`, `pt`) by inserting rooms with a new `category` header and `language` code. No further schema work needed.
+
 ### Host tips ("chatrooms where good discussion gets rewarded")
 
 The host can award a small RPOW tip to a user whose message reflects a genuinely good contribution to the room (an insight, a careful explanation, a useful question, etc.). Tagline: **"Chatrooms where good discussion gets rewarded."** Rendered on the landing/empty states.
