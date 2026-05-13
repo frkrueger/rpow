@@ -7,28 +7,44 @@ interface Props {
   me: Me | null;
 }
 
+// Module-level cache so room switches render the previous scrollback instantly
+// while a background refresh runs. Survives RoomView unmount/remount on route
+// changes but is dropped on full page reload (acceptable — we want fresh data
+// after a reload anyway).
+const scrollbackCache = new Map<string, ChatMessage[]>();
+
 /** Scrollback + composer for a single room. Joins the realtime stream
  *  for live updates. Auth states: anon → CTA, signed but no x_handle →
  *  bind CTA, signed+verified → enabled composer. */
 export function RoomView({ me }: Props) {
   const { slug } = useParams<{ slug: string }>();
   const room = slug ?? 'general';
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cached = scrollbackCache.get(room);
+  const [messages, setMessages] = useState<ChatMessage[]>(cached ?? []);
+  const [loading, setLoading] = useState(!cached);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Cold scrollback fetch on room change.
+  // Background refresh on room change. If we have a cached copy we render it
+  // immediately (no "Loading…") and just refresh in the background; otherwise
+  // we show the loading state for the cold fetch.
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    const haveCache = scrollbackCache.has(room);
+    if (haveCache) {
+      setMessages(scrollbackCache.get(room)!);
+      setLoading(false);
+    } else {
+      setMessages([]);
+      setLoading(true);
+    }
     setError(null);
     api.scrollback(room, 50)
       .then(r => {
         if (cancelled) return;
-        setMessages(r.messages.map(m => ({
+        const fresh: ChatMessage[] = r.messages.map(m => ({
           id: m.id,
           room: m.roomSlug,
           x_handle: m.xHandle,
@@ -36,26 +52,36 @@ export function RoomView({ me }: Props) {
           body: m.body,
           at: m.createdAt,
           is_host: m.isHost,
-        })));
+        }));
+        scrollbackCache.set(room, fresh);
+        setMessages(fresh);
         setLoading(false);
       })
       .catch(e => {
         if (cancelled) return;
-        setError(e.message ?? String(e));
+        if (!haveCache) setError(e.message ?? String(e));
         setLoading(false);
       });
     return () => { cancelled = true; };
   }, [room]);
 
-  // Live updates.
+  // Live updates. Keep both local state and the scrollback cache in sync so
+  // navigating back to a room shows the latest state without a flash of stale.
   const handleEvent = useCallback((evt: import('./RealtimeProvider.js').RealtimeEvent) => {
     if (evt.type === 'message') {
-      // De-dupe: optimistic posts get the same id back from POST.
-      setMessages(prev => prev.some(m => m.id === evt.message.id) ? prev : [...prev, evt.message]);
+      setMessages(prev => {
+        const next = prev.some(m => m.id === evt.message.id) ? prev : [...prev, evt.message];
+        scrollbackCache.set(room, next);
+        return next;
+      });
     } else if (evt.type === 'message_deleted') {
-      setMessages(prev => prev.filter(m => m.id !== evt.id));
+      setMessages(prev => {
+        const next = prev.filter(m => m.id !== evt.id);
+        scrollbackCache.set(room, next);
+        return next;
+      });
     }
-  }, []);
+  }, [room]);
   useRoomStream(room, handleEvent);
 
   // Stick to bottom on new messages.
@@ -74,13 +100,46 @@ export function RoomView({ me }: Props) {
     if (e) e.preventDefault();
     const body = draft.trim();
     if (!body || composerState !== 'ready' || sending) return;
-    setSending(true);
     setError(null);
+
+    // Optimistic insert: render the message immediately with a temp id and
+    // clear the composer so the click feels instant. Reconcile with the real
+    // row when POST resolves; roll back + restore the draft on error.
+    const tempId = `temp:${Date.now()}:${Math.random().toString(36).slice(2, 8)}`;
+    const optimistic: ChatMessage = {
+      id: tempId,
+      room,
+      x_handle: me?.x_handle ?? '',
+      avatar: me?.x_avatar_url ?? null,
+      body,
+      at: new Date().toISOString(),
+      is_host: false,
+    };
+    setMessages(prev => {
+      const next = [...prev, optimistic];
+      scrollbackCache.set(room, next);
+      return next;
+    });
+    setDraft('');
+    setSending(true);
     try {
       const sent = await api.postMessage(room, body);
-      setMessages(prev => prev.some(m => m.id === sent.id) ? prev : [...prev, sent]);
-      setDraft('');
+      // Swap the temp row for the real one; de-dupe if the SSE event already
+      // delivered the real id while POST was in flight.
+      setMessages(prev => {
+        const withoutTemp = prev.filter(m => m.id !== tempId);
+        const next = withoutTemp.some(m => m.id === sent.id) ? withoutTemp : [...withoutTemp, sent];
+        scrollbackCache.set(room, next);
+        return next;
+      });
     } catch (e: unknown) {
+      // Roll back optimistic row + restore the draft so the user can retry.
+      setMessages(prev => {
+        const next = prev.filter(m => m.id !== tempId);
+        scrollbackCache.set(room, next);
+        return next;
+      });
+      setDraft(body);
       const err = e as { message?: string; code?: string; status?: number };
       if (err.code === 'RATE_LIMITED') {
         setError('Slow down — sending too fast.');

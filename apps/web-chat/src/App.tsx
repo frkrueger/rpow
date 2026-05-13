@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Navigate, Route, Routes, useParams } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { Sidebar } from './Sidebar.js';
 import { RealtimeProvider } from './RealtimeProvider.js';
 import { RoomView } from './RoomView.js';
@@ -17,10 +17,12 @@ export function App() {
     return () => { cancelled = true; };
   }, []);
 
-  // Stream subscription set: only the room currently being viewed. Slice 3
-  // will widen this to also include all of the user's DM threads.
-  const slug = window.location.pathname.startsWith('/r/')
-    ? window.location.pathname.slice(3).split('/')[0]
+  // Track the URL via react-router so navigation re-subscribes the SSE stream
+  // to the new room. Reading window.location directly here is non-reactive and
+  // leaves the stream stuck on the initial room.
+  const location = useLocation();
+  const slug = location.pathname.startsWith('/r/')
+    ? (location.pathname.slice(3).split('/')[0] || 'general')
     : 'general';
   const subscribedRooms = useMemo(() => [slug], [slug]);
 
