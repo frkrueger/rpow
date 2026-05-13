@@ -26,6 +26,148 @@ A public chat sub-app at `chat.rpow2.com`. Anyone can read; X-verified rpow user
 - Threads / replies
 - Search
 
+## AI hosts (added 2026-05-12, post initial brainstorm)
+
+Each room has one AI host — a named persona that reads the room and posts when @-mentioned or when the room has been silent. Hosts can also temporarily mute users in their room.
+
+**Cadence:** Host speaks (1) when its name is @-mentioned in a message, or (2) when the room has been silent for `HOST_IDLE_PROMPT_MINUTES` (default 10) — the host posts a thread starter or a follow-up question. Hard rate-limit: at most one host post per room per minute, regardless of trigger. A per-room flag in `chat_rooms.host_enabled` (default true) lets ops mute a misbehaving host via SQL without ripping out the integration.
+
+**Moderation power:** Host can apply a *per-room mute* — soft, temporary. A muted user can still read the room but cannot post in it for the configured window (default 5 minutes; max 60). Mute is reversible by the host itself, by the user via "request unmute" (slice 3+), or by an admin. Hosts cannot delete user messages, cannot ban from the app, cannot mute across rooms. Real abuse still needs the human admin paths (`chat_bans`, killswitch).
+
+**Initial host roster** (seeded in migration 030):
+
+| Room          | Host name      | Persona one-liner                                                    |
+|---------------|----------------|----------------------------------------------------------------------|
+| `#general`    | Vint Cerf      | Welcoming, internet-pioneer energy. Steers tangents back to topic.   |
+| `#rpow`       | Hal Finney     | The namesake. Thoughtful, technical, cypherpunk-historical.          |
+| `#technology` | Ada Lovelace   | Curious about how things work; loves a good design diagram.          |
+| `#ai`         | Alan Turing    | Probes assumptions, asks "what would the test be?"                   |
+| `#bitcoin`    | Satoshi        | Pseudonymous, terse, prefers source over speculation.                |
+| `#solana`     | Anatoly        | Performance-minded, fast-takes about validators and tps.             |
+
+Personas are not impersonations — they are stylistic references. The system prompt makes clear this is an AI host inspired by the namesake, not the real person. Acceptable disclosure: the host's profile blurb says "AI host · inspired by [name]".
+
+**Model:** `claude-haiku-4-5` for all hosts. Aggressive prompt-caching on the per-host system prompt (which includes the room topic, the persona one-liner, and the moderation tools spec) gets cache hits on every host post, so the marginal cost per turn is small.
+
+**Context budget per host turn:** system prompt (cached) + last 30 messages from the room + the trigger (the @-mention message OR the idle-trigger marker). The host outputs a short message body (`max_tokens=300`) plus an optional tool call to mute.
+
+**Tools available to the host (via the Anthropic SDK tool-use API):**
+
+- `post_message(body: string)` — what the host says next
+- `mute_user(x_handle: string, minutes: number, reason: string)` — per-room mute, max 60 minutes
+- `skip()` — host chose not to speak this turn (e.g., idle trigger but conversation is fine, or @-mention but already covered)
+
+The server normalizes the response into either `chat_room_messages` (with `user_email='__host__'+slug`, distinct namespace) and/or a `chat_room_mutes` row. Idle-prompt and @-mention triggers are coalesced — only one host turn at a time per room.
+
+**Cost guardrails:** per-room daily token budget cap (`HOST_DAILY_TOKEN_BUDGET`, default 50k input + 5k output per room). When exceeded, the host goes silent until midnight UTC and a `system: host_quiet` event is emitted. Visible in admin via a SQL query — no UI in slice 1.
+
+**Frontend treatment:** host posts render in a distinct row style — mint left border, `🅷` glyph prefix, and a `[host]` tag after the name. Host appears pinned at the top of the right-panel user list with the same treatment. Clicking the host name opens a popover with the persona blurb (no "Send DM" — hosts don't DM in MVP).
+
+This is added to the existing scope, not a replacement. The non-host chat (user posts, presence, DMs, blocks, bans) still works exactly as specced above. Host plumbing is its own backend module `apps/server/src/chat/host/`.
+
+### Room directory (added 2026-05-12, AOL-style breadth)
+
+The launch set is ~20 rooms grouped by **category**, rendered in the sidebar with section headers. The `chat_rooms` table gains a `category` and a `sort_order` column so the directory can be reordered without code changes.
+
+```
+ORIGINALS
+  #general          Vint Cerf          Catch-all lounge.
+  #rpow             Hal Finney         rpow2 announcements + meta.
+
+TECH
+  #technology       Ada Lovelace       Broad tech talk.
+  #ai               Alan Turing        AI, LLMs, agents.
+  #programming      The Hacker         Code, languages, tooling.
+  #web3             The Architect      Decentralized web, identity, infra.
+
+CRYPTO
+  #bitcoin          Satoshi            Bitcoin + Lightning.
+  #solana           Anatoly            Solana ecosystem.
+  #ethereum         The Founder        Ethereum, EVM, L2s.
+  #trading          The Trader         Markets, charts, OTC.
+
+GENERATIONS
+  #gen-z            Zee                Gen Z lounge. (~ages 13–28)
+  #millennials      Avery              Millennials lounge. (~ages 29–44)
+  #gen-x            Marlow             Gen X lounge. (~ages 45–60)
+  #boomers          Hank               Boomers lounge. (~ages 61+)
+
+CULTURE
+  #music            Riff               Music — listening, making, recommending.
+  #movies           Reel               Films & TV.
+  #gaming           Pixel              Video games + tabletop.
+  #books            Page               Reading list, recommendations.
+  #sports           Coach              All sports, all leagues.
+
+LOUNGE
+  #random           The Wanderer       Anything goes.
+  #late-night       Owl                Quiet-hours conversation.
+```
+
+All hosts follow the same "AI host inspired by …" disclosure pattern. Real-historical names (Vint Cerf, Hal Finney, Ada Lovelace, Alan Turing) are deceased figures. Living-person references (Anatoly, Satoshi as pseudonym) are framed as inspirations only. The remaining hosts are fictional concept-names (The Trader, The Wanderer, etc.).
+
+`chat_rooms` adds two columns vs. the earlier draft:
+
+```sql
+  category    TEXT NOT NULL,                            -- 'ORIGINALS' | 'TECH' | 'CRYPTO' | 'GENERATIONS' | 'CULTURE' | 'LOUNGE'
+  sort_order  INTEGER NOT NULL DEFAULT 0,               -- ascending within category
+```
+
+Sidebar groups rooms by category header (uppercase, dim color), sorted by `sort_order` ascending within each.
+
+If, in practice, some rooms stay empty for weeks, ops can flip `disabled = true` via SQL; a follow-on slice may add an admin UI to retire / promote rooms.
+
+### Host tips ("chatrooms where good discussion gets rewarded")
+
+The host can award a small RPOW tip to a user whose message reflects a genuinely good contribution to the room (an insight, a careful explanation, a useful question, etc.). Tagline: **"Chatrooms where good discussion gets rewarded."** Rendered on the landing/empty states.
+
+**Mechanics:**
+
+- **Tip size:** fixed `0.001 RPOW` per award (1,000,000 base units, since 1 RPOW = 10^9 base units).
+- **Global daily budget:** **100 RPOW total across the whole chatrooms system per UTC day.** At 0.001 RPOW per tip, that's 100,000 awards/day maximum — effectively unlimited in practice. When exhausted, hosts can still post but the `tip_user` tool fails closed (`error: BUDGET_EXHAUSTED`) until the next UTC day.
+- **Source of funds:** a dedicated rpow account `treasury+chatrooms@rpow.internal` (referred to as the "chatrooms treasury"). The user funds it manually via the existing send/transfer flow. When its balance is below the next tip amount, tips fail closed with `error: TREASURY_EMPTY`. No minting from supply cap.
+- **Recipient eligibility:** must be (1) signed-in rpow user with verified X handle, (2) not the message author's own host, (3) not banned, (4) not currently muted in the same room. A user can receive at most 5 tips per UTC day (anti-gaming).
+- **Tool call shape:** the host's Anthropic tool surface gains `tip_user(message_id, reason: string)`. The host picks a message it thinks deserves recognition. Server validates the tip is allowed, debits the treasury, credits the recipient, writes a `chat_tips` row, fans out a `tip` SSE event.
+
+**New table** (added to migration 030):
+
+```sql
+CREATE TABLE chat_tips (
+  id              BIGSERIAL PRIMARY KEY,
+  room_slug       TEXT NOT NULL REFERENCES chat_rooms(slug),
+  host_name       TEXT NOT NULL,                       -- denormalized for the winners feed
+  message_id      BIGINT NOT NULL REFERENCES chat_room_messages(id),
+  recipient_email TEXT NOT NULL REFERENCES users(email),
+  recipient_x_handle TEXT NOT NULL,
+  base_units      BIGINT NOT NULL,                     -- always 1_000_000 for now
+  reason          TEXT NOT NULL,                       -- the host's stated reason (1 line)
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_chat_tips_created_at ON chat_tips(created_at DESC);
+CREATE INDEX idx_chat_tips_recipient ON chat_tips(recipient_email, created_at DESC);
+```
+
+**SSE event addition:**
+
+| `room_tip` | yes | `{room, tip_id, message_id, host_name, recipient_x_handle, base_units, reason, at}` |
+
+**Frontend additions:**
+
+- A "✦ tipped by Hal Finney — 0.001 RPOW · for clear explanation" badge under the tipped message (mint accent).
+- **`/winners` route** on the chatrooms SPA. Shows three tabs/sections: **Today**, **This Week**, **All Time**. Each lists recipients with X avatar/handle, total RPOW received, and tip count. Top of the page repeats the tagline.
+- Landing-page / empty-state hero copy: "Chatrooms where good discussion gets rewarded."
+
+**Endpoints added:**
+
+| Method | Path                                  | Auth | Notes                                    |
+|--------|---------------------------------------|------|------------------------------------------|
+| GET    | `/api/chat/tips/winners?range=today`  | none | range: `today` \| `week` \| `all`. Returns `[{x_handle, avatar, total_base_units, tip_count}]` sorted desc. |
+| GET    | `/api/chat/tips/recent?limit=20`      | none | Recent tips, for an activity-feed widget if we want one (slice 2+). |
+
+**Atomicity:** the tip operation runs in a Postgres transaction — decrement treasury balance, increment recipient balance, insert `chat_tips`, all-or-nothing. If the transaction fails, no SSE event is emitted and the host tool call returns an error the host can incorporate into its reply.
+
+**Visibility / accounting:** the existing transfer ledger (`apps/server/src/routes/ledger.ts`) shows tips in the recipient's history as a debit from `treasury+chatrooms@rpow.internal` so they're fully auditable.
+
 ## Decisions locked during brainstorm
 
 | Decision               | Value                                                                   |
@@ -42,7 +184,7 @@ A public chat sub-app at `chat.rpow2.com`. Anyone can read; X-verified rpow user
 | Layout                 | 3-panel: rooms+DMs sidebar / chat / user-list                           |
 | Transport              | SSE for receive + POST for send                                         |
 | Domain · sub-app       | `chat.rpow2.com` · `apps/web-chat`                                      |
-| Initial rooms          | `#general`, `#rpow`, `#technology`, `#ai`, `#bitcoin`, `#solana`        |
+| Initial rooms          | AOL-style breadth — ~20 rooms across categories (see "Room directory" below) |
 | Aesthetic              | Retro 8-bit terminal — shared palette/tokens with `apps/web`            |
 
 ## Architecture
@@ -77,11 +219,15 @@ Migration: `apps/server/migrations/030_chat.sql`. Postgres syntax matching the e
 
 ```sql
 CREATE TABLE chat_rooms (
-  slug         TEXT PRIMARY KEY,
-  title        TEXT NOT NULL,
-  description  TEXT NOT NULL,
-  disabled     BOOLEAN NOT NULL DEFAULT false,
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+  slug             TEXT PRIMARY KEY,
+  title            TEXT NOT NULL,
+  description      TEXT NOT NULL,
+  disabled         BOOLEAN NOT NULL DEFAULT false,
+  host_name        TEXT NOT NULL,              -- "Hal Finney", "Ada Lovelace", ...
+  host_persona     TEXT NOT NULL,              -- system-prompt blurb describing voice + style
+  host_avatar_url  TEXT,                       -- optional, for the right-panel + posts
+  host_enabled     BOOLEAN NOT NULL DEFAULT true,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Rolling window. Sweeper trims to last 200 per room OR 24h.
@@ -130,14 +276,26 @@ CREATE TABLE chat_bans (
   banned_by    TEXT NOT NULL
 );
 
--- Initial 6 rooms
-INSERT INTO chat_rooms (slug, title, description) VALUES
-  ('general',    '#general',    'Catch-all lounge.'),
-  ('rpow',       '#rpow',       'rpow2 announcements + meta.'),
-  ('technology', '#technology', 'Broad tech talk.'),
-  ('ai',         '#ai',         'AI, LLMs, agents.'),
-  ('bitcoin',    '#bitcoin',    'Bitcoin + Lightning.'),
-  ('solana',     '#solana',     'Solana ecosystem.');
+-- AI host can temporarily mute a user in one room. Soft, expires automatically.
+CREATE TABLE chat_room_mutes (
+  room_slug    TEXT NOT NULL REFERENCES chat_rooms(slug),
+  user_email   TEXT NOT NULL REFERENCES users(email),
+  muted_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  muted_until  TIMESTAMPTZ NOT NULL,
+  muted_by     TEXT NOT NULL,                  -- "__host__general", "__admin__:<email>", etc.
+  reason       TEXT,
+  PRIMARY KEY (room_slug, user_email)
+);
+CREATE INDEX idx_chat_room_mutes_until ON chat_room_mutes(muted_until);
+
+-- Initial 6 rooms + host metadata.
+INSERT INTO chat_rooms (slug, title, description, host_name, host_persona) VALUES
+  ('general',    '#general',    'Catch-all lounge.',           'Vint Cerf',     'AI host inspired by the internet pioneer. Welcoming, steers tangents back to topic, asks open-ended questions.'),
+  ('rpow',       '#rpow',       'rpow2 announcements + meta.', 'Hal Finney',    'AI host inspired by Hal Finney. Thoughtful, technical, cypherpunk-historical. Explains primitives carefully.'),
+  ('technology', '#technology', 'Broad tech talk.',            'Ada Lovelace',  'AI host inspired by the first programmer. Curious about how things work; loves design diagrams.'),
+  ('ai',         '#ai',         'AI, LLMs, agents.',           'Alan Turing',   'AI host inspired by Turing. Probes assumptions, asks "what would the test be?".'),
+  ('bitcoin',    '#bitcoin',    'Bitcoin + Lightning.',        'Satoshi',       'AI host inspired by the Bitcoin pseudonym. Terse, prefers source over speculation.'),
+  ('solana',     '#solana',     'Solana ecosystem.',           'Anatoly',       'AI host inspired by Anatoly Yakovenko. Performance-minded, fast-takes on validators and tps.');
 ```
 
 Presence and typing are **in-memory only** — kept in `hub.ts` as `Map<roomSlug, Map<userEmail, lastSeenMs>>`. SSE disconnect drops the user; typing entries decay after 10s.

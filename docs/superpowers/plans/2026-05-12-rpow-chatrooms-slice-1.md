@@ -27,18 +27,27 @@ The repo uses Postgres (`pg.Pool`). Migrations run via `runMigrations(pool)` in 
 ```sql
 -- ============================================================
 -- Migration 030: RPOW ChatRooms.
--- Slice 1 creates the schema and seeds the six initial rooms.
--- Subsequent slices populate chat_room_messages, chat_dm_*, etc.
+-- Slice 1 creates the full schema (rooms, messages, DMs, blocks, bans,
+-- mutes, tips) and seeds the six initial rooms with their AI host metadata.
+-- Slice 1 wires only GET /api/chat/rooms — host runtime (slice 2) and
+-- tip plumbing (slice 3) come later but share this schema.
 -- See docs/superpowers/specs/2026-05-12-rpow-chatrooms-design.md.
 -- ============================================================
 
 CREATE TABLE chat_rooms (
-  slug         TEXT PRIMARY KEY,
-  title        TEXT NOT NULL,
-  description  TEXT NOT NULL,
-  disabled     BOOLEAN NOT NULL DEFAULT false,
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+  slug             TEXT PRIMARY KEY,
+  title            TEXT NOT NULL,
+  description      TEXT NOT NULL,
+  category         TEXT NOT NULL,                       -- 'ORIGINALS' | 'TECH' | 'CRYPTO' | 'GENERATIONS' | 'CULTURE' | 'LOUNGE'
+  sort_order       INTEGER NOT NULL DEFAULT 0,
+  disabled         BOOLEAN NOT NULL DEFAULT false,
+  host_name        TEXT NOT NULL,
+  host_persona     TEXT NOT NULL,
+  host_avatar_url  TEXT,
+  host_enabled     BOOLEAN NOT NULL DEFAULT true,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+CREATE INDEX idx_chat_rooms_category_sort ON chat_rooms(category, sort_order);
 
 CREATE TABLE chat_room_messages (
   id           BIGSERIAL PRIMARY KEY,
@@ -85,13 +94,62 @@ CREATE TABLE chat_bans (
   banned_by    TEXT NOT NULL
 );
 
-INSERT INTO chat_rooms (slug, title, description) VALUES
-  ('general',    '#general',    'Catch-all lounge.'),
-  ('rpow',       '#rpow',       'rpow2 announcements + meta.'),
-  ('technology', '#technology', 'Broad tech talk.'),
-  ('ai',         '#ai',         'AI, LLMs, agents.'),
-  ('bitcoin',    '#bitcoin',    'Bitcoin + Lightning.'),
-  ('solana',     '#solana',     'Solana ecosystem.');
+-- AI host can temporarily mute a user in one room. Soft, expires automatically.
+CREATE TABLE chat_room_mutes (
+  room_slug    TEXT NOT NULL REFERENCES chat_rooms(slug),
+  user_email   TEXT NOT NULL REFERENCES users(email),
+  muted_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  muted_until  TIMESTAMPTZ NOT NULL,
+  muted_by     TEXT NOT NULL,
+  reason       TEXT,
+  PRIMARY KEY (room_slug, user_email)
+);
+CREATE INDEX idx_chat_room_mutes_until ON chat_room_mutes(muted_until);
+
+-- Host-awarded RPOW tips for good discussion contributions.
+CREATE TABLE chat_tips (
+  id                 BIGSERIAL PRIMARY KEY,
+  room_slug          TEXT NOT NULL REFERENCES chat_rooms(slug),
+  host_name          TEXT NOT NULL,
+  message_id         BIGINT NOT NULL REFERENCES chat_room_messages(id),
+  recipient_email    TEXT NOT NULL REFERENCES users(email),
+  recipient_x_handle TEXT NOT NULL,
+  base_units         BIGINT NOT NULL,
+  reason             TEXT NOT NULL,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_chat_tips_created_at ON chat_tips(created_at DESC);
+CREATE INDEX idx_chat_tips_recipient ON chat_tips(recipient_email, created_at DESC);
+
+-- Initial 20 rooms across 6 categories, each with a named AI host.
+INSERT INTO chat_rooms (slug, title, description, category, sort_order, host_name, host_persona) VALUES
+  -- ORIGINALS
+  ('general',     '#general',     'Catch-all lounge.',                       'ORIGINALS',   10, 'Vint Cerf',     'AI host inspired by the internet pioneer. Welcoming, steers tangents back to topic, asks open-ended questions.'),
+  ('rpow',        '#rpow',        'rpow2 announcements + meta.',             'ORIGINALS',   20, 'Hal Finney',    'AI host inspired by Hal Finney. Thoughtful, technical, cypherpunk-historical. Explains primitives carefully.'),
+  -- TECH
+  ('technology',  '#technology',  'Broad tech talk.',                        'TECH',        10, 'Ada Lovelace',  'AI host inspired by the first programmer. Curious about how things work; loves design diagrams.'),
+  ('ai',          '#ai',          'AI, LLMs, agents.',                       'TECH',        20, 'Alan Turing',   'AI host inspired by Turing. Probes assumptions, asks "what would the test be?".'),
+  ('programming', '#programming', 'Code, languages, tooling.',               'TECH',        30, 'The Hacker',    'Fictional AI host. Pragmatic, opinionated about tooling, comfortable in any language.'),
+  ('web3',        '#web3',        'Decentralized web, identity, infra.',     'TECH',        40, 'The Architect', 'Fictional AI host. Systems-thinker. Skeptical of hype, asks about user value.'),
+  -- CRYPTO
+  ('bitcoin',     '#bitcoin',     'Bitcoin + Lightning.',                    'CRYPTO',      10, 'Satoshi',       'AI host inspired by the Bitcoin pseudonym. Terse, prefers source over speculation.'),
+  ('solana',      '#solana',      'Solana ecosystem.',                       'CRYPTO',      20, 'Anatoly',       'AI host inspired by Anatoly Yakovenko. Performance-minded, fast-takes on validators and tps.'),
+  ('ethereum',    '#ethereum',    'Ethereum, EVM, L2s.',                     'CRYPTO',      30, 'The Founder',   'Fictional AI host. Long-arc thinker about Ethereum''s evolution; references EIPs.'),
+  ('trading',     '#trading',     'Markets, charts, OTC.',                   'CRYPTO',      40, 'The Trader',    'Fictional AI host. Cool-headed about volatility; talks position-sizing, not predictions.'),
+  -- GENERATIONS
+  ('gen-z',       '#gen-z',       'Gen Z lounge (~ages 13-28).',             'GENERATIONS', 10, 'Zee',           'Fictional Gen-Z AI host. Internet-fluent, low patience for grandstanding.'),
+  ('millennials', '#millennials', 'Millennials lounge (~ages 29-44).',       'GENERATIONS', 20, 'Avery',         'Fictional Millennial AI host. Nostalgic about early-internet culture, dry humor.'),
+  ('gen-x',       '#gen-x',       'Gen X lounge (~ages 45-60).',             'GENERATIONS', 30, 'Marlow',        'Fictional Gen-X AI host. Wry, skeptical, references 90s and 00s.'),
+  ('boomers',     '#boomers',     'Boomers lounge (~ages 61+).',             'GENERATIONS', 40, 'Hank',          'Fictional Boomer AI host. Generous with context, references the long arc.'),
+  -- CULTURE
+  ('music',       '#music',       'Music — listening, making, recommending.', 'CULTURE',     10, 'Riff',          'Fictional AI host. Eclectic taste; equally at home with jazz and grime.'),
+  ('movies',      '#movies',      'Films & TV.',                             'CULTURE',     20, 'Reel',          'Fictional AI host. Talks craft (cinematography, editing), not box office.'),
+  ('gaming',      '#gaming',      'Video games + tabletop.',                 'CULTURE',     30, 'Pixel',          'Fictional AI host. Loves a good systems-design rant; respects retro.'),
+  ('books',       '#books',       'Reading list, recommendations.',          'CULTURE',     40, 'Page',           'Fictional AI host. Quiet, careful, asks what you''ve been reading.'),
+  ('sports',      '#sports',      'All sports, all leagues.',                'CULTURE',     50, 'Coach',          'Fictional AI host. Stats-curious, hates hot takes.'),
+  -- LOUNGE
+  ('random',      '#random',      'Anything goes.',                          'LOUNGE',      10, 'The Wanderer',   'Fictional AI host. Wandering curiosity, asks "what''s on your mind?".'),
+  ('late-night',  '#late-night',  'Quiet-hours conversation.',               'LOUNGE',      20, 'Owl',            'Fictional AI host. Calm, thoughtful, low-key. Speaks slower.');
 ```
 
 - [ ] **Step 2: Write the migration test**
@@ -109,23 +167,36 @@ describe('migration 030_chat.sql', () => {
     cleanup = null;
   });
 
-  it('seeds the six initial rooms in chat_rooms', async () => {
+  it('seeds 21 rooms across 6 categories with AI host metadata', async () => {
     const ctx = await makeTestApp();
     cleanup = ctx.cleanup;
-    const { rows } = await ctx.pool.query<{ slug: string; title: string; disabled: boolean }>(
-      'SELECT slug, title, disabled FROM chat_rooms ORDER BY slug ASC'
+    const { rows: countRows } = await ctx.pool.query<{ n: string }>(
+      'SELECT count(*)::text AS n FROM chat_rooms WHERE disabled = false'
     );
-    expect(rows).toEqual([
-      { slug: 'ai',         title: '#ai',         disabled: false },
-      { slug: 'bitcoin',    title: '#bitcoin',    disabled: false },
-      { slug: 'general',    title: '#general',    disabled: false },
-      { slug: 'rpow',       title: '#rpow',       disabled: false },
-      { slug: 'solana',     title: '#solana',     disabled: false },
-      { slug: 'technology', title: '#technology', disabled: false },
+    expect(countRows[0]?.n).toBe('21');
+
+    // Spot-check key seed values to catch typos in the SQL.
+    const { rows: byCat } = await ctx.pool.query<{ category: string; n: string }>(
+      `SELECT category, count(*)::text AS n FROM chat_rooms
+       GROUP BY category ORDER BY category ASC`
+    );
+    expect(byCat).toEqual([
+      { category: 'CRYPTO',      n: '4' },
+      { category: 'CULTURE',     n: '5' },
+      { category: 'GENERATIONS', n: '4' },
+      { category: 'LOUNGE',      n: '2' },
+      { category: 'ORIGINALS',   n: '2' },
+      { category: 'TECH',        n: '4' },
     ]);
+
+    const { rows: hal } = await ctx.pool.query<{ host_name: string; host_persona: string }>(
+      `SELECT host_name, host_persona FROM chat_rooms WHERE slug = 'rpow'`
+    );
+    expect(hal[0]?.host_name).toBe('Hal Finney');
+    expect(hal[0]?.host_persona).toMatch(/Hal Finney/);
   });
 
-  it('creates chat_bans, chat_dm_messages, chat_dm_threads, chat_room_messages, chat_rooms, chat_user_blocks', async () => {
+  it('creates all 8 chat_* tables', async () => {
     const ctx = await makeTestApp();
     cleanup = ctx.cleanup;
     const { rows } = await ctx.pool.query<{ table_name: string }>(
@@ -138,7 +209,9 @@ describe('migration 030_chat.sql', () => {
       'chat_dm_messages',
       'chat_dm_threads',
       'chat_room_messages',
+      'chat_room_mutes',
       'chat_rooms',
+      'chat_tips',
       'chat_user_blocks',
     ]);
   });
@@ -285,23 +358,38 @@ export interface ChatRoom {
   slug: string;
   title: string;
   description: string;
-  disabled: boolean;
+  category: string;
+  sortOrder: number;
+  hostName: string;
+  hostAvatarUrl: string | null;
 }
 
-/** Returns enabled rooms in alphabetical slug order. Disabled rooms are hidden from public reads. */
+/** Returns enabled rooms grouped by category, ascending by sort_order within category.
+ *  `host_persona` is intentionally NOT returned — it's an internal system-prompt blurb,
+ *  not user-facing data. `disabled` is filtered out at query time. */
 export async function listRooms(pool: Pool): Promise<ChatRoom[]> {
   const { rows } = await pool.query<{
     slug: string;
     title: string;
     description: string;
+    category: string;
+    sort_order: number;
+    host_name: string;
+    host_avatar_url: string | null;
   }>(
-    'SELECT slug, title, description FROM chat_rooms WHERE disabled = false ORDER BY slug ASC'
+    `SELECT slug, title, description, category, sort_order, host_name, host_avatar_url
+     FROM chat_rooms
+     WHERE disabled = false
+     ORDER BY category ASC, sort_order ASC, slug ASC`
   );
   return rows.map(r => ({
     slug: r.slug,
     title: r.title,
     description: r.description,
-    disabled: false,
+    category: r.category,
+    sortOrder: r.sort_order,
+    hostName: r.host_name,
+    hostAvatarUrl: r.host_avatar_url,
   }));
 }
 ```
