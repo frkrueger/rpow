@@ -8,6 +8,7 @@ export interface ChatMessage {
   body: string;
   createdAt: string;           // ISO timestamp
   deletedAt: string | null;
+  isHost: boolean;             // true for AI host posts; UI renders distinctively
 }
 
 export interface ChatRoom {
@@ -78,6 +79,7 @@ export async function insertMessage(
     body: string;
     created_at: string;
     deleted_at: string | null;
+    is_host: boolean;
   }>(
     `WITH author AS (
        SELECT x_handle, x_avatar_url FROM users WHERE email = $1
@@ -94,7 +96,8 @@ export async function insertMessage(
        x_avatar_url,
        body,
        created_at::text AS created_at,
-       deleted_at::text AS deleted_at`,
+       deleted_at::text AS deleted_at,
+       is_host`,
     [args.userEmail, args.roomSlug, args.body],
   );
   const r = rows[0];
@@ -111,6 +114,7 @@ export async function insertMessage(
     body: r.body,
     createdAt: r.created_at,
     deletedAt: r.deleted_at,
+    isHost: false,
   };
 }
 
@@ -134,6 +138,7 @@ export async function listMessages(
     body: string;
     created_at: string;
     deleted_at: string | null;
+    is_host: boolean;
   }>(
     `SELECT
        id::text AS id,
@@ -142,7 +147,8 @@ export async function listMessages(
        x_avatar_url,
        body,
        created_at::text AS created_at,
-       deleted_at::text AS deleted_at
+       deleted_at::text AS deleted_at,
+       is_host
      FROM chat_room_messages
      WHERE room_slug = $1 AND deleted_at IS NULL${cursor}
      ORDER BY id DESC
@@ -159,6 +165,7 @@ export async function listMessages(
     body: r.body,
     createdAt: r.created_at,
     deletedAt: r.deleted_at,
+    isHost: r.is_host,
   }));
 }
 

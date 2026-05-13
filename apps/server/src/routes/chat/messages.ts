@@ -11,6 +11,7 @@ import {
 import { publish } from '../../chat/hub.js';
 import { allowPost } from '../../chat/rateLimit.js';
 import { validateLanguage } from '../../chat/language.js';
+import { maybeRunHost } from '../../chat/host/runtime.js';
 
 const MAX_BODY = 2000;
 const MIN_BODY = 1;
@@ -89,6 +90,16 @@ export async function messagesRoutes(app: FastifyInstance) {
         body: msg.body,
         at: msg.createdAt,
       }),
+    });
+
+    // Async: if the message @-mentions the host, kick off a reply turn.
+    // Errors are swallowed inside maybeRunHost — never blocks the POST.
+    void maybeRunHost({
+      pool: app.pool,
+      apiKey: app.config.anthropicApiKey,
+      roomSlug: msg.roomSlug,
+      triggerMessageBody: msg.body,
+      triggerXHandle: msg.xHandle,
     });
 
     return reply.code(201).send({

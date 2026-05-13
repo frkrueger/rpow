@@ -90,6 +90,8 @@ export interface AppConfig {
   chatWebOrigin: string;
   /** X (Twitter) API Bearer token. When unset, the avatar proxy returns 404 for cache misses. */
   xBearerToken?: string;
+  /** Anthropic API key for the chat host runtime. When unset, hosts are mute. */
+  anthropicApiKey?: string;
   /** Solana JSON-RPC endpoint for fetching draw entropy. When unset, draws cannot run and the scheduler tick logs a warning. */
   solanaRpcUrl?: string;
   /** AMM alpha allowlist — CSV of emails that can hit any /amm/* endpoint. */

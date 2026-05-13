@@ -79,6 +79,7 @@ export async function makeTestApp(opts: {
     freelotteryWebOrigin: 'http://freelottery.test',
     chatWebOrigin: 'http://chat.test',
     xBearerToken: undefined,
+    anthropicApiKey: undefined,
     solanaRpcUrl: undefined,
     ammAllowedEmails: opts?.ammAllowedEmails ?? '*',
     ammAdminEmails: opts?.ammAdminEmails ?? '',

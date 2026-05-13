@@ -82,6 +82,9 @@ const Schema = z.object({
   // profile_image_url. Optional in dev/test; when unset the proxy returns
   // 404 for cache misses (frontend renders a letter placeholder).
   X_BEARER_TOKEN: z.string().min(20).optional(),
+  // Anthropic API key. When unset, AI host replies are disabled silently
+  // (rooms behave as plain chat). claude-haiku-4-5 is the default model.
+  ANTHROPIC_API_KEY: z.string().min(20).optional(),
   INDEXER_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(15000),
   INDEXER_BOOTSTRAP_LIMIT: z.coerce.number().int().positive().default(1000),
 }).superRefine((v, ctx) => {

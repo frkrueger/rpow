@@ -972,3 +972,31 @@ a.ledger-handle:hover { color: var(--accent); }
   align-items: flex-start;
 }
 .composer-cta p { color: var(--dim); margin: 0; font-size: 13px; }
+
+/* ──────── ChatRooms — host messages ──────── */
+.msg.is-host {
+  border-left: 2px solid var(--accent);
+  background: rgba(110,231,183,0.04);
+  padding: 6px 8px 6px 10px;
+  margin-left: -10px;
+}
+.msg-avatar.host-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  font-size: 18px;
+  background: transparent;
+  border-color: var(--accent);
+}
+.msg-handle.host-handle {
+  color: var(--accent);
+  font-weight: 600;
+}
+.host-badge {
+  margin-left: 4px;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dim);
+}

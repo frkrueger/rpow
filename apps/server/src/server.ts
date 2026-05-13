@@ -8,6 +8,7 @@ import { loadBridgeKeypair } from './bridge-keys.js';
 import { reconcilePendingWraps } from './srpow-reconcile.js';
 import { refillTriviaQuestions } from './trivia/questions.js';
 import { runDraw } from './freelottery/draw.js';
+import { runIdleSweep } from './chat/host/idle.js';
 
 const env = parseEnv();
 const pool = createPool(env.DATABASE_URL, env.PG_POOL_MAX);
@@ -129,6 +130,7 @@ const app = await buildApp({
     freelotteryWebOrigin: env.FREELOTTERY_WEB_ORIGIN,
     chatWebOrigin: env.CHAT_WEB_ORIGIN,
     xBearerToken: env.X_BEARER_TOKEN,
+    anthropicApiKey: env.ANTHROPIC_API_KEY,
     solanaRpcUrl: env.SOLANA_RPC_URL,
     ammAllowedEmails: env.AMM_ALLOWED_EMAILS,
     ammAdminEmails: env.AMM_ADMIN_EMAILS,
@@ -168,6 +170,15 @@ setInterval(() => {
   runDraw({ pool: app.pool, config: app.config })
     .catch(err => app.log.warn({ err }, 'freelottery: scheduled draw failed'));
 }, 60 * 1000);
+
+// Chat host idle sweep: every 5 min, check each host-enabled room and post
+// a thread-starter / follow-up if it's been quiet (per-room cool-downs
+// enforced inside runIdleSweep). When ANTHROPIC_API_KEY is unset, returns
+// immediately so hosts stay mute.
+setInterval(() => {
+  runIdleSweep(app.pool, app.config.anthropicApiKey)
+    .catch(err => app.log.warn({ err }, 'chat: idle sweep failed'));
+}, 5 * 60 * 1000);
 
 await app.listen({ host: '0.0.0.0', port: env.PORT });
 app.log.info(`rpow2 server listening on :${env.PORT}`);

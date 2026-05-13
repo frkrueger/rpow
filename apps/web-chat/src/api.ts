@@ -37,6 +37,7 @@ export interface ChatMessage {
   avatar: string | null;
   body: string;
   at: string;
+  is_host?: boolean;
 }
 
 export interface RoomsResponse {
@@ -52,6 +53,7 @@ export interface MessagesResponse {
     body: string;
     createdAt: string;
     deletedAt: string | null;
+    isHost: boolean;
   }>;
 }
 

@@ -35,6 +35,7 @@ export function RoomView({ me }: Props) {
           avatar: m.xAvatarUrl,
           body: m.body,
           at: m.createdAt,
+          is_host: m.isHost,
         })));
         setLoading(false);
       })
@@ -113,13 +114,18 @@ export function RoomView({ me }: Props) {
           </div>
         )}
         {!loading && messages.map(m => (
-          <div className="msg" key={m.id}>
-            {m.avatar
-              ? <img className="msg-avatar" src={m.avatar} alt={`@${m.x_handle}`} loading="lazy" />
-              : <span className="msg-avatar placeholder" aria-hidden="true">{m.x_handle.slice(0, 1).toUpperCase()}</span>
+          <div className={`msg${m.is_host ? ' is-host' : ''}`} key={m.id}>
+            {m.is_host
+              ? <span className="msg-avatar host-glyph" aria-hidden="true">🅷</span>
+              : m.avatar
+                ? <img className="msg-avatar" src={m.avatar} alt={`@${m.x_handle}`} loading="lazy" />
+                : <span className="msg-avatar placeholder" aria-hidden="true">{m.x_handle.slice(0, 1).toUpperCase()}</span>
             }
             <div className="msg-body">
-              <a className="msg-handle" href={`https://x.com/${m.x_handle}`} target="_blank" rel="noreferrer">@{m.x_handle}</a>
+              {m.is_host
+                ? <span className="msg-handle host-handle">{m.x_handle} <span className="host-badge">[host]</span></span>
+                : <a className="msg-handle" href={`https://x.com/${m.x_handle}`} target="_blank" rel="noreferrer">@{m.x_handle}</a>
+              }
               <span className="msg-text">{m.body}</span>
             </div>
           </div>
