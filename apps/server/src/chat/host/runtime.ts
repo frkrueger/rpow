@@ -8,6 +8,9 @@ const RECENT_MESSAGES_LIMIT = 30;
 // @-mention it back-to-back, the host stays at most one post every 5 minutes.
 // Keeps the host from dominating a busy room.
 const HOST_MIN_INTERVAL_MS = 5 * 60_000;
+// Max consecutive host messages without a user message between them. A user
+// must speak before the host can post a third time in a row.
+const MAX_CONSECUTIVE_HOST = 2;
 const lastPostAt = new Map<string, number>();
 
 /** Called from the POST handler after a user message is persisted. If the
@@ -44,6 +47,22 @@ export async function maybeRunHost(args: {
   const now = Date.now();
   const last = lastPostAt.get(args.roomSlug) ?? 0;
   if (now - last < HOST_MIN_INTERVAL_MS) return;
+
+  // Cap consecutive host messages — a user must speak in between. Look at the
+  // most recent N messages; if the tail already has MAX_CONSECUTIVE_HOST host
+  // rows in a row, bail. (Done after the time gate so we don't waste a query
+  // on rate-limited triggers.)
+  const { rows: tail } = await args.pool.query<{ is_host: boolean }>(
+    `SELECT is_host
+       FROM chat_room_messages
+       WHERE room_slug = $1 AND deleted_at IS NULL
+       ORDER BY id DESC
+       LIMIT $2`,
+    [args.roomSlug, MAX_CONSECUTIVE_HOST],
+  );
+  if (tail.length >= MAX_CONSECUTIVE_HOST && tail.every(r => r.is_host)) {
+    return;
+  }
   lastPostAt.set(args.roomSlug, now);
 
   // Pull recent context (last N non-deleted messages, oldest first).

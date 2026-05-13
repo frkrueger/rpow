@@ -8,6 +8,10 @@ const QUIET_AFTER_MS = 30 * 60 * 1000;        // only post if quiet > 30 min
 const HOST_MIN_INTERVAL_MS = 60 * 60 * 1000;  // warm rooms: at most 1 idle/hour
 const COLD_HOST_INTERVAL_MS = 12 * 60 * 60 * 1000; // cold rooms: at most 2/day
 const RECENT_CONTEXT_LIMIT = 30;
+// A user must speak between consecutive host posts. Idle sweep respects the
+// same cap as the on-mention path so a quiet room doesn't accumulate host
+// monologues across days.
+const MAX_CONSECUTIVE_HOST = 2;
 
 /** Run one sweep across every host-enabled, non-disabled room. Schedules
  *  exactly one LLM call per qualifying room and publishes the reply
@@ -78,6 +82,18 @@ async function maybeIdleForRoom(
   const isWarm = now - lastUser < 60 * 60 * 1000;
   const minInterval = isWarm ? HOST_MIN_INTERVAL_MS : COLD_HOST_INTERVAL_MS;
   if (now - lastHost < minInterval) return;
+
+  // 3) Cap consecutive host messages. If the last 2 rows are both host
+  //    posts, a user has to speak before the host can chime in again.
+  const { rows: tail } = await pool.query<{ is_host: boolean }>(
+    `SELECT is_host
+       FROM chat_room_messages
+       WHERE room_slug = $1 AND deleted_at IS NULL
+       ORDER BY id DESC
+       LIMIT $2`,
+    [room.slug, MAX_CONSECUTIVE_HOST],
+  );
+  if (tail.length >= MAX_CONSECUTIVE_HOST && tail.every(r => r.is_host)) return;
 
   // Pull recent context.
   const { rows: ctx } = await pool.query<{
