@@ -40,7 +40,7 @@ const ENTRIES: Entry[] = [
   {
     when: 'Sun May 10',
     title: 'Community games arrive',
-    body: 'Adam McBride ships RPOWSwap. His friend ships RPOWMarket. Thousands of RPOW trades happen OTC.',
+    body: 'Adam McBride ships RPOWSwap for OTC trades. Mike Borowski ships RPOWMarket, a prediction market. Thousands of RPOW trades and predictions happen.',
   },
   {
     when: 'Sat May 9',
