@@ -127,6 +127,7 @@ const app = await buildApp({
     freelotteryDrawHourUtc: env.FREELOTTERY_DRAW_HOUR_UTC,
     freelotteryAllowedEmails: env.FREELOTTERY_ALLOWED_EMAILS,
     freelotteryWebOrigin: env.FREELOTTERY_WEB_ORIGIN,
+    xBearerToken: env.X_BEARER_TOKEN,
     solanaRpcUrl: env.SOLANA_RPC_URL,
     ammAllowedEmails: env.AMM_ALLOWED_EMAILS,
     ammAdminEmails: env.AMM_ADMIN_EMAILS,

@@ -85,6 +85,8 @@ export interface AppConfig {
   freelotteryAllowedEmails: string;
   /** CORS origin for the Freelottery frontend. */
   freelotteryWebOrigin: string;
+  /** X (Twitter) API Bearer token. When unset, the avatar proxy returns 404 for cache misses. */
+  xBearerToken?: string;
   /** Solana JSON-RPC endpoint for fetching draw entropy. When unset, draws cannot run and the scheduler tick logs a warning. */
   solanaRpcUrl?: string;
   /** AMM alpha allowlist — CSV of emails that can hit any /amm/* endpoint. */

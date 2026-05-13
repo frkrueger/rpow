@@ -77,6 +77,10 @@ const Schema = z.object({
   FREELOTTERY_DRAW_HOUR_UTC: z.coerce.number().int().min(0).max(23).default(19),
   FREELOTTERY_ALLOWED_EMAILS: z.string().default('*'),
   FREELOTTERY_WEB_ORIGIN: z.string().url().default('https://freelottery.rpow2.com'),
+  // X (Twitter) API Bearer token. Used by the avatar proxy to resolve
+  // profile_image_url. Optional in dev/test; when unset the proxy returns
+  // 404 for cache misses (frontend renders a letter placeholder).
+  X_BEARER_TOKEN: z.string().min(20).optional(),
   INDEXER_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(15000),
   INDEXER_BOOTSTRAP_LIMIT: z.coerce.number().int().positive().default(1000),
 }).superRefine((v, ctx) => {

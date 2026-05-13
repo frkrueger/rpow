@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import crypto from 'node:crypto';
 
-const UPSTREAM_BASE = 'https://unavatar.io/twitter/';
+const X_API_BASE = 'https://api.twitter.com/2';
 const FETCH_TIMEOUT_MS = 5_000;
 // X / Twitter handle rules: 1-15 chars, [A-Za-z0-9_]. Anything else is rejected
 // to keep the URL space tight and prevent path-traversal-style abuse.
@@ -54,33 +54,20 @@ export async function avatarRoutes(app: FastifyInstance) {
       // Fall through and try upstream again. The INSERT below will overwrite.
     }
 
-    // 2. Upstream fetch.
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    // 2. Upstream fetch via X API → twimg.
+    if (!app.config.xBearerToken) {
+      // No token configured (dev/test) — cache the miss so we don't keep
+      // hitting this path and serve 404.
+      await persistMissing(app, handle);
+      return sendMissing(reply);
+    }
     try {
-      const upstream = await fetch(`${UPSTREAM_BASE}${handle}`, {
-        method: 'GET',
-        signal: controller.signal,
-        redirect: 'follow',
-        headers: {
-          'user-agent': 'Mozilla/5.0 (rpow-avatar-proxy)',
-          accept: 'image/avif,image/webp,image/png,image/jpeg,*/*;q=0.8',
-        },
-      });
-      if (!upstream.ok) {
+      const result = await fetchAvatarFromX(handle, app.config.xBearerToken);
+      if (!result) {
         await persistMissing(app, handle);
         return sendMissing(reply);
       }
-      const contentType = upstream.headers.get('content-type') ?? 'image/jpeg';
-      const bytes = Buffer.from(await upstream.arrayBuffer());
-      // unavatar.io sometimes serves a generic placeholder PNG for handles
-      // it can't resolve. Anything under 1KB is almost certainly that
-      // placeholder, not a real avatar. Treat it as a miss so we don't
-      // pollute the cache with grey squares.
-      if (bytes.length < 1024) {
-        await persistMissing(app, handle);
-        return sendMissing(reply);
-      }
+      const { contentType, bytes } = result;
 
       await app.pool.query(
         `INSERT INTO avatar_cache (handle, content_type, bytes, fetched_at)
@@ -96,10 +83,59 @@ export async function avatarRoutes(app: FastifyInstance) {
     } catch {
       await persistMissing(app, handle);
       return sendMissing(reply);
-    } finally {
-      clearTimeout(timer);
     }
   });
+}
+
+/** Look up profile_image_url via X API, then fetch the bytes from twimg.
+ *  Returns null on any failure (handle not found, X API down, image fetch
+ *  fails). The caller persists a negative cache row on null. */
+export async function fetchAvatarFromX(
+  handle: string,
+  bearerToken: string,
+): Promise<{ contentType: string; bytes: Buffer } | null> {
+  const profileUrl = await fetchProfileImageUrl(handle, bearerToken);
+  if (!profileUrl) return null;
+  // X API returns the _normal (48px) variant. Upgrade to _400x400 for
+  // crisp avatar rendering on hi-DPI screens.
+  const hiResUrl = profileUrl.replace(/_normal(\.\w+)(\?.*)?$/, '_400x400$1');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const r = await fetch(hiResUrl, { signal: controller.signal, redirect: 'follow' });
+    if (!r.ok) return null;
+    const contentType = r.headers.get('content-type') ?? 'image/jpeg';
+    const bytes = Buffer.from(await r.arrayBuffer());
+    return { contentType, bytes };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Single-handle lookup against X API v2. Used by the avatar proxy on cache
+ *  miss. Batched lookups (for the backfill script) use a different endpoint. */
+async function fetchProfileImageUrl(
+  handle: string,
+  bearerToken: string,
+): Promise<string | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const r = await fetch(
+      `${X_API_BASE}/users/by/username/${encodeURIComponent(handle)}?user.fields=profile_image_url`,
+      {
+        headers: { authorization: `Bearer ${bearerToken}` },
+        signal: controller.signal,
+      },
+    );
+    if (!r.ok) return null;
+    const data = await r.json() as { data?: { profile_image_url?: string } };
+    return data?.data?.profile_image_url ?? null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function persistMissing(app: FastifyInstance, handle: string) {
