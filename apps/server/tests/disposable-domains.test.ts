@@ -30,11 +30,31 @@ describe('isDisposableEmail', () => {
     expect(isDisposableEmail('')).toBe(false);
   });
 
-  it('does not over-match on subdomains (apex-only)', () => {
-    // We intentionally don't wildcard-match. Bot operators use apex domains;
-    // expanding to subdomains risks false positives if a real provider hosts
-    // a subdomain that happens to share suffix.
+  it('does not over-match on subdomains of exact-list entries', () => {
+    // BLOCKED_DOMAINS is apex-only; bots that pivot to subdomains of e.g.
+    // wshu.net would need a new entry. Suffix matching is reserved for
+    // BLOCKED_SUFFIXES.
     expect(isDisposableEmail('foo@bar.wshu.net')).toBe(false);
+  });
+
+  it('blocks entire .my.id TLD (15+ bot-farm domains observed under it)', () => {
+    expect(isDisposableEmail('foo@inteksate.my.id')).toBe(true);
+    expect(isDisposableEmail('foo@ucupmail.my.id')).toBe(true);
+    expect(isDisposableEmail('foo@some.future.bot.my.id')).toBe(true);
+    // Exact apex would also be blocked
+    expect(isDisposableEmail('foo@my.id')).toBe(true);
+  });
+
+  it('blocks mailisk.net subdomains (rotates random subdomain per signup)', () => {
+    expect(isDisposableEmail('foo@eup2nq6jkfqt.mailisk.net')).toBe(true);
+    expect(isDisposableEmail('foo@mailisk.net')).toBe(true);
+  });
+
+  it('blocks the fmailler family + new wave domains', () => {
+    expect(isDisposableEmail('foo@fmaillerbox.com')).toBe(true);
+    expect(isDisposableEmail('foo@fmailler.com')).toBe(true);
+    expect(isDisposableEmail('foo@absalomfreak.xyz')).toBe(true);
+    expect(isDisposableEmail('foo@sultantrade.uk')).toBe(true);
   });
 
   it('exports a non-empty blocklist', () => {

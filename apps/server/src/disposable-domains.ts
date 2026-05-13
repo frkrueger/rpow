@@ -57,16 +57,53 @@ const BLOCKED_DOMAINS: ReadonlySet<string> = new Set([
   'fakeinbox.com',
   'mintemail.com',
   'trashmail.com',
+
+  // Second wave (added 2026-05-13). All had 1K-4K bot signups in 24h,
+  // zero legit user signal.
+  'absalomfreak.xyz',
+  'rescova.site',
+  'sultantrade.uk',
+  'fmaillerbox.com',
+  'fmaillerbox.net',
+  'fmailler.com',
+  'fmailnex.com',
+  'fmaild.com',
+  'mailto.plus',
+  'neoblox.fun',
+  'ptrpow.org',
+  'iwantoberich.uk',
+  'pokenia.xyz',
+  'openmail.pro',
+  'bayzodashboard.xyz',
+  'daihocdanangtg.com',
+  'solarnyx.com',
 ]);
 
-/** Returns true if the email's domain is in the disposable blocklist.
- *  Case-insensitive; matches the domain exactly (no wildcard), since most
- *  bot operators use the apex domain. */
+/** Domain-or-subdomain suffixes: any address whose domain equals or ends with
+ *  `.<suffix>` is blocked. Use for whole TLDs that bots register cheaply (e.g.
+ *  `.my.id` — Indonesian ID, dozens of one-off bot domains observed) and for
+ *  disposable providers that rotate random subdomains (`mailisk.net`). */
+const BLOCKED_SUFFIXES: readonly string[] = [
+  'my.id',         // 15+ bot-farm domains observed under .my.id, zero legit
+  'mailisk.net',   // disposable service — random subdomain per signup
+];
+
+function domainMatchesSuffix(domain: string, suffix: string): boolean {
+  return domain === suffix || domain.endsWith('.' + suffix);
+}
+
+/** Returns true if the email's domain is in the disposable blocklist —
+ *  either an exact match in BLOCKED_DOMAINS or a domain-or-subdomain
+ *  match against BLOCKED_SUFFIXES. Case-insensitive. */
 export function isDisposableEmail(email: string): boolean {
   const at = email.indexOf('@');
   if (at < 0) return false;
   const domain = email.slice(at + 1).toLowerCase().trim();
-  return BLOCKED_DOMAINS.has(domain);
+  if (BLOCKED_DOMAINS.has(domain)) return true;
+  for (const sfx of BLOCKED_SUFFIXES) {
+    if (domainMatchesSuffix(domain, sfx)) return true;
+  }
+  return false;
 }
 
 /** Providers that treat `user+tag@domain` as the same inbox as `user@domain`.
