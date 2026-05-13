@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
-import { HashRouter, Route, Routes, NavLink } from 'react-router-dom';
+import { HashRouter, Navigate, Route, Routes, NavLink } from 'react-router-dom';
 import { applyTheme, loadTheme, nextTheme, type Theme } from './theme.js';
 import { useMe } from './hooks/useMe.js';
 import { api } from './api.js';
@@ -42,7 +42,7 @@ export default function App() {
           )}
           <nav className="nav">
             <NavLink to="/ledger">ledger</NavLink>
-            <NavLink to="/">wallet</NavLink>
+            <NavLink to="/wallet">wallet</NavLink>
             <NavLink to="/mine">mine</NavLink>
             <NavLink to="/send">send</NavLink>
             <NavLink to="/activity">activity</NavLink>
@@ -71,7 +71,7 @@ export default function App() {
         </header>
         <main>
           <Routes>
-            <Route path="/" element={<WalletPage />} />
+            <Route path="/" element={<Navigate to="/ledger" replace />} />
             <Route path="/wallet" element={<WalletPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/mine" element={<MinePage />} />
