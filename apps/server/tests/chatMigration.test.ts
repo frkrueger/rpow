@@ -14,19 +14,30 @@ describe('migration 031_chat.sql', () => {
     const { rows: countRows } = await ctx.pool.query<{ n: string }>(
       'SELECT count(*)::text AS n FROM chat_rooms WHERE disabled = false'
     );
-    expect(countRows[0]?.n).toBe('21');
+    // 21 English (031) + 6 Mandarin (032) = 27 total.
+    expect(countRows[0]?.n).toBe('27');
 
     const { rows: byCat } = await ctx.pool.query<{ category: string; n: string }>(
       `SELECT category, count(*)::text AS n FROM chat_rooms
        GROUP BY category ORDER BY category ASC`
     );
     expect(byCat).toEqual([
+      { category: 'CHINESE',     n: '6' },
       { category: 'CRYPTO',      n: '4' },
       { category: 'CULTURE',     n: '5' },
       { category: 'GENERATIONS', n: '4' },
       { category: 'LOUNGE',      n: '2' },
       { category: 'ORIGINALS',   n: '2' },
       { category: 'TECH',        n: '4' },
+    ]);
+
+    // Spot-check that the language column landed and the Mandarin set has language='zh'.
+    const { rows: langs } = await ctx.pool.query<{ language: string; n: string }>(
+      `SELECT language, count(*)::text AS n FROM chat_rooms GROUP BY language ORDER BY language ASC`
+    );
+    expect(langs).toEqual([
+      { language: 'en', n: '21' },
+      { language: 'zh', n: '6' },
     ]);
 
     const { rows: hal } = await ctx.pool.query<{ host_name: string; host_persona: string }>(
