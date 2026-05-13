@@ -49,19 +49,19 @@ export default function App() {
             {me?.wrap_allowed && <NavLink to="/wrap">wrap</NavLink>}
             <NavLink to="/apps">apps</NavLink>
             <a
-              href="https://gladiator.rpow2.com/"
+              href="https://chat.rpow2.com/"
               className="external"
               onClick={(e) => {
                 // Forward the rpow_session via URL fragment so the cookie
-                // reliably lands on gladiator.rpow2.com even when the
-                // browser doesn't auto-propagate the .rpow2.com cookie.
-                // Same mechanism used by the /apps tile.
+                // reliably lands on chat.rpow2.com even when the browser
+                // doesn't auto-propagate the .rpow2.com cookie. Same
+                // mechanism used by the /apps tile.
                 const m = document.cookie.match(/(?:^|;\s*)rpow_session=([^;]+)/);
                 if (!m) return;
                 e.preventDefault();
-                window.location.href = `https://gladiator.rpow2.com/#/auth-callback?s=${encodeURIComponent(m[1])}`;
+                window.location.href = `https://chat.rpow2.com/#/auth-callback?s=${encodeURIComponent(m[1])}`;
               }}
-            >gladiator{'\u2197'}</a>
+            >chat{'\u2197'}</a>
             <a href="https://stats.rpow2.com/" target="_blank" rel="noreferrer" className="external">stats{'\u2197'}</a>
             {me
               ? <button onClick={logout} title="end session">out</button>
