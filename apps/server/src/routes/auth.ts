@@ -5,7 +5,7 @@ import { hashToken, issueMagicLink } from '../magic.js';
 import { signSession, SESSION_COOKIE, SESSION_TTL_SECONDS, verifySession } from '../session.js';
 import { makeUnsubToken } from '../unsub.js';
 import { magicLinkEmail } from '../email-template.js';
-import { isDisposableEmail } from '../disposable-domains.js';
+import { isDisposableEmail, normalizeEmail } from '../disposable-domains.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -55,7 +55,9 @@ export async function authRoutes(app: FastifyInstance) {
   app.post('/auth/request', async (req, reply) => {
     const parsed = RequestBody.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: 'BAD_REQUEST', message: 'invalid email' });
-    const email = parsed.data.email.toLowerCase().trim();
+    // Normalize gmail-style +addressing — bots fan out hundreds of +tags off
+    // one real inbox to create many accounts. Treat them as one.
+    const email = normalizeEmail(parsed.data.email);
     const ip = (req.ip ?? '0.0.0.0');
     const isOperator = app.config.operatorEmails.has(email);
 

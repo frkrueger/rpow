@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isDisposableEmail, BLOCKED_DOMAINS } from '../src/disposable-domains.js';
+import { isDisposableEmail, normalizeEmail, BLOCKED_DOMAINS } from '../src/disposable-domains.js';
 
 describe('isDisposableEmail', () => {
   it('returns true for known bot-farm domains', () => {
@@ -39,5 +39,35 @@ describe('isDisposableEmail', () => {
 
   it('exports a non-empty blocklist', () => {
     expect(BLOCKED_DOMAINS.size).toBeGreaterThan(20);
+  });
+});
+
+describe('normalizeEmail', () => {
+  it('strips Gmail +tags', () => {
+    expect(normalizeEmail('foo+a@gmail.com')).toBe('foo@gmail.com');
+    expect(normalizeEmail('foo+anything.here@gmail.com')).toBe('foo@gmail.com');
+    expect(normalizeEmail('zhet10001+rpow123@gmail.com')).toBe('zhet10001@gmail.com');
+  });
+
+  it('strips +tags for googlemail.com too (same provider)', () => {
+    expect(normalizeEmail('foo+a@googlemail.com')).toBe('foo@googlemail.com');
+  });
+
+  it('leaves +tags alone on non-Gmail providers (semantics differ)', () => {
+    expect(normalizeEmail('foo+a@protonmail.com')).toBe('foo+a@protonmail.com');
+    expect(normalizeEmail('foo+a@yahoo.com')).toBe('foo+a@yahoo.com');
+  });
+
+  it('lowercases and trims', () => {
+    expect(normalizeEmail('  Foo+TAG@Gmail.com  ')).toBe('foo@gmail.com');
+  });
+
+  it('is a no-op when there is no +tag', () => {
+    expect(normalizeEmail('foo@gmail.com')).toBe('foo@gmail.com');
+  });
+
+  it('handles malformed input gracefully', () => {
+    expect(normalizeEmail('no-at-sign')).toBe('no-at-sign');
+    expect(normalizeEmail('')).toBe('');
   });
 });

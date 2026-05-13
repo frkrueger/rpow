@@ -69,5 +69,28 @@ export function isDisposableEmail(email: string): boolean {
   return BLOCKED_DOMAINS.has(domain);
 }
 
+/** Providers that treat `user+tag@domain` as the same inbox as `user@domain`.
+ *  Bots exploit this by fanning out hundreds of +tags off one real inbox to
+ *  create many "different" accounts. Normalizing strips the +tag so the dupes
+ *  collide on the unique constraint. */
+const PLUS_ADDRESSING_PROVIDERS: ReadonlySet<string> = new Set([
+  'gmail.com', 'googlemail.com',
+]);
+
+/** Lowercase + trim + strip Gmail-style +tags. Used as the canonical signup
+ *  identity. We do NOT strip dots in the gmail local-part (also ignored by
+ *  Gmail) because the existing user base has many dotted variants already. */
+export function normalizeEmail(email: string): string {
+  const trimmed = email.toLowerCase().trim();
+  const at = trimmed.indexOf('@');
+  if (at < 0) return trimmed;
+  const local = trimmed.slice(0, at);
+  const domain = trimmed.slice(at + 1);
+  if (!PLUS_ADDRESSING_PROVIDERS.has(domain)) return trimmed;
+  const plus = local.indexOf('+');
+  if (plus < 0) return trimmed;
+  return local.slice(0, plus) + '@' + domain;
+}
+
 /** Exposed for tests + admin views. */
 export { BLOCKED_DOMAINS };
