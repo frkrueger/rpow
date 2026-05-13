@@ -1,18 +1,16 @@
-#!/usr/bin/env tsx
-// scripts/backfill-avatars.ts
+// src/scripts/backfill-avatars.ts
 //
 // One-shot script: resolve every X-verified user's profile_image_url via
 // X API v2 (batched 100-at-a-time), fetch the avatar bytes from twimg,
 // and populate the avatar_cache table. Idempotent — re-running just
 // refreshes any handles whose pfp changed.
 //
-// Usage (on the VPS):
-//   sudo -u rpow bash -c 'set -a; . /etc/rpow/server.env; set +a; \
-//     tsx /opt/rpow/repo/apps/server/scripts/backfill-avatars.ts'
+// Compiled by `tsc -b` to apps/server/dist/scripts/backfill-avatars.js.
+// Run on the VPS via apps/server/scripts/backfill-avatars.sh wrapper.
 //
 // Requires X_BEARER_TOKEN + DATABASE_URL in the environment.
 
-import { createPool } from '../src/db.js';
+import { createPool } from '../db.js';
 
 const X_API_BASE = 'https://api.twitter.com/2';
 const BATCH_SIZE = 100;        // X API users/by max
@@ -52,16 +50,12 @@ async function main() {
     if (!r.ok) {
       const body = await r.text();
       console.error(`x api error ${r.status}: ${body.slice(0, 200)}`);
-      // Mark every handle in this batch as missing so the proxy doesn't
-      // hammer X API for them on next page load.
       for (const h of batch) await persistMissing(pool, h);
       missing += batch.length;
       continue;
     }
     const data = await r.json() as { data?: XUser[]; errors?: unknown[] };
 
-    // X API returns matched users in `data`. Unmatched handles end up in
-    // `errors` — mark them missing.
     const resolved = new Map<string, XUser>();
     for (const u of data.data ?? []) resolved.set(u.username.toLowerCase(), u);
     for (const handle of batch) {
