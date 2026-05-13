@@ -3,6 +3,11 @@ type Entry = { when: string; title: string; body: string };
 // Newest first.
 const ENTRIES: Entry[] = [
   {
+    when: 'Wed May 13',
+    title: '★ 200,000 USERS — 6 DAYS · FREE LOTTERY LIVE ★',
+    body: 'Six days after launch RPOW2 crosses two hundred thousand users. The Daily Free Lottery is now live at freelottery.rpow2.com — 1,000 RPOW awarded every day for 100 days. First draw today at 19:00 UTC.',
+  },
+  {
     when: 'Tue May 12',
     title: '★ DAILY FREE LOTTERY launches ★',
     body: '1,000 RPOW awarded daily for 100 days. Tweet to enter. Draws at 19:00 UTC. First draw tomorrow. freelottery.rpow2.com',
