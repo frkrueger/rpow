@@ -41,11 +41,11 @@ export default function App() {
             </div>
           )}
           <nav className="nav">
+            <NavLink to="/ledger">ledger</NavLink>
             <NavLink to="/">wallet</NavLink>
             <NavLink to="/mine">mine</NavLink>
             <NavLink to="/send">send</NavLink>
             <NavLink to="/activity">activity</NavLink>
-            <NavLink to="/ledger">ledger</NavLink>
             {me?.wrap_allowed && <NavLink to="/wrap">wrap</NavLink>}
             <NavLink to="/apps">apps</NavLink>
             <a
