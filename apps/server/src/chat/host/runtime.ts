@@ -5,9 +5,9 @@ import { runHostTurn } from './llm.js';
 
 const RECENT_MESSAGES_LIMIT = 30;
 // Hard cap how often a single host can post in a room — even if many users
-// @-mention it back-to-back, the host stays at most one post per 60 seconds.
-// Keeps the host from spamming a busy room.
-const HOST_MIN_INTERVAL_MS = 60_000;
+// @-mention it back-to-back, the host stays at most one post every 5 minutes.
+// Keeps the host from dominating a busy room.
+const HOST_MIN_INTERVAL_MS = 5 * 60_000;
 const lastPostAt = new Map<string, number>();
 
 /** Called from the POST handler after a user message is persisted. If the

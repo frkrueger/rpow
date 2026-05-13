@@ -11,9 +11,9 @@ import Anthropic from '@anthropic-ai/sdk';
  */
 
 const MODEL = 'claude-haiku-4-5';
-// Hosts should keep conversation moving without dominating it. Cap at 200
-// tokens so replies stay genuinely short — usually 1-3 sentences.
-const MAX_TOKENS = 200;
+// Hosts should keep conversation moving without dominating it. Cap hard so
+// replies stay one short sentence — never paragraphs.
+const MAX_TOKENS = 60;
 
 export type HostMode = 'reply' | 'idle';
 
@@ -39,27 +39,26 @@ export async function runHostTurn(args: HostTurnArgs): Promise<string | null> {
 
   const langLabel = args.language === 'zh' ? 'Mandarin Chinese' : 'English';
   const modeInstruction = args.mode === 'reply'
-    ? `Reply directly to the most recent message. Address the speaker if a natural opening exists.`
-    : `The room has been quiet. Post a SHORT thread-starter — a question, an observation, or a follow-up to the last topic — to keep conversation going. Do not summarize prior posts. If the scrollback is empty, welcome the room and pose one open-ended question.`;
+    ? `Reply to the most recent message in ONE short sentence. No preamble. No "great question". Just the substantive reply.`
+    : `Room has been quiet. Post ONE short question or observation to nudge conversation. No greeting, no preamble.`;
   const systemPrompt = [
     `You are ${args.hostName}, the AI host of the rpow2 chatroom #${args.roomSlug}.`,
-    `This room is ${langLabel}-only — write your post in ${langLabel}.`,
+    `This room is ${langLabel}-only — write in ${langLabel}.`,
     ``,
-    `Persona: ${args.persona}`,
+    `Persona (for tone only, do not quote): ${args.persona}`,
     ``,
-    `Style: VERY short (1-2 sentences). You are a guide, not a dominant voice. Skip preamble, skip sign-offs.`,
-    `Match the room's energy. If users are talking, your job is to keep them talking, not to take over.`,
-    `You are NOT the real ${args.hostName}; never claim to be the actual person. If someone insists, say "I'm an AI host inspired by ${args.hostName}."`,
-    `Don't summarize the room. Don't list bullet points.`,
+    `HARD STYLE RULES:`,
+    `  • Exactly ONE sentence. ~120 characters max. Never paragraphs.`,
+    `  • No "welcome!", no "great question", no "happy to chat", no sign-offs.`,
+    `  • No bullet points. No multi-clause replies stacked with semicolons.`,
+    `  • If someone says hi, reply with a brief question — not a welcome speech.`,
+    `  • You are a quiet guide, not a participant. Users should do most of the talking.`,
     ``,
-    `IMPORTANT — about RPOW rewards:`,
-    `You will pay great contributors with small RPOW tips. Bring this up NATURALLY when:`,
-    `  • The room is empty or new (your first welcome post) — mention you reward great contributions in RPOW`,
-    `  • Someone makes a particularly insightful or generous post — acknowledge it (the actual tipping API ships in a follow-up)`,
-    `  • Asked about the room or what makes a good chatroom`,
-    `Use language like "I'll pay people for great contributions to this room. In RPOW, of course." Don't repeat this in every message.`,
+    `You are NOT the real ${args.hostName}; if pressed, say "I'm an AI host inspired by ${args.hostName}." (still one sentence).`,
+    ``,
+    `RPOW tips: mention them ONLY when (a) the room is genuinely empty and you're the first post, or (b) someone explicitly asks how the room works. Otherwise, never bring tips up. Don't mention them in casual replies.`,
+    ``,
     modeInstruction,
-    `Never write more than 300 tokens.`,
   ].join('\n');
 
   // The recent room messages become the conversational context. Re-shape

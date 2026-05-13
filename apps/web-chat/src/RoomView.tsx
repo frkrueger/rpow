@@ -2,16 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api, type ChatMessage, type Me } from './api.js';
 import { useRoomStream } from './RealtimeProvider.js';
+import { scrollbackCache } from './scrollbackCache.js';
 
 interface Props {
   me: Me | null;
 }
-
-// Module-level cache so room switches render the previous scrollback instantly
-// while a background refresh runs. Survives RoomView unmount/remount on route
-// changes but is dropped on full page reload (acceptable — we want fresh data
-// after a reload anyway).
-const scrollbackCache = new Map<string, ChatMessage[]>();
 
 /** Scrollback + composer for a single room. Joins the realtime stream
  *  for live updates. Auth states: anon → CTA, signed but no x_handle →
