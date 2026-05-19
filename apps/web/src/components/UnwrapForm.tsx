@@ -138,7 +138,12 @@ async function sendSrpowTransferToBridge(
   tx.feePayer = owner;
 
   const sig: string = await walletAdapter.sendTransaction(tx, conn);
-  await conn.confirmTransaction(sig, 'finalized');
+  // Intentionally NOT awaiting conn.confirmTransaction here: it opens a WS
+  // subscription against our /rpc proxy which is HTTP-only, so it falls
+  // through to a 60s polling timeout that throws even when the tx is fine.
+  // The server's /srpow/unwrap endpoint runs its own on-chain verification
+  // (returns 202 PENDING and reconciles in the background if not yet
+  // finalized), so the client doesn't need to wait here.
   return sig;
 }
 
