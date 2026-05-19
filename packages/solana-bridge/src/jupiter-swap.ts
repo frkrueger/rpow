@@ -103,14 +103,20 @@ export class JupiterClient {
       signature = bs58.encode(tx.signatures[0]!);
       await args.onSignaturePrepared(signature);
 
+      // Extract blockhash from the tx Jupiter built — guaranteed to match what
+      // Jupiter signed and what was used to construct the tx. Fetch lastValidBlockHeight
+      // BEFORE submit so a transient RPC failure here doesn't risk a false-failure
+      // refund after the tx has been sent.
+      const blockhash = tx.message.recentBlockhash;
+      const { lastValidBlockHeight } =
+        await this.opts.connection.getLatestBlockhash(this.opts.commitment);
+
       await this.opts.connection.sendRawTransaction(tx.serialize(), {
         skipPreflight: false, preflightCommitment: this.opts.commitment,
       });
 
       let timeoutHandle: NodeJS.Timeout | undefined;
       try {
-        const { blockhash, lastValidBlockHeight } =
-          await this.opts.connection.getLatestBlockhash(this.opts.commitment);
         const confirmPromise = this.opts.connection.confirmTransaction(
           { signature, blockhash, lastValidBlockHeight }, this.opts.commitment,
         );
