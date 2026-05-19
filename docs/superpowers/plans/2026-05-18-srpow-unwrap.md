@@ -52,7 +52,14 @@
 
 ## Conventions for every task
 
-- Run tests via `pnpm --filter @rpow/server vitest run <path>` (server) or `pnpm --filter @rpow/solana-bridge vitest run <path>` (bridge) or `pnpm --filter @rpow/web vitest run <path>` (web). The repo uses pnpm workspaces.
+- **Run tests via npm workspaces** (the repo uses npm, NOT pnpm — `pnpm-workspace.yaml` does not exist):
+  - Server: `TEST_DATABASE_URL="postgres://postgres:p@localhost:55432/postgres" npm --workspace @rpow/server run test -- <path-from-server-root>`
+  - Bridge: `npm --workspace @rpow/solana-bridge run test -- <path-from-bridge-root>`
+  - Web: `npm --workspace @rpow/web run test -- <path-from-web-root>`
+  - Build: `npm --workspace @rpow/web run build` (no extra args)
+  - Wherever this plan says `pnpm --filter X vitest run Y`, translate to the npm form above.
+- **Postgres baseline**: server tests require Docker Postgres at `localhost:55432`. Start it with the README command if missing: `docker run --rm -d --name rpow-pg -e POSTGRES_PASSWORD=p -p 55432:5432 postgres:16`.
+- **Pre-existing failing tests** in `apps/server/tests/srpow-wrap.test.ts` (4 failures from commit `6f63773` — daily-limit feature shipped without updating idempotency-replay tests). These failures predate this work. Do NOT try to fix them as part of these tasks. When a task touches this file (Task 11, Task 13), only verify the new tests you added pass.
 - All server tests use `makeTestApp()` from `apps/server/tests/helpers.ts` which creates an isolated Postgres schema + runs all migrations.
 - Commit at the end of each task with this footer:
   ```
