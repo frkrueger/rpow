@@ -39,11 +39,20 @@ if (env.SOLANA_RPC_URL && env.SRPOW_MINT_ADDRESS && env.BRIDGE_KEYPAIR_BASE58) {
 }
 
 if (env.SOLANA_RPC_URL && env.SRPOW_MINT_ADDRESS && env.BRIDGE_KEYPAIR_BASE58) {
-  await reconcilePendingWraps(pool, bridgeClient);
-  await reconcilePendingUnwraps(pool, bridgeClient, {
+  const reconcileCfg = {
     signingPrivateKeyHex: env.RPOW_SIGNING_PRIVATE_KEY_HEX,
     srpowUnwrapFeeBps: env.SRPOW_UNWRAP_FEE_BPS,
-  });
+  };
+  await reconcilePendingWraps(pool, bridgeClient);
+  await reconcilePendingUnwraps(pool, bridgeClient, reconcileCfg);
+  // Periodic reconcile so PENDING rows (e.g. the not_found-on-first-check
+  // case, or interrupted swap/burn) get retried without a server restart.
+  setInterval(() => {
+    reconcilePendingWraps(pool, bridgeClient)
+      .catch(err => console.error('srpow: periodic wrap reconcile failed', err?.message ?? err));
+    reconcilePendingUnwraps(pool, bridgeClient, reconcileCfg)
+      .catch(err => console.error('srpow: periodic unwrap reconcile failed', err?.message ?? err));
+  }, 60 * 1000);
 } else {
   console.log('SRPOW disabled: skipping reconcile worker');
 }

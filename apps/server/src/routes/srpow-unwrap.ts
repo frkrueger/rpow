@@ -172,16 +172,28 @@ export async function srpowUnwrapRoutes(app: FastifyInstance) {
       await markUnwrapFailed(app.pool, eventId, 'srpow not configured');
       return reply.code(503).send({ error: 'BRIDGE_DISABLED' });
     }
-    const v = await app.bridgeClient.verifyInboundTransfer({
+    // Retry verify a few times — Phantom often submits via its own RPC and
+    // it can take a few seconds for our Helius node to see the signature.
+    // Without this, a fast post-from-client races RPC indexing and gets
+    // 'not_found' on a tx that's actually fine.
+    let v = await app.bridgeClient.verifyInboundTransfer({
       signature, expectedFrom: wallet, expectedTo: app.config.bridgeWalletPubkey,
       expectedAmount: amount, mint: app.config.srpowMintAddress,
     });
+    for (let i = 0; i < 5 && v.status === 'not_found'; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      v = await app.bridgeClient.verifyInboundTransfer({
+        signature, expectedFrom: wallet, expectedTo: app.config.bridgeWalletPubkey,
+        expectedAmount: amount, mint: app.config.srpowMintAddress,
+      });
+    }
     if (v.status === 'pending') {
       return reply.code(202).send({ event_id: eventId, status: 'PENDING' as const, message: 'inbound sig not finalized yet, retry shortly' });
     }
     if (v.status === 'not_found') {
-      await markUnwrapFailed(app.pool, eventId, 'inbound sig not_found');
-      return reply.code(400).send({ error: 'TRANSFER_NOT_LANDED', event_id: eventId });
+      // After 10s of retries still nothing — stay PENDING; reconciler will
+      // re-check on the next periodic pass instead of locking the row to FAILED.
+      return reply.code(202).send({ event_id: eventId, status: 'PENDING' as const, message: 'inbound sig not seen yet; reconciler will retry' });
     }
     if (v.status === 'failed') {
       await markUnwrapFailed(app.pool, eventId, `inbound sig failed: ${v.reason}`);
