@@ -91,7 +91,7 @@ const Schema = z.object({
   SRPOW_UNWRAP_MIN_BASE_UNITS: z.string().regex(/^[0-9]+$/).default('10000000000'),
   SRPOW_UNWRAP_SLIPPAGE_BPS: z.coerce.number().int().min(0).max(10000).default(1000),
   SRPOW_UNWRAP_FEE_BPS: z.coerce.number().int().min(0).max(10000).default(500),
-  JUPITER_API_BASE: z.string().url().default('https://quote-api.jup.ag'),
+  JUPITER_API_BASE: z.string().url().default('https://lite-api.jup.ag'),
 }).superRefine((v, ctx) => {
   if (v.MAILER === 'resend' && !v.RESEND_API_KEY) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['RESEND_API_KEY'], message: 'required when MAILER=resend' });

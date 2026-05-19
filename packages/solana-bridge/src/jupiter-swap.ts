@@ -22,7 +22,7 @@ export interface QuoteArgs {
 }
 
 export async function fetchJupiterQuote(args: QuoteArgs): Promise<JupiterQuote> {
-  const url = new URL('/v6/quote', args.apiBase);
+  const url = new URL('/swap/v1/quote', args.apiBase);
   url.searchParams.set('inputMint', args.inputMint);
   url.searchParams.set('outputMint', args.outputMint);
   url.searchParams.set('amount', args.amountBaseUnits.toString());
@@ -81,7 +81,7 @@ export class JupiterClient {
 
     let signature: string | null = null;
     try {
-      const swapRes = await fetch(new URL('/v6/swap', this.opts.apiBase).toString(), {
+      const swapRes = await fetch(new URL('/swap/v1/swap', this.opts.apiBase).toString(), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
