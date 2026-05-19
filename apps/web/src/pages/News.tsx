@@ -3,6 +3,11 @@ type Entry = { when: string; title: string; body: string };
 // Newest first.
 const ENTRIES: Entry[] = [
   {
+    when: 'Tue May 19',
+    title: 'SRPOW → RPOW unwrap added',
+    body: 'The bridge now runs both directions. SRPOW on Solana can be unwrapped back to RPOW from the Wrap page — completing the round trip.',
+  },
+  {
     when: 'Mon May 18',
     title: 'Chat and Free Lottery deprecated',
     body: 'RPOW ChatRooms and the Daily Free Lottery are no longer linked from rpow2.com. Both failed to find an audience. The subdomains remain reachable for now.',
