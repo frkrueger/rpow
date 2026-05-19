@@ -98,4 +98,17 @@ describe('reconcilePendingWraps', () => {
     const tk = await t.pool.query('SELECT state FROM tokens WHERE id=$1', [tid]);
     expect(tk.rows[0].state).toBe('LOCKED_FOR_BRIDGE');
   });
+
+  it('does not touch UNWRAP rows', async () => {
+    const ctx = await makeTestApp({ wrapAllowlistCsv: '*' });
+    cleanup = ctx.cleanup;
+    await ctx.pool.query(`INSERT INTO users(email, solana_wallet) VALUES ('u@x','PK')`);
+    await ctx.pool.query(`
+      INSERT INTO srpow_wrap_events(id,user_email,solana_wallet,amount,direction,status,idempotency_key,solana_signature)
+      VALUES ('11111111-1111-1111-1111-111111111111','u@x','PK',100,'UNWRAP','PENDING','idem-key-z','SIGZ_eighty_eight_chars_padding_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
+    `);
+    await expect(reconcilePendingWraps(ctx.pool, ctx.bridgeClient)).resolves.toBeUndefined();
+    const { rows } = await ctx.pool.query(`SELECT status FROM srpow_wrap_events WHERE id='11111111-1111-1111-1111-111111111111'`);
+    expect(rows[0].status).toBe('PENDING');
+  });
 });

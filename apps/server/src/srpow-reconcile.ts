@@ -4,7 +4,7 @@ import { withTx } from './db.js';
 
 export async function reconcilePendingWraps(pool: Pool, bridge: BridgeClient): Promise<void> {
   const { rows } = await pool.query<{ id: string; solana_signature: string | null }>(
-    `SELECT id, solana_signature FROM srpow_wrap_events WHERE status='PENDING'`,
+    `SELECT id, solana_signature FROM srpow_wrap_events WHERE status='PENDING' AND direction='WRAP'`,
   );
   for (const ev of rows) {
     if (!ev.solana_signature) {
