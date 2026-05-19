@@ -354,11 +354,32 @@ export class SolanaBridgeClient implements BridgeClient {
   }
 
   async verifyInboundTransfer(args: VerifyInboundTransferArgs): Promise<VerifyInboundTransferResult> {
+    // Step 1: status check distinguishes 'not_found' from 'pending' from 'failed'.
+    // getTransaction() at a commitment level returns null for both "unknown" and
+    // "below commitment"; we MUST distinguish so the caller doesn't auto-refund
+    // an in-flight tx.
+    let status: SignatureStatus;
+    try {
+      status = await this.getSignatureStatus(args.signature);
+    } catch (e: any) {
+      // Treat RPC errors here as transient — caller can retry. Map to pending
+      // so the unwrap stays in PENDING state and reconcile picks it up.
+      return { status: 'pending' };
+    }
+    if (status === 'not_found') return { status: 'not_found' };
+    if (status === 'pending') return { status: 'pending' };
+
+    // Step 2: status is 'confirmed' or 'failed' — fetch the full tx for either
+    // the err detail or the balance arrays.
     const tx = await this.opts.connection.getTransaction(args.signature, {
       commitment: this.opts.commitment,
       maxSupportedTransactionVersion: 0,
     });
-    if (!tx) return { status: 'not_found' };
+    if (!tx) {
+      // Defensive: status said reachable but tx fetch returned null. Treat as
+      // pending so we retry rather than refund.
+      return { status: 'pending' };
+    }
     if (tx.meta?.err) {
       return { status: 'failed', reason: JSON.stringify(tx.meta.err) };
     }
@@ -369,8 +390,14 @@ export class SolanaBridgeClient implements BridgeClient {
     const pre = tx.meta?.preTokenBalances ?? [];
     const post = tx.meta?.postTokenBalances ?? [];
 
-    // Find the post-balance entry for the expected destination + mint, and
-    // its matching pre-balance (zero if the ATA didn't exist before).
+    // Step 3: explicit mint check. If no post-balance entry is for the expected
+    // mint at all, the tx is for a different mint entirely — distinguishable
+    // from "right mint, wrong recipient".
+    if (!post.some(b => b.mint === args.mint)) {
+      return { status: 'mismatch', reason: 'wrong_mint' };
+    }
+
+    // Step 4: destination credit delta.
     const postTo = post.find(b => b.mint === args.mint && b.owner === args.expectedTo);
     if (!postTo) return { status: 'mismatch', reason: 'wrong_to' };
     const preTo = pre.find(b =>
@@ -382,7 +409,7 @@ export class SolanaBridgeClient implements BridgeClient {
       return { status: 'mismatch', reason: 'wrong_amount' };
     }
 
-    // Confirm the source debited by the same amount.
+    // Step 5: source debit delta — must match expected amount on the from side.
     const postFrom = post.find(b => b.mint === args.mint && b.owner === args.expectedFrom);
     if (!postFrom) return { status: 'mismatch', reason: 'wrong_from' };
     const preFrom = pre.find(b =>
