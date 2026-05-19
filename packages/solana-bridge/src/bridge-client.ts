@@ -37,6 +37,36 @@ export type MintToResult =
  */
 export type SignatureStatus = 'confirmed' | 'failed' | 'not_found' | 'pending';
 
+// ---- Inbound transfer verification (unwrap step 1) -----------------------
+
+export interface VerifyInboundTransferArgs {
+  signature: string;
+  expectedFrom: string;        // user's bound wallet (base58)
+  expectedTo: string;          // bridge wallet (base58)
+  expectedAmount: bigint;      // SRPOW base units
+  mint: string;                // SRPOW mint pubkey (base58)
+}
+
+export type VerifyInboundTransferResult =
+  | { status: 'confirmed' }
+  | { status: 'pending' }
+  | { status: 'not_found' }
+  | { status: 'failed'; reason: string }
+  | { status: 'mismatch'; reason: 'wrong_from' | 'wrong_to' | 'wrong_amount' | 'wrong_mint' };
+
+// ---- SRPOW → SOL Jupiter swap (unwrap step 2) ----------------------------
+
+export type SwapSrpowForSolResult =
+  | { status: 'confirmed'; signature: string; sol_received_lamports: bigint }
+  | { status: 'slippage_exceeded'; quoted_slippage_bps: number }
+  | { status: 'failed'; signature: string | null; failureReason: string };
+
+// ---- SRPOW burn (unwrap step 3) ------------------------------------------
+
+export type BurnSrpowResult =
+  | { status: 'confirmed'; signature: string }
+  | { status: 'failed'; signature: string | null; failureReason: string };
+
 /**
  * Callback invoked by `mintTo` AFTER the tx has been signed locally (so the
  * signature is final) but BEFORE the raw tx is submitted to the cluster. The
@@ -61,6 +91,21 @@ export interface BridgeClient {
    */
   mintTo(args: MintToArgs, onSignaturePrepared: OnSignaturePrepared): Promise<MintToResult>;
   getSignatureStatus(signature: string): Promise<SignatureStatus>;
+  verifyInboundTransfer(args: VerifyInboundTransferArgs): Promise<VerifyInboundTransferResult>;
+  swapSrpowForSol(
+    amountBaseUnits: bigint,
+    maxSlippageBps: number,
+    onSignaturePrepared: OnSignaturePrepared,
+  ): Promise<SwapSrpowForSolResult>;
+  burnSrpow(
+    amountBaseUnits: bigint,
+    onSignaturePrepared: OnSignaturePrepared,
+  ): Promise<BurnSrpowResult>;
+  transferSrpowFromBridge(
+    recipientWallet: string,
+    amountBaseUnits: bigint,
+    onSignaturePrepared: OnSignaturePrepared,
+  ): Promise<MintToResult>;
 }
 
 type Queued =
@@ -71,11 +116,20 @@ export class FakeBridgeClient implements BridgeClient {
   calls: MintToArgs[] = [];
   private queue: Queued[] = [];
   private statuses = new Map<string, SignatureStatus>();
+  private inboundVerifyQueue: VerifyInboundTransferResult[] = [];
+  private swapQueue: SwapSrpowForSolResult[] = [];
+  private burnQueue: BurnSrpowResult[] = [];
+  burnCalls: { amountBaseUnits: bigint }[] = [];
+  swapCalls: { amountBaseUnits: bigint; maxSlippageBps: number }[] = [];
+  transferFromBridgeCalls: { recipient: string; amountBaseUnits: bigint }[] = [];
 
   queueResult(r: Queued): void { this.queue.push(r); }
   setSignatureStatus(sig: string, status: SignatureStatus): void {
     this.statuses.set(sig, status);
   }
+  queueInboundVerify(r: VerifyInboundTransferResult): void { this.inboundVerifyQueue.push(r); }
+  queueSwapResult(r: SwapSrpowForSolResult): void { this.swapQueue.push(r); }
+  queueBurnResult(r: BurnSrpowResult): void { this.burnQueue.push(r); }
 
   async mintTo(
     args: MintToArgs,
@@ -112,6 +166,57 @@ export class FakeBridgeClient implements BridgeClient {
 
   async getSignatureStatus(signature: string): Promise<SignatureStatus> {
     return this.statuses.get(signature) ?? 'not_found';
+  }
+
+  async verifyInboundTransfer(_args: VerifyInboundTransferArgs): Promise<VerifyInboundTransferResult> {
+    const next = this.inboundVerifyQueue.shift();
+    if (!next) throw new Error('FakeBridgeClient: no inbound verify queued');
+    return next;
+  }
+
+  async swapSrpowForSol(
+    amountBaseUnits: bigint,
+    maxSlippageBps: number,
+    onSignaturePrepared: OnSignaturePrepared,
+  ): Promise<SwapSrpowForSolResult> {
+    this.swapCalls.push({ amountBaseUnits, maxSlippageBps });
+    const next = this.swapQueue.shift();
+    if (!next) throw new Error('FakeBridgeClient: no swap result queued');
+    if (next.status === 'confirmed') {
+      try { await onSignaturePrepared(next.signature); }
+      catch (e: any) {
+        return { status: 'failed', signature: null, failureReason: `pre-submit storage failure: ${e?.message ?? String(e)}` };
+      }
+    }
+    return next;
+  }
+
+  async burnSrpow(
+    amountBaseUnits: bigint,
+    onSignaturePrepared: OnSignaturePrepared,
+  ): Promise<BurnSrpowResult> {
+    this.burnCalls.push({ amountBaseUnits });
+    const next = this.burnQueue.shift();
+    if (!next) throw new Error('FakeBridgeClient: no burn result queued');
+    if (next.status === 'confirmed') {
+      try { await onSignaturePrepared(next.signature); }
+      catch (e: any) {
+        return { status: 'failed', signature: null, failureReason: `pre-submit storage failure: ${e?.message ?? String(e)}` };
+      }
+    }
+    return next;
+  }
+
+  async transferSrpowFromBridge(
+    recipientWallet: string,
+    amountBaseUnits: bigint,
+    onSignaturePrepared: OnSignaturePrepared,
+  ): Promise<MintToResult> {
+    this.transferFromBridgeCalls.push({ recipient: recipientWallet, amountBaseUnits });
+    return this.mintTo(
+      { recipientWallet, amountBaseUnits },
+      onSignaturePrepared,
+    );
   }
 }
 
@@ -234,5 +339,21 @@ export class SolanaBridgeClient implements BridgeClient {
     if (v.confirmationStatus === 'finalized') return 'confirmed';
     if (v.confirmationStatus === this.opts.commitment) return 'confirmed';
     return 'pending';
+  }
+
+  async verifyInboundTransfer(_args: VerifyInboundTransferArgs): Promise<VerifyInboundTransferResult> {
+    throw new Error('SolanaBridgeClient.verifyInboundTransfer not yet implemented');
+  }
+
+  async swapSrpowForSol(): Promise<SwapSrpowForSolResult> {
+    throw new Error('SolanaBridgeClient.swapSrpowForSol not yet implemented');
+  }
+
+  async burnSrpow(): Promise<BurnSrpowResult> {
+    throw new Error('SolanaBridgeClient.burnSrpow not yet implemented');
+  }
+
+  async transferSrpowFromBridge(): Promise<MintToResult> {
+    throw new Error('SolanaBridgeClient.transferSrpowFromBridge not yet implemented');
   }
 }

@@ -71,3 +71,57 @@ describe('FakeBridgeClient', () => {
     expect(r.failureReason).toMatch(/storage failure/);
   });
 });
+
+describe('FakeBridgeClient.verifyInboundTransfer', () => {
+  it('returns queued status for the given sig', async () => {
+    const b = new FakeBridgeClient();
+    b.queueInboundVerify({ status: 'confirmed' });
+    const r = await b.verifyInboundTransfer({
+      signature: 'SIG1', expectedFrom: 'A', expectedTo: 'B',
+      expectedAmount: 100n, mint: 'M',
+    });
+    expect(r.status).toBe('confirmed');
+  });
+  it('throws if no result queued', async () => {
+    const b = new FakeBridgeClient();
+    await expect(b.verifyInboundTransfer({
+      signature: 'SIG1', expectedFrom: 'A', expectedTo: 'B', expectedAmount: 100n, mint: 'M',
+    })).rejects.toThrow(/no inbound verify queued/);
+  });
+});
+
+describe('FakeBridgeClient.swapSrpowForSol', () => {
+  it('returns confirmed swap with SOL received', async () => {
+    const b = new FakeBridgeClient();
+    b.queueSwapResult({ status: 'confirmed', signature: 'SWAP_SIG', sol_received_lamports: 12345n });
+    let prepared: string | null = null;
+    const r = await b.swapSrpowForSol(50n, 1000, async (sig) => { prepared = sig; });
+    expect(r.status).toBe('confirmed');
+    expect(prepared).toBe('SWAP_SIG');
+    if (r.status === 'confirmed') {
+      expect(r.sol_received_lamports).toBe(12345n);
+    }
+  });
+});
+
+describe('FakeBridgeClient.burnSrpow', () => {
+  it('returns confirmed burn and calls onSignaturePrepared', async () => {
+    const b = new FakeBridgeClient();
+    b.queueBurnResult({ status: 'confirmed', signature: 'BURN_SIG' });
+    let prepared: string | null = null;
+    const r = await b.burnSrpow(95n, async (sig) => { prepared = sig; });
+    expect(r.status).toBe('confirmed');
+    expect(prepared).toBe('BURN_SIG');
+  });
+});
+
+describe('FakeBridgeClient.transferSrpowFromBridge', () => {
+  it('reuses the mintTo result queue for the refund path', async () => {
+    const b = new FakeBridgeClient();
+    b.queueResult({ signature: 'REFUND_SIG' });
+    let prepared: string | null = null;
+    const r = await b.transferSrpowFromBridge('USER_WALLET', 100n, async (sig) => { prepared = sig; });
+    expect(r.status).toBe('confirmed');
+    expect(prepared).toBe('REFUND_SIG');
+  });
+});
