@@ -1,30 +1,76 @@
 import { useEffect, useState } from 'react';
+import { useWallet } from '@solana/wallet-adapter-react';
 import { Panel } from '../components/Panel.js';
 import { ConnectPhantom } from '../components/ConnectPhantom.js';
 import { WrapForm } from '../components/WrapForm.js';
 import { WrapHistory } from '../components/WrapHistory.js';
+import { UnwrapForm } from '../components/UnwrapForm.js';
+import { AmmWalletProviders } from '../amm/AmmWalletProviders.js';
 import { useSrpow } from '../hooks/useSrpow.js';
 import { useMe } from '../hooks/useMe.js';
+import { useSrpowConfig } from '../hooks/useSrpowConfig.js';
+import { fetchSrpowBalanceBaseUnits } from '../lib/srpowBalance.js';
 import { formatRpow } from '../lib/format.js';
 
 export function WrapPage() {
+  return (
+    <AmmWalletProviders>
+      <WrapPageInner />
+    </AmmWalletProviders>
+  );
+}
+
+function WrapPageInner() {
   const { me, refresh: refreshMe } = useMe();
   const { events, refresh: refreshEvents } = useSrpow();
+  const { config: srpowConfig } = useSrpowConfig();
+  const walletAdapter = useWallet();
+
   const [wallet, setWallet] = useState<string | null>(me?.solana_wallet ?? null);
+  const [tab, setTab] = useState<'wrap' | 'unwrap'>('wrap');
+  const [srpowBalance, setSrpowBalance] = useState<bigint>(0n);
+
   useEffect(() => { setWallet(me?.solana_wallet ?? null); }, [me?.solana_wallet]);
+
+  // Fetch SRPOW balance whenever Unwrap tab is active + wallet + mint known.
+  useEffect(() => {
+    if (tab !== 'unwrap') return;
+    if (!me?.solana_wallet || !srpowConfig?.srpow_mint_address) return;
+    const rpcUrl = import.meta.env.VITE_SOLANA_RPC_URL as string | undefined;
+    if (!rpcUrl) return;
+    let cancelled = false;
+    fetchSrpowBalanceBaseUnits({
+      rpcUrl,
+      ownerPubkey: me.solana_wallet,
+      mintPubkey: srpowConfig.srpow_mint_address,
+    })
+      .then(b => { if (!cancelled) setSrpowBalance(b); })
+      .catch(() => { if (!cancelled) setSrpowBalance(0n); });
+    return () => { cancelled = true; };
+  }, [tab, me?.solana_wallet, srpowConfig?.srpow_mint_address, events]);
 
   if (!me) return <Panel title="WRAP TO SOLANA"><div>loading…</div></Panel>;
   if (!me.wrap_allowed) {
     return <Panel title="WRAP TO SOLANA"><div>Not enabled for your account.</div></Panel>;
   }
 
+  const tabBtn = (active: boolean): React.CSSProperties => ({
+    fontFamily: 'inherit',
+    fontWeight: active ? 700 : 400,
+    padding: '4px 12px',
+    background: active ? 'var(--accent, #6ee7b7)' : 'transparent',
+    color: active ? '#000' : 'inherit',
+    border: '1px solid var(--accent, #6ee7b7)',
+    cursor: 'pointer',
+  });
+
   return (
     <>
-      <Panel title="WRAP TO SOLANA (SRPOW)">
+      <Panel title="WRAP / UNWRAP SRPOW">
         <p style={{ marginTop: 0, fontSize: 12, color: '#aaa' }}>
-          Centralized → on-chain. Once SRPOW is minted to your wallet, you control it
-          via Phantom. The operator takes no fee and no warranty is provided. Treat
-          with care.
+          Centralized ↔ on-chain. Wrap mints SRPOW to your wallet; Unwrap burns
+          SRPOW and credits RPOW back. The operator takes no warranty —
+          treat with care.
         </p>
         <ConnectPhantom
           boundWallet={wallet}
@@ -37,15 +83,42 @@ export function WrapPage() {
         </div>
       </Panel>
 
-      <Panel title="WRAP">
-        <WrapForm
-          availableBaseUnits={me.balance_base_units}
-          enabled={!!wallet}
-          onWrapped={() => { refreshEvents(); refreshMe(); }}
-        />
+      <Panel title={tab === 'wrap' ? 'WRAP' : 'UNWRAP'}>
+        <div className="tabbar" style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          <button
+            onClick={() => setTab('wrap')}
+            aria-pressed={tab === 'wrap'}
+            style={tabBtn(tab === 'wrap')}
+          >
+            Wrap
+          </button>
+          <button
+            onClick={() => setTab('unwrap')}
+            aria-pressed={tab === 'unwrap'}
+            style={tabBtn(tab === 'unwrap')}
+          >
+            Unwrap
+          </button>
+        </div>
+        {tab === 'wrap' ? (
+          <WrapForm
+            availableBaseUnits={me.balance_base_units}
+            enabled={!!wallet}
+            onWrapped={() => { refreshEvents(); refreshMe(); }}
+          />
+        ) : srpowConfig ? (
+          <UnwrapForm
+            srpowBalanceBaseUnits={srpowBalance}
+            config={srpowConfig}
+            walletAdapter={walletAdapter.publicKey ? walletAdapter : null}
+            onUnwrapped={() => { refreshEvents(); refreshMe(); }}
+          />
+        ) : (
+          <div style={{ fontSize: 12, color: '#888' }}>Loading config…</div>
+        )}
       </Panel>
 
-      <Panel title="RECENT WRAPS">
+      <Panel title="RECENT ACTIVITY">
         <WrapHistory events={events} />
       </Panel>
     </>

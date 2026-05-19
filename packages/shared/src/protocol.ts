@@ -139,6 +139,10 @@ export interface WrapEvent {
   amount_base_units: string;
   status: 'PENDING' | 'CONFIRMED' | 'FAILED' | 'REFUNDED';
   solana_signature: string | null;
+  /** UNWRAP only: Jupiter swap tx signature (fee SRPOW → SOL). */
+  swap_signature?: string | null;
+  /** UNWRAP only: SPL burn tx signature (remaining SRPOW destroyed). */
+  burn_signature?: string | null;
   failure_reason: string | null;
   created_at: string;
   updated_at: string;
