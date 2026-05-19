@@ -88,6 +88,11 @@ export async function makeTestApp(opts: {
     ammUsdcWalletPubkey: '4dqpFtkMJjtt94egCLVESYWxnZm9f7icLLMC3qTzzpdU',
     ammUsdcWalletAta: '9wVgJE1iKnBS8FiSnHc7jXv5Lz6uD819UYxwu7QAxxSp',
     usdcMintAddress: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+    srpowUnwrapMinBaseUnits: 10_000_000_000n,
+    srpowUnwrapSlippageBps: 1000,
+    srpowUnwrapFeeBps: 500,
+    bridgeWalletPubkey: null,
+    srpowMintAddress: null,
     secureCookies: false,
     operatorEmails: new Set<string>(),
   };

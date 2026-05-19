@@ -17,6 +17,7 @@ import { ledgerRoutes } from './routes/ledger.js';
 import { unsubscribeRoutes } from './routes/unsubscribe.js';
 import { phantomRoutes } from './routes/phantom.js';
 import { srpowRoutes } from './routes/srpow.js';
+import { srpowUnwrapRoutes } from './routes/srpow-unwrap.js';
 import { longshotRoutes } from './routes/longshot.js';
 import { gladiatorRoutes } from './routes/gladiator/index.js';
 import { triviaRoutes } from './routes/trivia/index.js';
@@ -124,6 +125,10 @@ export interface AppConfig {
   srpowUnwrapSlippageBps: number;
   /** Protocol fee charged on unwrap in basis points. */
   srpowUnwrapFeeBps: number;
+  /** Bridge wallet pubkey (base58). Null when BRIDGE_KEYPAIR_BASE58 is unset. */
+  bridgeWalletPubkey: string | null;
+  /** SRPOW mint address (base58). Null when SRPOW_MINT_ADDRESS is unset. */
+  srpowMintAddress: string | null;
 }
 
 export interface BuildAppOptions {
@@ -202,6 +207,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   await app.register(unsubscribeRoutes);
   await app.register(phantomRoutes);
   await app.register(srpowRoutes);
+  await app.register(srpowUnwrapRoutes);
   await app.register(longshotRoutes);
   await app.register(gladiatorRoutes);
   await app.register(triviaRoutes);

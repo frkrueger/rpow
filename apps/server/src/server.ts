@@ -14,11 +14,16 @@ const env = parseEnv();
 const pool = createPool(env.DATABASE_URL, env.PG_POOL_MAX);
 
 let bridgeClient: BridgeClient;
+let bridgeWalletPubkey: string | null = null;
+let srpowMintAddress: string | null = null;
 if (env.SOLANA_RPC_URL && env.SRPOW_MINT_ADDRESS && env.BRIDGE_KEYPAIR_BASE58) {
   const conn = new Connection(env.SOLANA_RPC_URL, env.SRPOW_COMMITMENT);
+  const bridgeKeypair = loadBridgeKeypair(env.BRIDGE_KEYPAIR_BASE58);
+  bridgeWalletPubkey = bridgeKeypair.publicKey.toBase58();
+  srpowMintAddress = env.SRPOW_MINT_ADDRESS;
   bridgeClient = new SolanaBridgeClient({
     connection: conn,
-    bridge: loadBridgeKeypair(env.BRIDGE_KEYPAIR_BASE58),
+    bridge: bridgeKeypair,
     mint: new PublicKey(env.SRPOW_MINT_ADDRESS),
     commitment: env.SRPOW_COMMITMENT,
     baseUnitsPerToken: SRPOW_BASE_UNITS_PER_RPOW,
@@ -29,6 +34,7 @@ if (env.SOLANA_RPC_URL && env.SRPOW_MINT_ADDRESS && env.BRIDGE_KEYPAIR_BASE58) {
   // Wrap is disabled at boot if SRPOW envs aren't all set.
   bridgeClient = new FakeBridgeClient();
   console.log('SRPOW disabled: SOLANA_RPC_URL/SRPOW_MINT_ADDRESS/BRIDGE_KEYPAIR_BASE58 not all set');
+  if (env.SRPOW_MINT_ADDRESS) srpowMintAddress = env.SRPOW_MINT_ADDRESS;
 }
 
 if (env.SOLANA_RPC_URL && env.SRPOW_MINT_ADDRESS && env.BRIDGE_KEYPAIR_BASE58) {
@@ -143,6 +149,8 @@ const app = await buildApp({
     srpowUnwrapMinBaseUnits: BigInt(env.SRPOW_UNWRAP_MIN_BASE_UNITS),
     srpowUnwrapSlippageBps: env.SRPOW_UNWRAP_SLIPPAGE_BPS,
     srpowUnwrapFeeBps: env.SRPOW_UNWRAP_FEE_BPS,
+    bridgeWalletPubkey,
+    srpowMintAddress,
     secureCookies: env.NODE_ENV === 'production',
     turnstileSecret: env.TURNSTILE_SECRET,
     operatorEmails: new Set(
