@@ -102,6 +102,22 @@ describe('FakeBridgeClient.swapSrpowForSol', () => {
       expect(r.sol_received_lamports).toBe(12345n);
     }
   });
+
+  it('throws if no result queued', async () => {
+    const b = new FakeBridgeClient();
+    await expect(b.swapSrpowForSol(50n, 1000, async () => {})).rejects.toThrow(/no swap result queued/);
+  });
+
+  it('returns failed when onSignaturePrepared throws', async () => {
+    const b = new FakeBridgeClient();
+    b.queueSwapResult({ status: 'confirmed', signature: 'SWAP_SIG', sol_received_lamports: 1n });
+    const r = await b.swapSrpowForSol(50n, 1000, async () => { throw new Error('db down'); });
+    expect(r.status).toBe('failed');
+    if (r.status === 'failed') {
+      expect(r.signature).toBeNull();
+      expect(r.failureReason).toMatch(/db down/);
+    }
+  });
 });
 
 describe('FakeBridgeClient.burnSrpow', () => {
@@ -112,6 +128,18 @@ describe('FakeBridgeClient.burnSrpow', () => {
     const r = await b.burnSrpow(95n, async (sig) => { prepared = sig; });
     expect(r.status).toBe('confirmed');
     expect(prepared).toBe('BURN_SIG');
+  });
+
+  it('throws if no result queued', async () => {
+    const b = new FakeBridgeClient();
+    await expect(b.burnSrpow(95n, async () => {})).rejects.toThrow(/no burn result queued/);
+  });
+
+  it('returns failed when onSignaturePrepared throws', async () => {
+    const b = new FakeBridgeClient();
+    b.queueBurnResult({ status: 'confirmed', signature: 'BURN_SIG' });
+    const r = await b.burnSrpow(95n, async () => { throw new Error('db down'); });
+    expect(r.status).toBe('failed');
   });
 });
 

@@ -121,7 +121,7 @@ export class FakeBridgeClient implements BridgeClient {
   private burnQueue: BurnSrpowResult[] = [];
   burnCalls: { amountBaseUnits: bigint }[] = [];
   swapCalls: { amountBaseUnits: bigint; maxSlippageBps: number }[] = [];
-  transferFromBridgeCalls: { recipient: string; amountBaseUnits: bigint }[] = [];
+  transferFromBridgeCalls: { recipientWallet: string; amountBaseUnits: bigint }[] = [];
 
   queueResult(r: Queued): void { this.queue.push(r); }
   setSignatureStatus(sig: string, status: SignatureStatus): void {
@@ -182,8 +182,13 @@ export class FakeBridgeClient implements BridgeClient {
     this.swapCalls.push({ amountBaseUnits, maxSlippageBps });
     const next = this.swapQueue.shift();
     if (!next) throw new Error('FakeBridgeClient: no swap result queued');
-    if (next.status === 'confirmed') {
-      try { await onSignaturePrepared(next.signature); }
+    // Mirror mintTo: call onSignaturePrepared whenever a signature exists,
+    // so the persist-before-submit contract holds for both success and failure.
+    const sig = next.status === 'confirmed'
+      ? next.signature
+      : (next.status === 'failed' ? next.signature : null);
+    if (sig !== null) {
+      try { await onSignaturePrepared(sig); }
       catch (e: any) {
         return { status: 'failed', signature: null, failureReason: `pre-submit storage failure: ${e?.message ?? String(e)}` };
       }
@@ -198,8 +203,11 @@ export class FakeBridgeClient implements BridgeClient {
     this.burnCalls.push({ amountBaseUnits });
     const next = this.burnQueue.shift();
     if (!next) throw new Error('FakeBridgeClient: no burn result queued');
-    if (next.status === 'confirmed') {
-      try { await onSignaturePrepared(next.signature); }
+    const sig = next.status === 'confirmed'
+      ? next.signature
+      : (next.status === 'failed' ? next.signature : null);
+    if (sig !== null) {
+      try { await onSignaturePrepared(sig); }
       catch (e: any) {
         return { status: 'failed', signature: null, failureReason: `pre-submit storage failure: ${e?.message ?? String(e)}` };
       }
@@ -212,11 +220,15 @@ export class FakeBridgeClient implements BridgeClient {
     amountBaseUnits: bigint,
     onSignaturePrepared: OnSignaturePrepared,
   ): Promise<MintToResult> {
-    this.transferFromBridgeCalls.push({ recipient: recipientWallet, amountBaseUnits });
-    return this.mintTo(
+    this.transferFromBridgeCalls.push({ recipientWallet, amountBaseUnits });
+    const result = await this.mintTo(
       { recipientWallet, amountBaseUnits },
       onSignaturePrepared,
     );
+    // mintTo appended to this.calls; remove it so `calls` remains a pure
+    // mintTo-only record (matters for tests that assert on calls.length).
+    this.calls.pop();
+    return result;
   }
 }
 
