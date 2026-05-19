@@ -353,8 +353,47 @@ export class SolanaBridgeClient implements BridgeClient {
     return 'pending';
   }
 
-  async verifyInboundTransfer(_args: VerifyInboundTransferArgs): Promise<VerifyInboundTransferResult> {
-    throw new Error('SolanaBridgeClient.verifyInboundTransfer not yet implemented');
+  async verifyInboundTransfer(args: VerifyInboundTransferArgs): Promise<VerifyInboundTransferResult> {
+    const tx = await this.opts.connection.getTransaction(args.signature, {
+      commitment: this.opts.commitment,
+      maxSupportedTransactionVersion: 0,
+    });
+    if (!tx) return { status: 'not_found' };
+    if (tx.meta?.err) {
+      return { status: 'failed', reason: JSON.stringify(tx.meta.err) };
+    }
+
+    // Token-balance delta is the cleanest way to verify an SPL transfer in
+    // either a legacy or versioned tx, and survives transfer-checked or
+    // transfer-with-fee variants.
+    const pre = tx.meta?.preTokenBalances ?? [];
+    const post = tx.meta?.postTokenBalances ?? [];
+
+    // Find the post-balance entry for the expected destination + mint, and
+    // its matching pre-balance (zero if the ATA didn't exist before).
+    const postTo = post.find(b => b.mint === args.mint && b.owner === args.expectedTo);
+    if (!postTo) return { status: 'mismatch', reason: 'wrong_to' };
+    const preTo = pre.find(b =>
+      b.accountIndex === postTo.accountIndex && b.mint === args.mint,
+    );
+    const preToAmount = preTo ? BigInt(preTo.uiTokenAmount.amount) : 0n;
+    const delta = BigInt(postTo.uiTokenAmount.amount) - preToAmount;
+    if (delta !== args.expectedAmount) {
+      return { status: 'mismatch', reason: 'wrong_amount' };
+    }
+
+    // Confirm the source debited by the same amount.
+    const postFrom = post.find(b => b.mint === args.mint && b.owner === args.expectedFrom);
+    if (!postFrom) return { status: 'mismatch', reason: 'wrong_from' };
+    const preFrom = pre.find(b =>
+      b.accountIndex === postFrom.accountIndex && b.mint === args.mint,
+    );
+    const preFromAmount = preFrom ? BigInt(preFrom.uiTokenAmount.amount) : 0n;
+    if (preFromAmount - BigInt(postFrom.uiTokenAmount.amount) !== args.expectedAmount) {
+      return { status: 'mismatch', reason: 'wrong_from' };
+    }
+
+    return { status: 'confirmed' };
   }
 
   async swapSrpowForSol(): Promise<SwapSrpowForSolResult> {
