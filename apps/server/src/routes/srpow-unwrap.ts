@@ -257,17 +257,43 @@ async function creditUserAndUpdateCounters(
   });
 }
 
-// Stub — Task 10 fills this in with the real bridge.transferSrpowFromBridge call.
 async function refundUnwrap(
   app: { pool: import('pg').Pool; bridgeClient: any },
   eventId: string,
   wallet: string,
   amount: bigint,
-  _swap: any,
+  swapResult: { status: string; quoted_slippage_bps?: number; failureReason?: string },
 ): Promise<{ code: number; body: any }> {
-  await app.pool.query(
-    `UPDATE srpow_wrap_events SET status='REFUNDED', failure_reason='swap_failed', updated_at=now() WHERE id=$1`,
-    [eventId],
+  const reason = swapResult.status === 'slippage_exceeded'
+    ? `swap_failed: slippage_exceeded (${swapResult.quoted_slippage_bps} bps)`
+    : `swap_failed: ${(swapResult as any).failureReason ?? 'unknown'}`;
+
+  // Bridge sends the full X SRPOW back to the user's wallet from its own ATA.
+  const refund = await app.bridgeClient.transferSrpowFromBridge(
+    wallet, amount,
+    async (sig: string) => {
+      // The refund sig is stored in burn_signature (operational compromise to
+      // avoid a 4th sig column). failure_reason makes the role unambiguous.
+      await app.pool.query(
+        `UPDATE srpow_wrap_events SET burn_signature=$1, updated_at=now() WHERE id=$2`,
+        [sig, eventId],
+      );
+    },
   );
-  return { code: 503, body: { error: 'BRIDGE_FAILED', event_id: eventId, status: 'REFUNDED' as const } };
+
+  if (refund.status !== 'confirmed') {
+    // Refund itself failed — leave the event PENDING and surface a 503.
+    // Operator must intervene (manual SRPOW transfer back).
+    await app.pool.query(
+      `UPDATE srpow_wrap_events SET failure_reason=$1, updated_at=now() WHERE id=$2`,
+      [`${reason}; refund_failed`, eventId],
+    );
+    return { code: 503, body: { error: 'BRIDGE_FAILED', event_id: eventId, status: 'PENDING' } };
+  }
+
+  await app.pool.query(
+    `UPDATE srpow_wrap_events SET status='REFUNDED', failure_reason=$1, updated_at=now() WHERE id=$2`,
+    [reason, eventId],
+  );
+  return { code: 503, body: { error: 'BRIDGE_FAILED', event_id: eventId, status: 'REFUNDED' } };
 }
