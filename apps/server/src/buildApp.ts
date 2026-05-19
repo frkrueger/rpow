@@ -25,6 +25,7 @@ import { ammRoutes } from './routes/amm/index.js';
 import { favoritesRoutes } from './routes/favorites.js';
 import { avatarRoutes } from './routes/avatars.js';
 import { chatRoutes } from './routes/chat/index.js';
+import { hashlockRoutes } from './routes/hashlock.js';
 
 export interface AppConfig {
   sessionSecret: string;
@@ -204,6 +205,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   await app.register(chatRoutes);
   await app.register(favoritesRoutes);
   await app.register(ammRoutes);
+  await app.register(hashlockRoutes);
   const { solanaRpcRoutes } = await import('./routes/solanaRpc.js');
   await app.register(solanaRpcRoutes);
 
