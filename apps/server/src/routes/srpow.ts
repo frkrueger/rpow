@@ -247,7 +247,8 @@ export async function srpowRoutes(app: FastifyInstance) {
     const s = readSession(req as any, app.config.sessionSecret);
     if (!s) return reply.code(401).send({ error: 'UNAUTHORIZED', message: 'login required' });
     const { rows } = await app.pool.query(
-      `SELECT id, direction, amount::text AS amount, status, solana_signature, failure_reason, created_at, updated_at
+      `SELECT id, direction, amount::text AS amount, status, solana_signature,
+              swap_signature, burn_signature, failure_reason, created_at, updated_at
        FROM srpow_wrap_events WHERE user_email=$1 ORDER BY created_at DESC LIMIT 100`,
       [s.email],
     );
@@ -257,6 +258,8 @@ export async function srpowRoutes(app: FastifyInstance) {
       amount_base_units: r.amount,
       status: r.status,
       solana_signature: r.solana_signature,
+      swap_signature: r.swap_signature,
+      burn_signature: r.burn_signature,
       failure_reason: r.failure_reason,
       created_at: r.created_at,
       updated_at: r.updated_at,
@@ -267,7 +270,8 @@ export async function srpowRoutes(app: FastifyInstance) {
     const s = readSession(req as any, app.config.sessionSecret);
     if (!s) return reply.code(401).send({ error: 'UNAUTHORIZED', message: 'login required' });
     const { rows } = await app.pool.query(
-      `SELECT id, direction, amount::text AS amount, status, solana_signature, failure_reason, created_at, updated_at
+      `SELECT id, direction, amount::text AS amount, status, solana_signature,
+              swap_signature, burn_signature, failure_reason, created_at, updated_at
        FROM srpow_wrap_events WHERE id=$1 AND user_email=$2`,
       [req.params.id, s.email],
     );
@@ -275,7 +279,8 @@ export async function srpowRoutes(app: FastifyInstance) {
     const r = rows[0];
     return {
       event_id: r.id, direction: r.direction, amount_base_units: r.amount, status: r.status,
-      solana_signature: r.solana_signature, failure_reason: r.failure_reason,
+      solana_signature: r.solana_signature, swap_signature: r.swap_signature,
+      burn_signature: r.burn_signature, failure_reason: r.failure_reason,
       created_at: r.created_at, updated_at: r.updated_at,
     };
   });

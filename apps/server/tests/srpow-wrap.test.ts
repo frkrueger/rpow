@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { makeTestApp } from './helpers.js';
-import { signSession, SESSION_COOKIE } from '../src/session.js';
+import { signSession, SESSION_COOKIE, SESSION_TTL_SECONDS } from '../src/session.js';
 import { randomUUID } from 'node:crypto';
 
 let cleanup: () => Promise<void> = async () => {};
@@ -248,6 +248,58 @@ describe('POST /srpow/wrap — replay of failed wrap', () => {
     const r2 = await t.app.inject({ method: 'POST', url: '/srpow/wrap', cookies: { [SESSION_COOKIE]: session }, payload });
     expect(r2.statusCode).toBe(503);
     expect(r2.json().status).toBe('REFUNDED');
+  });
+});
+
+describe('GET /srpow/events — swap_signature + burn_signature', () => {
+  it('GET /srpow/events returns swap_signature + burn_signature columns', async () => {
+    const ctx = await makeTestApp({ wrapAllowlistCsv: '*' });
+    cleanup = ctx.cleanup;
+    await ctx.pool.query(`INSERT INTO users(email, solana_wallet) VALUES ('u@x','PK')`);
+    await ctx.pool.query(
+      `INSERT INTO srpow_wrap_events(id,user_email,solana_wallet,amount,direction,status,idempotency_key,
+         solana_signature,swap_signature,burn_signature)
+       VALUES ('dddddddd-dddd-dddd-dddd-dddddddddddd','u@x','PK',100,'UNWRAP','CONFIRMED','idem-events-k1',
+         $1,$2,$3)`,
+      ['I'.repeat(88), 'S'.repeat(88), 'B'.repeat(88)],
+    );
+    const cookie = `${SESSION_COOKIE}=` + signSession({ email: 'u@x' }, 'x'.repeat(32), SESSION_TTL_SECONDS);
+    const res = await ctx.app.inject({ method: 'GET', url: '/srpow/events', headers: { cookie } });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body[0]).toMatchObject({
+      direction: 'UNWRAP',
+      solana_signature: 'I'.repeat(88),
+      swap_signature: 'S'.repeat(88),
+      burn_signature: 'B'.repeat(88),
+    });
+  });
+
+  it('GET /srpow/events/:id returns swap_signature + burn_signature columns', async () => {
+    const ctx = await makeTestApp({ wrapAllowlistCsv: '*' });
+    cleanup = ctx.cleanup;
+    await ctx.pool.query(`INSERT INTO users(email, solana_wallet) VALUES ('u@x','PK')`);
+    await ctx.pool.query(
+      `INSERT INTO srpow_wrap_events(id,user_email,solana_wallet,amount,direction,status,idempotency_key,
+         solana_signature,swap_signature,burn_signature)
+       VALUES ('dddddddd-dddd-dddd-dddd-dddddddddddd','u@x','PK',100,'UNWRAP','CONFIRMED','idem-events-k2',
+         $1,$2,$3)`,
+      ['I'.repeat(88), 'S'.repeat(88), 'B'.repeat(88)],
+    );
+    const cookie = `${SESSION_COOKIE}=` + signSession({ email: 'u@x' }, 'x'.repeat(32), SESSION_TTL_SECONDS);
+    const res = await ctx.app.inject({
+      method: 'GET',
+      url: '/srpow/events/dddddddd-dddd-dddd-dddd-dddddddddddd',
+      headers: { cookie },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body).toMatchObject({
+      direction: 'UNWRAP',
+      solana_signature: 'I'.repeat(88),
+      swap_signature: 'S'.repeat(88),
+      burn_signature: 'B'.repeat(88),
+    });
   });
 });
 
