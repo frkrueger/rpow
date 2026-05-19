@@ -5,6 +5,8 @@ import {
   getAssociatedTokenAddressSync,
   createAssociatedTokenAccountInstruction,
   createMintToInstruction,
+  createBurnInstruction,
+  createTransferCheckedInstruction,
 } from '@solana/spl-token';
 import bs58 from 'bs58';
 
@@ -427,11 +429,121 @@ export class SolanaBridgeClient implements BridgeClient {
     throw new Error('SolanaBridgeClient.swapSrpowForSol not yet implemented');
   }
 
-  async burnSrpow(): Promise<BurnSrpowResult> {
-    throw new Error('SolanaBridgeClient.burnSrpow not yet implemented');
+  async burnSrpow(
+    amountBaseUnits: bigint,
+    onSignaturePrepared: OnSignaturePrepared,
+  ): Promise<BurnSrpowResult> {
+    let signature: string | null = null;
+    try {
+      const bridgeAta = getAssociatedTokenAddressSync(this.opts.mint, this.opts.bridge.publicKey);
+
+      const tx = new Transaction();
+      tx.add(createBurnInstruction(
+        bridgeAta,
+        this.opts.mint,
+        this.opts.bridge.publicKey,
+        amountBaseUnits,
+      ));
+
+      const { blockhash, lastValidBlockHeight } =
+        await this.opts.connection.getLatestBlockhash(this.opts.commitment);
+      tx.recentBlockhash = blockhash;
+      tx.feePayer = this.opts.bridge.publicKey;
+      tx.sign(this.opts.bridge);
+
+      signature = bs58.encode(tx.signature!);
+      await onSignaturePrepared(signature);
+
+      await this.opts.connection.sendRawTransaction(tx.serialize(), {
+        skipPreflight: false,
+        preflightCommitment: this.opts.commitment,
+      });
+
+      let timeoutHandle: NodeJS.Timeout | undefined;
+      try {
+        const confirmPromise = this.opts.connection.confirmTransaction(
+          { signature, blockhash, lastValidBlockHeight },
+          this.opts.commitment,
+        );
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timeoutHandle = setTimeout(
+            () => reject(new Error(`burn confirmation timeout after ${this.opts.timeoutMs}ms`)),
+            this.opts.timeoutMs,
+          );
+        });
+        const c = await Promise.race([confirmPromise, timeoutPromise]);
+        if (c.value.err) {
+          return { status: 'failed', signature, failureReason: `confirmation err: ${JSON.stringify(c.value.err)}` };
+        }
+        return { status: 'confirmed', signature };
+      } finally {
+        if (timeoutHandle) clearTimeout(timeoutHandle);
+      }
+    } catch (e: any) {
+      return { status: 'failed', signature, failureReason: e?.message ?? String(e) };
+    }
   }
 
-  async transferSrpowFromBridge(): Promise<MintToResult> {
-    throw new Error('SolanaBridgeClient.transferSrpowFromBridge not yet implemented');
+  async transferSrpowFromBridge(
+    recipientWallet: string,
+    amountBaseUnits: bigint,
+    onSignaturePrepared: OnSignaturePrepared,
+  ): Promise<MintToResult> {
+    const recipient = new PublicKey(recipientWallet);
+    let signature: string | null = null;
+    try {
+      const bridgeAta = getAssociatedTokenAddressSync(this.opts.mint, this.opts.bridge.publicKey);
+      const recipientAta = getAssociatedTokenAddressSync(this.opts.mint, recipient);
+      const ataInfo = await this.opts.connection.getAccountInfo(recipientAta, this.opts.commitment);
+
+      const tx = new Transaction();
+      if (!ataInfo) {
+        tx.add(createAssociatedTokenAccountInstruction(
+          this.opts.bridge.publicKey, recipientAta, recipient, this.opts.mint,
+        ));
+      }
+      // transfer-checked requires the decimals; SRPOW uses 9 (baseUnitsPerToken=10^9).
+      tx.add(createTransferCheckedInstruction(
+        bridgeAta, this.opts.mint, recipientAta, this.opts.bridge.publicKey,
+        amountBaseUnits, 9,
+      ));
+
+      const { blockhash, lastValidBlockHeight } =
+        await this.opts.connection.getLatestBlockhash(this.opts.commitment);
+      tx.recentBlockhash = blockhash;
+      tx.feePayer = this.opts.bridge.publicKey;
+      tx.sign(this.opts.bridge);
+
+      signature = bs58.encode(tx.signature!);
+      await onSignaturePrepared(signature);
+
+      await this.opts.connection.sendRawTransaction(tx.serialize(), {
+        skipPreflight: false,
+        preflightCommitment: this.opts.commitment,
+      });
+
+      let timeoutHandle: NodeJS.Timeout | undefined;
+      try {
+        const c = await Promise.race([
+          this.opts.connection.confirmTransaction(
+            { signature, blockhash, lastValidBlockHeight }, this.opts.commitment,
+          ),
+          new Promise<never>((_, reject) => {
+            timeoutHandle = setTimeout(
+              () => reject(new Error(`refund confirmation timeout after ${this.opts.timeoutMs}ms`)),
+              this.opts.timeoutMs,
+            );
+          }),
+        ]);
+        if (c.value.err) {
+          return { status: 'failed', signature, failureReason: `confirmation err: ${JSON.stringify(c.value.err)}` };
+        }
+        return { status: 'confirmed', signature };
+      } finally {
+        if (timeoutHandle) clearTimeout(timeoutHandle);
+      }
+    } catch (e: any) {
+      return { status: 'failed', signature, failureReason: e?.message ?? String(e) };
+    }
   }
 }
