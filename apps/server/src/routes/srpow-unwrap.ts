@@ -31,6 +31,45 @@ export async function srpowUnwrapRoutes(app: FastifyInstance) {
     };
   });
 
+  // Server-side SRPOW on-chain balance lookup. Exists because the browser
+  // path through /solana-rpc collects a duplicated Access-Control-Allow-Origin
+  // header from an upstream layer and gets blocked by browsers — server→Helius
+  // sidesteps that entirely.
+  app.get('/srpow/balance', async (req, reply) => {
+    const s = readSession(req as any, app.config.sessionSecret);
+    if (!s) return reply.code(401).send({ error: 'UNAUTHORIZED', message: 'login required' });
+    const upstream = process.env.SOLANA_RPC_URL;
+    const mint = app.config.srpowMintAddress;
+    if (!upstream || !mint) {
+      return reply.code(503).send({ error: 'NO_RPC', message: 'SRPOW not configured' });
+    }
+    const { rows } = await app.pool.query<{ solana_wallet: string | null }>(
+      'SELECT solana_wallet FROM users WHERE email=$1', [s.email],
+    );
+    const wallet = rows[0]?.solana_wallet ?? null;
+    if (!wallet) return { base_units: '0' };
+    try {
+      const r = await fetch(upstream, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0', id: 1, method: 'getTokenAccountsByOwner',
+          params: [wallet, { mint }, { encoding: 'jsonParsed', commitment: 'finalized' }],
+        }),
+      });
+      if (!r.ok) return reply.code(502).send({ error: 'UPSTREAM_FAILED', message: `helius ${r.status}` });
+      const body = await r.json() as { result?: { value: Array<{ account: { data: { parsed: { info: { tokenAmount: { amount: string } } } } } }> } };
+      const accs = body.result?.value ?? [];
+      const total = accs.reduce<bigint>(
+        (acc, a) => acc + BigInt(a.account.data.parsed.info.tokenAmount.amount),
+        0n,
+      );
+      return { base_units: total.toString() };
+    } catch (e: any) {
+      return reply.code(502).send({ error: 'UPSTREAM_FAILED', message: e?.message ?? 'fetch failed' });
+    }
+  });
+
   app.post('/srpow/unwrap', async (req, reply) => {
     const s = readSession(req as any, app.config.sessionSecret);
     if (!s) return reply.code(401).send({ error: 'UNAUTHORIZED', message: 'login required' });

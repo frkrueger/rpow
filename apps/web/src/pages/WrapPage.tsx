@@ -9,8 +9,9 @@ import { AmmWalletProviders } from '../amm/AmmWalletProviders.js';
 import { useSrpow } from '../hooks/useSrpow.js';
 import { useMe } from '../hooks/useMe.js';
 import { useSrpowConfig } from '../hooks/useSrpowConfig.js';
-import { fetchSrpowBalanceBaseUnits } from '../lib/srpowBalance.js';
 import { formatRpow } from '../lib/format.js';
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
 export function WrapPage() {
   return (
@@ -32,22 +33,17 @@ function WrapPageInner() {
 
   useEffect(() => { setWallet(me?.solana_wallet ?? null); }, [me?.solana_wallet]);
 
-  // Fetch SRPOW balance whenever Unwrap tab is active + wallet + mint known.
+  // Fetch SRPOW balance via server endpoint (sidesteps /solana-rpc CORS dup).
   useEffect(() => {
     if (tab !== 'unwrap') return;
-    if (!me?.solana_wallet || !srpowConfig?.srpow_mint_address) return;
-    const rpcUrl = import.meta.env.VITE_SOLANA_RPC_URL as string | undefined;
-    if (!rpcUrl) return;
+    if (!me?.solana_wallet) return;
     let cancelled = false;
-    fetchSrpowBalanceBaseUnits({
-      rpcUrl,
-      ownerPubkey: me.solana_wallet,
-      mintPubkey: srpowConfig.srpow_mint_address,
-    })
-      .then(b => { if (!cancelled) setSrpowBalance(b); })
+    fetch(`${API_BASE}/srpow/balance`, { credentials: 'include' })
+      .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+      .then((j: { base_units: string }) => { if (!cancelled) setSrpowBalance(BigInt(j.base_units)); })
       .catch(() => { if (!cancelled) setSrpowBalance(0n); });
     return () => { cancelled = true; };
-  }, [tab, me?.solana_wallet, srpowConfig?.srpow_mint_address, events]);
+  }, [tab, me?.solana_wallet, events]);
 
   if (!me) return <Panel title="WRAP TO SOLANA"><div>loading…</div></Panel>;
   if (!me.wrap_allowed) {
