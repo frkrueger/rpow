@@ -42,6 +42,19 @@ describe('migration 035 — srpow_unwrap schema', () => {
     `)).rejects.toThrow(/unique/i);
   });
 
+  it('allows multiple UNWRAP rows with solana_signature = NULL (partial index predicate)', async () => {
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    await ctx.pool.query(`INSERT INTO users(email) VALUES ('a@x'),('b@x')`);
+    await ctx.pool.query(`
+      INSERT INTO srpow_wrap_events(id, user_email, solana_wallet, amount, direction, status, idempotency_key, solana_signature)
+      VALUES ('00000000-0000-0000-0000-000000000005','a@x','PK1',100,'UNWRAP','PENDING','k5',NULL)
+    `);
+    await expect(ctx.pool.query(`
+      INSERT INTO srpow_wrap_events(id, user_email, solana_wallet, amount, direction, status, idempotency_key, solana_signature)
+      VALUES ('00000000-0000-0000-0000-000000000006','b@x','PK2',100,'UNWRAP','PENDING','k6',NULL)
+    `)).resolves.toBeDefined();
+  });
+
   it('seeds 128 shards of unwrap_fee_burned_srpow_base_units at value=0', async () => {
     const ctx = await makeTestApp(); cleanup = ctx.cleanup;
     const r = await ctx.pool.query<{ n: string }>(
