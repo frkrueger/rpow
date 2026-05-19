@@ -66,7 +66,7 @@ export async function srpowUnwrapRoutes(app: FastifyInstance) {
       if (e.status === 'CONFIRMED') {
         return {
           ok: true, event_id: e.id, status: 'CONFIRMED' as const,
-          credit_base_units: ((amount * 95n) / 100n).toString(),
+          credit_base_units: ((amount * (10000n - BigInt(app.config.srpowUnwrapFeeBps))) / 10000n).toString(),
           inbound_signature: e.solana_signature,
           swap_signature: e.swap_signature, burn_signature: e.burn_signature,
         };
