@@ -6,6 +6,7 @@ import { Connection, PublicKey } from '@solana/web3.js';
 import { SolanaBridgeClient, FakeBridgeClient, type BridgeClient, SRPOW_BASE_UNITS_PER_RPOW } from '@rpow/solana-bridge';
 import { loadBridgeKeypair } from './bridge-keys.js';
 import { reconcilePendingWraps } from './srpow-reconcile.js';
+import { reconcilePendingUnwraps } from './srpow-unwrap-reconcile.js';
 import { refillTriviaQuestions } from './trivia/questions.js';
 import { runDraw } from './freelottery/draw.js';
 import { runIdleSweep } from './chat/host/idle.js';
@@ -39,6 +40,10 @@ if (env.SOLANA_RPC_URL && env.SRPOW_MINT_ADDRESS && env.BRIDGE_KEYPAIR_BASE58) {
 
 if (env.SOLANA_RPC_URL && env.SRPOW_MINT_ADDRESS && env.BRIDGE_KEYPAIR_BASE58) {
   await reconcilePendingWraps(pool, bridgeClient);
+  await reconcilePendingUnwraps(pool, bridgeClient, {
+    signingPrivateKeyHex: env.RPOW_SIGNING_PRIVATE_KEY_HEX,
+    srpowUnwrapFeeBps: env.SRPOW_UNWRAP_FEE_BPS,
+  });
 } else {
   console.log('SRPOW disabled: skipping reconcile worker');
 }
