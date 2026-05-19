@@ -175,4 +175,12 @@ describe('parseEnv', () => {
   it('rejects FREELOTTERY_DRAW_HOUR_UTC out of range', () => {
     expect(() => parseEnv({ ...BASE_ENV, FREELOTTERY_DRAW_HOUR_UTC: '24' })).toThrow(/FREELOTTERY_DRAW_HOUR_UTC/);
   });
+
+  it('parses SRPOW_UNWRAP_* with defaults', () => {
+    const parsed = parseEnv({ ...BASE_ENV });
+    expect(parsed.SRPOW_UNWRAP_MIN_BASE_UNITS).toBe('10000000000');
+    expect(parsed.SRPOW_UNWRAP_SLIPPAGE_BPS).toBe(1000);
+    expect(parsed.SRPOW_UNWRAP_FEE_BPS).toBe(500);
+    expect(parsed.JUPITER_API_BASE).toBe('https://quote-api.jup.ag');
+  });
 });

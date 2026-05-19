@@ -87,6 +87,11 @@ const Schema = z.object({
   ANTHROPIC_API_KEY: z.string().min(20).optional(),
   INDEXER_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(15000),
   INDEXER_BOOTSTRAP_LIMIT: z.coerce.number().int().positive().default(1000),
+  // SRPOW Unwrap params — all have defaults so dev boots without configuration.
+  SRPOW_UNWRAP_MIN_BASE_UNITS: z.string().regex(/^[0-9]+$/).default('10000000000'),
+  SRPOW_UNWRAP_SLIPPAGE_BPS: z.coerce.number().int().min(0).max(10000).default(1000),
+  SRPOW_UNWRAP_FEE_BPS: z.coerce.number().int().min(0).max(10000).default(500),
+  JUPITER_API_BASE: z.string().url().default('https://quote-api.jup.ag'),
 }).superRefine((v, ctx) => {
   if (v.MAILER === 'resend' && !v.RESEND_API_KEY) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['RESEND_API_KEY'], message: 'required when MAILER=resend' });

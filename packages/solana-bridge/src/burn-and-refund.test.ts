@@ -17,6 +17,7 @@ function makeClient() {
       commitment: 'finalized',
       baseUnitsPerToken: 10n ** 9n,
       timeoutMs: 30000,
+      jupiterApiBase: 'https://quote-api.jup.ag',
     }),
     conn,
   };

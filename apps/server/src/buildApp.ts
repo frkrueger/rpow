@@ -118,6 +118,12 @@ export interface AppConfig {
   ammUsdcWalletAta: string;
   /** USDC mint address. Default = mainnet. */
   usdcMintAddress: string;
+  /** Minimum SRPOW amount for an unwrap in base units (bigint stored as bigint). */
+  srpowUnwrapMinBaseUnits: bigint;
+  /** Slippage tolerance for Jupiter swap in basis points. */
+  srpowUnwrapSlippageBps: number;
+  /** Protocol fee charged on unwrap in basis points. */
+  srpowUnwrapFeeBps: number;
 }
 
 export interface BuildAppOptions {

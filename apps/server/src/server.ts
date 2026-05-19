@@ -23,6 +23,7 @@ if (env.SOLANA_RPC_URL && env.SRPOW_MINT_ADDRESS && env.BRIDGE_KEYPAIR_BASE58) {
     commitment: env.SRPOW_COMMITMENT,
     baseUnitsPerToken: SRPOW_BASE_UNITS_PER_RPOW,
     timeoutMs: env.SRPOW_WRAP_TIMEOUT_MS,
+    jupiterApiBase: env.JUPITER_API_BASE,
   });
 } else {
   // Wrap is disabled at boot if SRPOW envs aren't all set.
@@ -139,6 +140,9 @@ const app = await buildApp({
     ammUsdcWalletPubkey: env.AMM_USDC_WALLET_PUBKEY,
     ammUsdcWalletAta: env.AMM_USDC_WALLET_ATA ?? '',  // empty → derived later if needed
     usdcMintAddress: env.USDC_MINT_ADDRESS,
+    srpowUnwrapMinBaseUnits: BigInt(env.SRPOW_UNWRAP_MIN_BASE_UNITS),
+    srpowUnwrapSlippageBps: env.SRPOW_UNWRAP_SLIPPAGE_BPS,
+    srpowUnwrapFeeBps: env.SRPOW_UNWRAP_FEE_BPS,
     secureCookies: env.NODE_ENV === 'production',
     turnstileSecret: env.TURNSTILE_SECRET,
     operatorEmails: new Set(

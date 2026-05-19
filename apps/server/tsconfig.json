@@ -3,7 +3,10 @@
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": "./src",
-    "types": ["node"]
+    "types": ["node"],
+    "paths": {
+      "@rpow/solana-bridge": ["../../packages/solana-bridge/dist/index.d.ts"]
+    }
   },
   "include": ["src/**/*.ts"],
   "references": [{ "path": "../../packages/shared" }]

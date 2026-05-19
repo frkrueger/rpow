@@ -378,7 +378,7 @@ export class SolanaBridgeClient implements BridgeClient {
     // Step 2: status is 'confirmed' or 'failed' — fetch the full tx for either
     // the err detail or the balance arrays.
     const tx = await this.opts.connection.getTransaction(args.signature, {
-      commitment: this.opts.commitment,
+      commitment: this.opts.commitment as 'confirmed' | 'finalized',
       maxSupportedTransactionVersion: 0,
     });
     if (!tx) {
