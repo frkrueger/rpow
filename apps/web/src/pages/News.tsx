@@ -3,6 +3,11 @@ type Entry = { when: string; title: string; body: string };
 // Newest first.
 const ENTRIES: Entry[] = [
   {
+    when: 'Mon May 18',
+    title: 'Chat and Free Lottery deprecated',
+    body: 'RPOW ChatRooms and the Daily Free Lottery are no longer linked from rpow2.com. Both failed to find an audience. The subdomains remain reachable for now.',
+  },
+  {
     when: 'Wed May 13',
     title: '★ 200,000 USERS — 6 DAYS · FREE LOTTERY LIVE ★',
     body: 'Six days after launch RPOW2 crosses two hundred thousand users. The Daily Free Lottery is now live at freelottery.rpow2.com — 1,000 RPOW awarded every day for 100 days. First draw today at 19:00 UTC.',
