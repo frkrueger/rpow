@@ -1,8 +1,10 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import { readSession } from './auth.js';
 import { isAllowed } from '../wrap-allowlist.js';
+import { withTx } from '../db.js';
+import { signTokenPayload } from '../signing.js';
 
 const UnwrapBody = z.object({
   signature: z.string().min(40).max(120),
@@ -152,8 +154,120 @@ export async function srpowUnwrapRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: 'AMOUNT_MISMATCH', event_id: eventId });
     }
 
-    // 'confirmed' — proceed to swap+burn+credit. Implemented in Task 9.
-    // For now: leave the row PENDING and return 202 so the test passes.
-    return reply.code(202).send({ event_id: eventId, status: 'PENDING' as const, message: 'unwrap pipeline pending (impl in task 9)' });
+    // 'confirmed' — execute the pipeline.
+    const feeAmount = (amount * BigInt(app.config.srpowUnwrapFeeBps)) / 10000n;
+    const burnAmount = amount - feeAmount;
+
+    // Step 2: swap fee SRPOW for SOL via Jupiter.
+    const swapResult = await app.bridgeClient.swapSrpowForSol(
+      feeAmount, app.config.srpowUnwrapSlippageBps,
+      async (sig) => {
+        await app.pool.query(
+          `UPDATE srpow_wrap_events SET swap_signature=$1, updated_at=now() WHERE id=$2`,
+          [sig, eventId],
+        );
+      },
+    );
+    if (swapResult.status !== 'confirmed') {
+      // Failure path: refund. Implemented in Task 10.
+      const r = await refundUnwrap(app, eventId, wallet, amount, swapResult);
+      return reply.code(r.code).send(r.body);
+    }
+
+    // Step 3: burn the burn amount of SRPOW from the bridge's own ATA.
+    const burnResult = await app.bridgeClient.burnSrpow(
+      burnAmount,
+      async (sig) => {
+        await app.pool.query(
+          `UPDATE srpow_wrap_events SET burn_signature=$1, updated_at=now() WHERE id=$2`,
+          [sig, eventId],
+        );
+      },
+    );
+    if (burnResult.status !== 'confirmed') {
+      // Burn failures retry via reconcile. Mark PENDING and return 202.
+      return reply.code(202).send({
+        event_id: eventId, status: 'PENDING' as const,
+        message: 'burn pending; reconcile will retry',
+      });
+    }
+
+    // Step 4: credit user + update counters atomically.
+    await creditUserAndUpdateCounters(
+      app.pool, app.config.signingPrivateKeyHex,
+      eventId, s.email, burnAmount, feeAmount,
+    );
+
+    return {
+      ok: true, event_id: eventId, status: 'CONFIRMED' as const,
+      credit_base_units: burnAmount.toString(),
+      inbound_signature: signature,
+      swap_signature: swapResult.signature,
+      burn_signature: burnResult.signature,
+    };
   });
+}
+
+async function creditUserAndUpdateCounters(
+  pool: import('pg').Pool,
+  signingPrivateKeyHex: string,
+  eventId: string,
+  userEmail: string,
+  creditAmount: bigint,        // 0.95X — the user's RPOW credit + decrement of wrapped_supply
+  feeBurnedAmount: bigint,     // 0.05X — the fee portion swapped, tracked separately
+): Promise<void> {
+  await withTx(pool, async (c) => {
+    const tokenId = randomUUID();
+    const issuedAt = new Date();
+    const ownerHash = createHash('sha256').update(userEmail).digest('hex');
+    const sig = signTokenPayload(
+      { id: tokenId, owner_email_hash: ownerHash, value: creditAmount, issued_at: issuedAt.toISOString() },
+      signingPrivateKeyHex,
+    );
+    // Trigger on tokens INSERT increments circulating_supply automatically.
+    await c.query(
+      `INSERT INTO tokens(id, owner_email, value, state, issued_at, server_sig, wrap_event_id, is_change)
+       VALUES($1, $2, $3, 'VALID', $4, $5, $6, FALSE)`,
+      [tokenId, userEmail, creditAmount.toString(), issuedAt, sig, eventId],
+    );
+
+    // Manually decrement wrapped_supply_base_units. No specific WRAPPED token
+    // "represents" the SRPOW being unwrapped (SRPOW is fungible on-chain);
+    // picking a random user's WRAPPED row to invalidate would be misleading
+    // audit data. Pay the cost of one extra write to keep history honest.
+    const wrappedShard = Math.floor(Math.random() * 128);
+    await c.query(
+      `UPDATE app_counters SET value = value - $1
+       WHERE name='wrapped_supply_base_units' AND shard=$2`,
+      [creditAmount.toString(), wrappedShard],
+    );
+
+    // Bump the fee burn counter (informational only).
+    const feeShard = Math.floor(Math.random() * 128);
+    await c.query(
+      `UPDATE app_counters SET value = value + $1
+       WHERE name='unwrap_fee_burned_srpow_base_units' AND shard=$2`,
+      [feeBurnedAmount.toString(), feeShard],
+    );
+
+    await c.query(
+      `UPDATE srpow_wrap_events SET status='CONFIRMED', updated_at=now() WHERE id=$1`,
+      [eventId],
+    );
+  });
+}
+
+// Stub — Task 10 fills this in with the real bridge.transferSrpowFromBridge call.
+async function refundUnwrap(
+  app: { pool: import('pg').Pool; bridgeClient: any },
+  eventId: string,
+  wallet: string,
+  amount: bigint,
+  _swap: any,
+): Promise<{ code: number; body: any }> {
+  await app.pool.query(
+    `UPDATE srpow_wrap_events SET status='REFUNDED', failure_reason='swap_failed', updated_at=now() WHERE id=$1`,
+    [eventId],
+  );
+  return { code: 503, body: { error: 'BRIDGE_FAILED', event_id: eventId, status: 'REFUNDED' as const } };
 }
