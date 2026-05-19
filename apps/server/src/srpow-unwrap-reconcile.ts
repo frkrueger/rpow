@@ -57,7 +57,29 @@ export async function reconcilePendingUnwraps(
     }
     if (swapStatus === 'pending') continue;
     if (swapStatus === 'not_found' || swapStatus === 'failed') {
-      // Swap never landed → refund.
+      // Check if a prior refund attempt already landed (route-time timeout case).
+      // The route stores refund sigs in burn_signature (operational compromise).
+      if (ev.burn_signature) {
+        try {
+          const priorStatus = await bridge.getSignatureStatus(ev.burn_signature);
+          if (priorStatus === 'confirmed') {
+            await pool.query(
+              `UPDATE srpow_wrap_events SET status='REFUNDED', failure_reason=$1, updated_at=now() WHERE id=$2`,
+              [`reconcile: swap ${swapStatus}; refund already confirmed`, ev.id],
+            );
+            continue;
+          }
+          if (priorStatus === 'pending') {
+            // Prior refund still in flight — leave row PENDING; next pass will retry.
+            continue;
+          }
+          // 'failed' / 'not_found' — fall through to issue a fresh refund.
+        } catch (e: any) {
+          console.error(`reconcile prior-refund status check failed ${ev.id}: ${e?.message ?? e}`);
+          continue;
+        }
+      }
+      // Issue a fresh refund.
       const refund = await bridge.transferSrpowFromBridge(
         ev.solana_wallet, BigInt(ev.amount),
         async (_sig) => {},

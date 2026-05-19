@@ -41,7 +41,10 @@ export function WrapHistory({ events }: Props) {
             {e.burn_signature && (
               <>
                 {' '}
-                <TxLink sig={e.burn_signature} label="burn" />
+                <TxLink
+                  sig={e.burn_signature}
+                  label={isUnwrap && e.status === 'REFUNDED' ? 'refund' : 'burn'}
+                />
               </>
             )}
             {e.failure_reason && (
