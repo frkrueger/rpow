@@ -106,7 +106,19 @@ async function sendSrpowTransferToBridge(
   const { getAssociatedTokenAddressSync, createTransferCheckedInstruction } = await import('@solana/spl-token');
 
   const rpcUrl = import.meta.env.VITE_SOLANA_RPC_URL as string;
-  const conn = new Connection(rpcUrl, 'finalized');
+  // @solana/web3.js auto-adds a `Solana-Client` header that the CF layer
+  // in front of our /rpc proxy doesn't whitelist on preflight (it returns a
+  // fixed allow-list of `Content-Type, Cookie`). Stripping it here keeps
+  // the preflight to a single simple header that CF does allow.
+  const conn = new Connection(rpcUrl, {
+    commitment: 'finalized',
+    fetch: (async (input: any, init: any) => {
+      const headers = new Headers(init?.headers ?? {});
+      headers.delete('Solana-Client');
+      headers.delete('solana-client');
+      return fetch(input, { ...init, headers });
+    }) as any,
+  });
 
   const owner = walletAdapter.publicKey as InstanceType<typeof PublicKey>;
   if (!owner) throw new Error('wallet not connected');
