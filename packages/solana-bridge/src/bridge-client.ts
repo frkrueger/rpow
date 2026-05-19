@@ -9,6 +9,7 @@ import {
   createTransferCheckedInstruction,
 } from '@solana/spl-token';
 import bs58 from 'bs58';
+import { JupiterClient } from './jupiter-swap.js';
 
 export interface MintToArgs { recipientWallet: string; amountBaseUnits: bigint }
 export type MintToResult =
@@ -241,9 +242,12 @@ export interface SolanaBridgeClientOptions {
   commitment: Commitment;          // 'confirmed' | 'finalized'
   baseUnitsPerToken: bigint;       // 10n ** 9n for SRPOW
   timeoutMs: number;
+  jupiterApiBase: string;
 }
 
 export class SolanaBridgeClient implements BridgeClient {
+  private jupiter: JupiterClient | null = null;
+
   constructor(private opts: SolanaBridgeClientOptions) {}
 
   async mintTo(
@@ -425,8 +429,27 @@ export class SolanaBridgeClient implements BridgeClient {
     return { status: 'confirmed' };
   }
 
-  async swapSrpowForSol(): Promise<SwapSrpowForSolResult> {
-    throw new Error('SolanaBridgeClient.swapSrpowForSol not yet implemented');
+  async swapSrpowForSol(
+    amountBaseUnits: bigint,
+    maxSlippageBps: number,
+    onSignaturePrepared: OnSignaturePrepared,
+  ): Promise<SwapSrpowForSolResult> {
+    if (!this.jupiter) {
+      this.jupiter = new JupiterClient({
+        apiBase: this.opts.jupiterApiBase,
+        connection: this.opts.connection,
+        bridge: this.opts.bridge,
+        commitment: this.opts.commitment,
+        timeoutMs: this.opts.timeoutMs,
+      });
+    }
+    return this.jupiter.swap({
+      inputMint: this.opts.mint.toBase58(),
+      outputMint: 'So11111111111111111111111111111111111111112',
+      amountBaseUnits,
+      maxSlippageBps,
+      onSignaturePrepared,
+    });
   }
 
   async burnSrpow(
