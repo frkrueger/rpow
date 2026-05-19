@@ -91,8 +91,8 @@ export async function makeTestApp(opts: {
     srpowUnwrapMinBaseUnits: 10_000_000_000n,
     srpowUnwrapSlippageBps: 1000,
     srpowUnwrapFeeBps: 500,
-    bridgeWalletPubkey: null,
-    srpowMintAddress: null,
+    bridgeWalletPubkey: 'BRIDGE_PUBKEY_TEST',
+    srpowMintAddress: 'SRPOW_MINT_TEST',
     secureCookies: false,
     operatorEmails: new Set<string>(),
   };
