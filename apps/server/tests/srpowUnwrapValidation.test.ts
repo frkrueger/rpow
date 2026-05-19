@@ -14,6 +14,13 @@ async function authedRequest(ctx: any, body: any) {
 }
 
 describe('POST /srpow/unwrap validation', () => {
+  const FAKE_SIG_A = '5'.repeat(88);      // 88-char realistic base58 sig
+  const FAKE_SIG_B = '4'.repeat(88);      // distinct second sig
+  const FAKE_SIG_X = '6'.repeat(88);
+  const FAKE_SIG_1 = '7'.repeat(88);
+  const IDEM_K1 = 'idem-key-0001';
+  const IDEM_K2 = 'idem-key-0002';
+
   let cleanup: (() => Promise<void>) | null = null;
   afterEach(async () => { if (cleanup) await cleanup(); cleanup = null; });
 
@@ -27,7 +34,7 @@ describe('POST /srpow/unwrap validation', () => {
     const ctx = await makeTestApp({ wrapAllowlistCsv: 'other@x' }); cleanup = ctx.cleanup;
     await ctx.pool.query(`INSERT INTO users(email, solana_wallet) VALUES ('user@x', 'USER_PK')`);
     const res = await authedRequest(ctx, {
-      signature: 'SIG', amount_base_units: '100000000000', idempotency_key: 'k1',
+      signature: FAKE_SIG_A, amount_base_units: '100000000000', idempotency_key: IDEM_K1,
     });
     expect(res.statusCode).toBe(403);
   });
@@ -36,7 +43,7 @@ describe('POST /srpow/unwrap validation', () => {
     const ctx = await makeTestApp({ wrapAllowlistCsv: '*' }); cleanup = ctx.cleanup;
     await ctx.pool.query(`INSERT INTO users(email, solana_wallet) VALUES ('user@x', 'USER_PK')`);
     const res = await authedRequest(ctx, {
-      signature: 'SIG', amount_base_units: '1', idempotency_key: 'k1',
+      signature: FAKE_SIG_A, amount_base_units: '1', idempotency_key: IDEM_K1,
     });
     expect(res.statusCode).toBe(400);
     expect(res.json().error).toBe('INSUFFICIENT_AMOUNT');
@@ -46,7 +53,7 @@ describe('POST /srpow/unwrap validation', () => {
     const ctx = await makeTestApp({ wrapAllowlistCsv: '*' }); cleanup = ctx.cleanup;
     await ctx.pool.query(`INSERT INTO users(email) VALUES ('user@x')`);  // no solana_wallet
     const res = await authedRequest(ctx, {
-      signature: 'SIG', amount_base_units: '10000000000', idempotency_key: 'k1',
+      signature: FAKE_SIG_A, amount_base_units: '10000000000', idempotency_key: IDEM_K1,
     });
     expect(res.statusCode).toBe(400);
     expect(res.json().error).toBe('NO_WALLET_BOUND');
@@ -57,7 +64,7 @@ describe('POST /srpow/unwrap validation', () => {
     await ctx.pool.query(`INSERT INTO users(email, solana_wallet) VALUES ('user@x', 'USER_PK')`);
     ctx.bridgeClient.queueInboundVerify({ status: 'pending' });
     const res = await authedRequest(ctx, {
-      signature: 'SIG1', amount_base_units: '10000000000', idempotency_key: 'k1',
+      signature: FAKE_SIG_1, amount_base_units: '10000000000', idempotency_key: IDEM_K1,
     });
     expect(res.statusCode).toBe(202);
     expect(res.json().status).toBe('PENDING');
@@ -69,8 +76,8 @@ describe('POST /srpow/unwrap validation', () => {
     const ctx = await makeTestApp({ wrapAllowlistCsv: '*' }); cleanup = ctx.cleanup;
     await ctx.pool.query(`INSERT INTO users(email, solana_wallet) VALUES ('user@x', 'USER_PK')`);
     ctx.bridgeClient.queueInboundVerify({ status: 'pending' });
-    await authedRequest(ctx, { signature: 'SIGX', amount_base_units: '10000000000', idempotency_key: 'k1' });
-    const res = await authedRequest(ctx, { signature: 'SIGX', amount_base_units: '10000000000', idempotency_key: 'k2' });
+    await authedRequest(ctx, { signature: FAKE_SIG_X, amount_base_units: '10000000000', idempotency_key: IDEM_K1 });
+    const res = await authedRequest(ctx, { signature: FAKE_SIG_X, amount_base_units: '10000000000', idempotency_key: IDEM_K2 });
     expect(res.statusCode).toBe(409);
     expect(res.json().error).toBe('INBOUND_SIG_REUSED');
   });

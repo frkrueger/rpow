@@ -5,15 +5,9 @@ import { readSession } from './auth.js';
 import { isAllowed } from '../wrap-allowlist.js';
 
 const UnwrapBody = z.object({
-  // Solana base58 signatures are typically 87-88 chars, but we accept any
-  // non-empty string here; the bridge client verifies signature shape on RPC
-  // lookup. Keeping this permissive lets tests use short fixture sigs.
-  signature: z.string().min(1).max(120),
+  signature: z.string().min(40).max(120),
   amount_base_units: z.string().regex(/^[1-9][0-9]{0,18}$/),
-  // Tests use short fixture keys; the wrap path also accepts min(8). We allow
-  // a 2-char minimum here so fixture data doesn't get rejected as BAD_REQUEST
-  // before the actual semantic checks run. Real client keys are UUIDs.
-  idempotency_key: z.string().min(2).max(80),
+  idempotency_key: z.string().min(8).max(80),
 });
 
 async function markUnwrapFailed(pool: import('pg').Pool, eventId: string, reason: string): Promise<void> {
