@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
+import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { Panel } from '../components/Panel.js';
 import { ConnectPhantom } from '../components/ConnectPhantom.js';
 import { WrapForm } from '../components/WrapForm.js';
@@ -103,12 +104,22 @@ function WrapPageInner() {
             onWrapped={() => { refreshEvents(); refreshMe(); }}
           />
         ) : srpowConfig ? (
-          <UnwrapForm
-            srpowBalanceBaseUnits={srpowBalance}
-            config={srpowConfig}
-            walletAdapter={walletAdapter.publicKey ? walletAdapter : null}
-            onUnwrapped={() => { refreshEvents(); refreshMe(); }}
-          />
+          <>
+            {!walletAdapter.publicKey && (
+              <div style={{ marginBottom: 12, fontSize: 12, color: '#aaa' }}>
+                <div style={{ marginBottom: 6 }}>
+                  Unwrap signs a transfer from your wallet. Connect via the wallet adapter:
+                </div>
+                <WalletMultiButton />
+              </div>
+            )}
+            <UnwrapForm
+              srpowBalanceBaseUnits={srpowBalance}
+              config={srpowConfig}
+              walletAdapter={walletAdapter.publicKey ? walletAdapter : null}
+              onUnwrapped={() => { refreshEvents(); refreshMe(); }}
+            />
+          </>
         ) : (
           <div style={{ fontSize: 12, color: '#888' }}>Loading config…</div>
         )}
