@@ -295,5 +295,5 @@ async function refundUnwrap(
     `UPDATE srpow_wrap_events SET status='REFUNDED', failure_reason=$1, updated_at=now() WHERE id=$2`,
     [reason, eventId],
   );
-  return { code: 503, body: { error: 'BRIDGE_FAILED', event_id: eventId, status: 'REFUNDED' } };
+  return { code: 503, body: { error: 'BRIDGE_FAILED', event_id: eventId, status: 'REFUNDED', failure_reason: reason } };
 }
