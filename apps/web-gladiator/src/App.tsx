@@ -130,15 +130,34 @@ export function App() {
 
   useEffect(() => {
     const t = setInterval(async () => {
-      const [l, r, c] = await Promise.all([
-        fetchLobby().catch(() => []),
-        fetchRecentFlips().catch(() => []),
-        fetchChat().catch(() => []),
-      ]);
-      setLobby(l); setRecentFlips(r); setChat(c);
+      // If we're stuck on 'spectator' but a cookie is actually present, the
+      // initial /me call probably hit a transient 5xx. Re-fetch the auth
+      // endpoints on each tick so we recover automatically once the server
+      // calms down. Once we're in unverified/verified the auth state is
+      // stable so we just refresh the lobby/chat/recent.
+      const hasCookie = document.cookie.includes('rpow_session=');
+      const tasks: Promise<unknown>[] = [
+        fetchLobby().catch(() => []).then(v => setLobby(v as LobbyEntry[])),
+        fetchRecentFlips().catch(() => []).then(v => setRecentFlips(v as RecentFlip[])),
+        fetchChat().catch(() => []).then(v => setChat(v as ChatMessage[])),
+      ];
+      if (authState === 'spectator' && hasCookie) {
+        tasks.push(
+          Promise.all([
+            fetchMe().catch(() => null),
+            fetchGladiatorMe().catch(() => null),
+          ]).then(([u, p]) => {
+            if (!u) return;
+            setMe(u);
+            setProfile(p);
+            setAuthState(!p || !p.x_handle_verified_at ? 'unverified' : 'verified');
+          }),
+        );
+      }
+      await Promise.all(tasks);
     }, 5000);
     return () => clearInterval(t);
-  }, []);
+  }, [authState]);
 
   const myOpenSession = profile?.open_session ?? null;
 
