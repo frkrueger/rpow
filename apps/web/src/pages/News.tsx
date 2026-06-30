@@ -4,8 +4,8 @@ type Entry = { when: string; title: string; body: string };
 const ENTRIES: Entry[] = [
   {
     when: 'Mon Jun 30',
-    title: 'Anti-bot improvements',
-    body: 'Mining bot traffic was degrading performance for real users. We deployed rate limiting on the balance endpoint and an internal balance cache that makes the server significantly more resilient to automated traffic.',
+    title: 'Anti-bot tech deployed — difficulty reset to 27',
+    body: 'Mining bot traffic was saturating the server and degrading performance for real users. We deployed rate limiting and an internal balance cache to absorb automated traffic. Difficulty has been reset to 27 bits so real miners can find solutions again.',
   },
   {
     when: 'Tue May 19',
