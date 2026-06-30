@@ -1,10 +1,19 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Panel } from '../components/Panel.js';
 import { useMe } from '../hooks/useMe.js';
 import { api } from '../api.js';
 import { formatRpow, formatUsdc, parseRpowToBaseUnits } from '../lib/format.js';
 import { AMM_PILOT_EMAILS } from '../lib/ammPilot.js';
+import type { LedgerResponse } from '@rpow/shared';
+
+function fmtBlockTime(bits: number): string {
+  const secs = Math.round(Math.pow(2, bits) / 2_000_000);
+  if (secs < 60) return `~${secs}s`;
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return s > 0 ? `~${m}m ${s}s` : `~${m}m`;
+}
 
 /** Best-effort safety check on a return_url. Accept http(s) only. Reject
  *  data:, javascript:, file:, etc. Reject malformed URLs. The displayed
@@ -118,6 +127,8 @@ function PayRequestCard({
 
 export function WalletPage() {
   const { me, loading, refresh } = useMe();
+  const [ledger, setLedger] = useState<LedgerResponse | null>(null);
+  useEffect(() => { api.ledger().then(setLedger).catch(() => {}); }, []);
   const [searchParams] = useSearchParams();
   const toParam = searchParams.get('to');
   const amountParam = searchParams.get('amount');
@@ -185,6 +196,12 @@ export function WalletPage() {
             <div className="stat-label">DAILY REMAINING</div>
             <div className="stat-value">{me.daily_remaining_base_units ? formatRpow(me.daily_remaining_base_units) : '—'}</div>
           </div>
+          {ledger && (
+            <div className="stat-cell">
+              <div className="stat-label">EST. TIME / BLOCK</div>
+              <div className="stat-value">{fmtBlockTime(ledger.current_difficulty_bits)} <span style={{ fontSize: 10, color: 'var(--dim)' }}>MacBook</span></div>
+            </div>
+          )}
           {AMM_PILOT_EMAILS.has(me.email) && (
             <div className="stat-cell">
               <div className="stat-label">USDC</div>

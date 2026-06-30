@@ -4,6 +4,14 @@ import { api } from '../api.js';
 import type { LedgerResponse } from '@rpow/shared';
 import { formatRpow } from '../lib/format.js';
 
+function fmtBlockTime(bits: number): string {
+  const secs = Math.round(Math.pow(2, bits) / 2_000_000);
+  if (secs < 60) return `~${secs}s`;
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return s > 0 ? `~${m}m ${s}s` : `~${m}m`;
+}
+
 export function LedgerPage() {
   const [d, setD] = useState<LedgerResponse | null>(null);
   useEffect(() => { api.ledger().then(setD); }, []);
@@ -39,6 +47,10 @@ export function LedgerPage() {
           <div className="stat-cell">
             <div className="stat-label">REWARD</div>
             <div className="stat-value">{formatRpow(d.current_reward_base_units)} RPOW</div>
+          </div>
+          <div className="stat-cell">
+            <div className="stat-label">EST. TIME / BLOCK</div>
+            <div className="stat-value">{fmtBlockTime(d.current_difficulty_bits)} <span style={{ fontSize: 10, color: 'var(--dim)' }}>MacBook</span></div>
           </div>
         </div>
         <div style={{ marginTop: 12, fontSize: 12, color: 'var(--dim)' }}>
