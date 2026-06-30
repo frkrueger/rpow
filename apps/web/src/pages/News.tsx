@@ -3,6 +3,11 @@ type Entry = { when: string; title: string; body: string };
 // Newest first.
 const ENTRIES: Entry[] = [
   {
+    when: 'Mon Jun 30',
+    title: 'Anti-bot improvements',
+    body: 'Mining bot traffic was degrading performance for real users. We deployed rate limiting on the balance endpoint and an internal balance cache that makes the server significantly more resilient to automated traffic.',
+  },
+  {
     when: 'Tue May 19',
     title: 'SRPOW → RPOW unwrap added',
     body: 'The bridge now runs both directions. SRPOW on Solana can be unwrapped back to RPOW from the Wrap page — completing the round trip.',
