@@ -43,8 +43,10 @@ if (env.SOLANA_RPC_URL && env.SRPOW_MINT_ADDRESS && env.BRIDGE_KEYPAIR_BASE58) {
     signingPrivateKeyHex: env.RPOW_SIGNING_PRIVATE_KEY_HEX,
     srpowUnwrapFeeBps: env.SRPOW_UNWRAP_FEE_BPS,
   };
-  await reconcilePendingWraps(pool, bridgeClient);
-  await reconcilePendingUnwraps(pool, bridgeClient, reconcileCfg);
+  await reconcilePendingWraps(pool, bridgeClient)
+    .catch(err => console.error('srpow: startup wrap reconcile failed', err?.message ?? err));
+  await reconcilePendingUnwraps(pool, bridgeClient, reconcileCfg)
+    .catch(err => console.error('srpow: startup unwrap reconcile failed', err?.message ?? err));
   // Periodic reconcile so PENDING rows (e.g. the not_found-on-first-check
   // case, or interrupted swap/burn) get retried without a server restart.
   setInterval(() => {
