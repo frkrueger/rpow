@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
-const STORAGE_KEY = 'celebration-srpow-bridge-may19-dismissed';
+const STORAGE_KEY = 'celebration-antibot-diff27-jun30-dismissed';
 
 export function CelebrationBanner() {
   const [dismissed, setDismissed] = useState(
@@ -20,7 +20,7 @@ export function CelebrationBanner() {
     <div className="celebration-banner">
       <Link to="/news" className="celebration-link">
         <pre className="celebration-art">{`+========================================================================+
-|              `}<span className="celebration-star">★</span>{`  `}<span className="celebration-headline">SRPOW → RPOW BRIDGE LIVE</span>{`  ·  TUE MAY 19  `}<span className="celebration-star">★</span>{`             |
+|        `}<span className="celebration-star">★</span>{`  `}<span className="celebration-headline">ANTI-BOT TECH DEPLOYED · DIFFICULTY RESET TO 27</span>{`  `}<span className="celebration-star">★</span>{`        |
 +========================================================================+`}</pre>
       </Link>
       <button
