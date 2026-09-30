@@ -1,0 +1,30 @@
+# Netlify site config for gladiator.rpow2.com.
+#
+# Set "Base directory" in the Netlify dashboard to apps/web-gladiator/.
+# Netlify reads this file from that base dir; `publish` and the working
+# dir for `command` are also relative to the base. `npm ci --workspaces`
+# must run from the workspace root, so the command starts with `cd ../..`
+# to get back to the repo root before installing.
+
+[build]
+  command = "cd ../.. && npm ci --workspaces --include-workspace-root && npm run build --workspace @rpow/web-gladiator"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22.20.0"
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1"
+
+# SPA fallback — every route serves index.html so client routing works.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Production builds use the VPS-hosted API at api.rpow2.com.
+# Server-side CORS already allows https://gladiator.rpow2.com per slice 1
+# (GLADIATOR_WEB_ORIGIN env var, wired into Fastify's allowedOrigins list).
+[context.production.environment]
+  VITE_API_BASE_URL = "https://api.rpow2.com"
+
+[context.deploy-preview.environment]
+  VITE_API_BASE_URL = "https://api.rpow2.com"

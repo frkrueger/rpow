@@ -15,3 +15,10 @@ coverage/
 playwright-report/
 test-results/
 *.tsbuildinfo
+.netlify/
+.playwright-mcp/
+.superpowers/
+# AMM hot-wallet secret files (never commit; see apps/server/scripts/gen-amm-hot-wallet.ts).
+*-hot-wallet.env
+*-hot-wallet.json
+amm-wallet*.env

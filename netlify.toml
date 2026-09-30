@@ -11,6 +11,14 @@
   # Playwright is a devDep of apps/web for E2E tests only. Skip the ~150MB Chromium download on Netlify builds.
   PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1"
 
+# Proxy auth verify through rpow2.com so cookie is set on same origin
+[[redirects]]
+  from = "/auth/verify"
+  to = "https://api.rpow2.com/auth/verify"
+  status = 200
+  force = true
+  headers = {X-Forwarded-Host = "rpow2.com"}
+
 # Static pages served directly (before SPA catch-all)
 [[redirects]]
   from = "/stats"
@@ -23,10 +31,14 @@
   to = "/index.html"
   status = 200
 
-# Production: web client points at the Fly-hosted API
+# Production: web client points at the VPS-hosted API (api.rpow2.com)
 [context.production.environment]
   VITE_API_BASE_URL = "https://api.rpow2.com"
+  # Public Solana mainnet RPC. Pilot-scale; swap for Helius via Netlify
+  # dashboard env if/when rate limits start biting.
+  VITE_SOLANA_RPC_URL = "https://api.rpow2.com/rpc"
 
 # Branch deploys default to the same API
 [context.deploy-preview.environment]
   VITE_API_BASE_URL = "https://api.rpow2.com"
+  VITE_SOLANA_RPC_URL = "https://api.rpow2.com/rpc"

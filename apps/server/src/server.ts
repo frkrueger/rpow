@@ -6,29 +6,55 @@ import { Connection, PublicKey } from '@solana/web3.js';
 import { SolanaBridgeClient, FakeBridgeClient, type BridgeClient, SRPOW_BASE_UNITS_PER_RPOW } from '@rpow/solana-bridge';
 import { loadBridgeKeypair } from './bridge-keys.js';
 import { reconcilePendingWraps } from './srpow-reconcile.js';
+import { reconcilePendingUnwraps } from './srpow-unwrap-reconcile.js';
+import { refillTriviaQuestions } from './trivia/questions.js';
+import { runDraw } from './freelottery/draw.js';
+import { runIdleSweep } from './chat/host/idle.js';
 
 const env = parseEnv();
-const pool = createPool(env.DATABASE_URL);
+const pool = createPool(env.DATABASE_URL, env.PG_POOL_MAX);
 
 let bridgeClient: BridgeClient;
+let bridgeWalletPubkey: string | null = null;
+let srpowMintAddress: string | null = null;
 if (env.SOLANA_RPC_URL && env.SRPOW_MINT_ADDRESS && env.BRIDGE_KEYPAIR_BASE58) {
   const conn = new Connection(env.SOLANA_RPC_URL, env.SRPOW_COMMITMENT);
+  const bridgeKeypair = loadBridgeKeypair(env.BRIDGE_KEYPAIR_BASE58);
+  bridgeWalletPubkey = bridgeKeypair.publicKey.toBase58();
+  srpowMintAddress = env.SRPOW_MINT_ADDRESS;
   bridgeClient = new SolanaBridgeClient({
     connection: conn,
-    bridge: loadBridgeKeypair(env.BRIDGE_KEYPAIR_BASE58),
+    bridge: bridgeKeypair,
     mint: new PublicKey(env.SRPOW_MINT_ADDRESS),
     commitment: env.SRPOW_COMMITMENT,
     baseUnitsPerToken: SRPOW_BASE_UNITS_PER_RPOW,
     timeoutMs: env.SRPOW_WRAP_TIMEOUT_MS,
+    jupiterApiBase: env.JUPITER_API_BASE,
   });
 } else {
   // Wrap is disabled at boot if SRPOW envs aren't all set.
   bridgeClient = new FakeBridgeClient();
   console.log('SRPOW disabled: SOLANA_RPC_URL/SRPOW_MINT_ADDRESS/BRIDGE_KEYPAIR_BASE58 not all set');
+  if (env.SRPOW_MINT_ADDRESS) srpowMintAddress = env.SRPOW_MINT_ADDRESS;
 }
 
 if (env.SOLANA_RPC_URL && env.SRPOW_MINT_ADDRESS && env.BRIDGE_KEYPAIR_BASE58) {
-  await reconcilePendingWraps(pool, bridgeClient);
+  const reconcileCfg = {
+    signingPrivateKeyHex: env.RPOW_SIGNING_PRIVATE_KEY_HEX,
+    srpowUnwrapFeeBps: env.SRPOW_UNWRAP_FEE_BPS,
+  };
+  await reconcilePendingWraps(pool, bridgeClient)
+    .catch(err => console.error('srpow: startup wrap reconcile failed', err?.message ?? err));
+  await reconcilePendingUnwraps(pool, bridgeClient, reconcileCfg)
+    .catch(err => console.error('srpow: startup unwrap reconcile failed', err?.message ?? err));
+  // Periodic reconcile so PENDING rows (e.g. the not_found-on-first-check
+  // case, or interrupted swap/burn) get retried without a server restart.
+  setInterval(() => {
+    reconcilePendingWraps(pool, bridgeClient)
+      .catch(err => console.error('srpow: periodic wrap reconcile failed', err?.message ?? err));
+    reconcilePendingUnwraps(pool, bridgeClient, reconcileCfg)
+      .catch(err => console.error('srpow: periodic unwrap reconcile failed', err?.message ?? err));
+  }, 60 * 1000);
 } else {
   console.log('SRPOW disabled: skipping reconcile worker');
 }
@@ -95,14 +121,93 @@ const app = await buildApp({
     magicLinkBaseUrl: env.MAGIC_LINK_BASE_URL,
     difficultyBits: env.DIFFICULTY_BITS,
     difficultyFloor: env.DIFFICULTY_FLOOR,
+    baseRewardBaseUnits: BigInt(env.MINT_BASE_REWARD_BASE_UNITS),
     mintMaxSupply: env.MINT_MAX_SUPPLY,
     signingPrivateKeyHex: env.RPOW_SIGNING_PRIVATE_KEY_HEX,
     signingPublicKeyHex: env.RPOW_SIGNING_PUBLIC_KEY_HEX,
     webOrigin: env.WEB_ORIGIN,
     publicStatsOrigins: env.PUBLIC_STATS_ORIGINS,
+    longShotWebOrigin: env.LONGSHOT_WEB_ORIGIN,
+    longShotMinBaseUnits: env.LONGSHOT_MIN_BASE_UNITS,
+    longShotMaxBaseUnits: env.LONGSHOT_MAX_BASE_UNITS,
+    longShotAllowedEmails: env.LONGSHOT_ALLOWED_EMAILS,
+    gladiatorMinBetBaseUnits: env.GLADIATOR_MIN_BET_BASE_UNITS,
+    gladiatorMaxBetBaseUnits: env.GLADIATOR_MAX_BET_BASE_UNITS,
+    gladiatorMaxBankrollBaseUnits: env.GLADIATOR_MAX_BANKROLL_BASE_UNITS,
+    gladiatorSessionTtlHours: env.GLADIATOR_SESSION_TTL_HOURS,
+    gladiatorChatRetentionDays: env.GLADIATOR_CHAT_RETENTION_DAYS,
+    gladiatorAllowedEmails: env.GLADIATOR_ALLOWED_EMAILS,
+    gladiatorWebOrigin: env.GLADIATOR_WEB_ORIGIN,
+    gladiatorAdminToken: env.GLADIATOR_ADMIN_TOKEN,
+    triviaMinBetBaseUnits: env.TRIVIA_MIN_BET_BASE_UNITS,
+    triviaMaxBetBaseUnits: env.TRIVIA_MAX_BET_BASE_UNITS,
+    triviaMaxBankrollBaseUnits: env.TRIVIA_MAX_BANKROLL_BASE_UNITS,
+    triviaMatchDeadlineSeconds: env.TRIVIA_MATCH_DEADLINE_SECONDS,
+    triviaSessionTtlHours: env.TRIVIA_SESSION_TTL_HOURS,
+    triviaAllowedEmails: env.TRIVIA_ALLOWED_EMAILS,
+    triviaWebOrigin: env.TRIVIA_WEB_ORIGIN,
+    freelotteryStartUtcDate: env.FREELOTTERY_START_UTC_DATE,
+    freelotteryTotalDays: env.FREELOTTERY_TOTAL_DAYS,
+    freelotteryPrizeBaseUnits: BigInt(env.FREELOTTERY_PRIZE_BASE_UNITS),
+    freelotteryDrawHourUtc: env.FREELOTTERY_DRAW_HOUR_UTC,
+    freelotteryAllowedEmails: env.FREELOTTERY_ALLOWED_EMAILS,
+    freelotteryWebOrigin: env.FREELOTTERY_WEB_ORIGIN,
+    chatWebOrigin: env.CHAT_WEB_ORIGIN,
+    xBearerToken: env.X_BEARER_TOKEN,
+    anthropicApiKey: env.ANTHROPIC_API_KEY,
+    solanaRpcUrl: env.SOLANA_RPC_URL,
+    ammAllowedEmails: env.AMM_ALLOWED_EMAILS,
+    ammAdminEmails: env.AMM_ADMIN_EMAILS,
+    ammUsdcPoolCapBaseUnits: env.AMM_USDC_POOL_CAP_BASE_UNITS,
+    ammLinkHmacSecret: env.AMM_LINK_HMAC_SECRET,
+    ammUsdcWalletPubkey: env.AMM_USDC_WALLET_PUBKEY,
+    ammUsdcWalletAta: env.AMM_USDC_WALLET_ATA ?? '',  // empty → derived later if needed
+    usdcMintAddress: env.USDC_MINT_ADDRESS,
+    srpowUnwrapMinBaseUnits: BigInt(env.SRPOW_UNWRAP_MIN_BASE_UNITS),
+    srpowUnwrapSlippageBps: env.SRPOW_UNWRAP_SLIPPAGE_BPS,
+    srpowUnwrapFeeBps: env.SRPOW_UNWRAP_FEE_BPS,
+    bridgeWalletPubkey,
+    srpowMintAddress,
     secureCookies: env.NODE_ENV === 'production',
     turnstileSecret: env.TURNSTILE_SECRET,
+    operatorEmails: new Set(
+      env.OPERATOR_EMAILS.split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
+    ),
   },
 });
+// One refill at boot so /matches/start can find questions immediately.
+// Errors are non-fatal — the route will return 503 NO_QUESTIONS_AVAILABLE
+// until the next refill succeeds.
+try {
+  const r = await refillTriviaQuestions(app.pool, { low: 50, high: 200 });
+  app.log.info({ inserted: r.inserted, total: r.total }, 'trivia: boot refill done');
+} catch (err) {
+  app.log.warn({ err }, 'trivia: boot refill failed');
+}
+
+// Top-up every 10 minutes. setInterval is non-blocking; refillTriviaQuestions
+// short-circuits when the pool is already above the low-watermark.
+setInterval(() => {
+  refillTriviaQuestions(app.pool, { low: 50, high: 200 })
+    .catch(err => app.log.warn({ err }, 'trivia: periodic refill failed'));
+}, 10 * 60 * 1000);
+
+// Freelottery draw runner: every 60s, check for past-due days and process them.
+// Non-blocking; errors are logged so the next tick re-attempts. When
+// freelotteryStartUtcDate is unset, runDraw short-circuits cheaply.
+setInterval(() => {
+  runDraw({ pool: app.pool, config: app.config })
+    .catch(err => app.log.warn({ err }, 'freelottery: scheduled draw failed'));
+}, 60 * 1000);
+
+// Chat host idle sweep: every 5 min, check each host-enabled room and post
+// a thread-starter / follow-up if it's been quiet (per-room cool-downs
+// enforced inside runIdleSweep). When ANTHROPIC_API_KEY is unset, returns
+// immediately so hosts stay mute.
+setInterval(() => {
+  runIdleSweep(app.pool, app.config.anthropicApiKey)
+    .catch(err => app.log.warn({ err }, 'chat: idle sweep failed'));
+}, 5 * 60 * 1000);
+
 await app.listen({ host: '0.0.0.0', port: env.PORT });
 app.log.info(`rpow2 server listening on :${env.PORT}`);

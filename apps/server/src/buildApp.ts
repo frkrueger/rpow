@@ -19,17 +19,92 @@ import { statsRoutes } from './routes/stats.js';
 import { unsubscribeRoutes } from './routes/unsubscribe.js';
 import { phantomRoutes } from './routes/phantom.js';
 import { srpowRoutes } from './routes/srpow.js';
+import { srpowUnwrapRoutes } from './routes/srpow-unwrap.js';
+import { longshotRoutes } from './routes/longshot.js';
+import { gladiatorRoutes } from './routes/gladiator/index.js';
+import { triviaRoutes } from './routes/trivia/index.js';
+import { freelotteryRoutes } from './routes/freelottery/index.js';
+import { ammRoutes } from './routes/amm/index.js';
+import { favoritesRoutes } from './routes/favorites.js';
+import { avatarRoutes } from './routes/avatars.js';
+import { chatRoutes } from './routes/chat/index.js';
 
 export interface AppConfig {
   sessionSecret: string;
   magicLinkBaseUrl: string;
   difficultyBits: number;
   difficultyFloor: number;
+  /** Base mint reward in BASE_UNITS_PER_RPOW units (10_000_000 = 0.01 RPOW). */
+  baseRewardBaseUnits: bigint;
   mintMaxSupply: number;
   signingPrivateKeyHex: string;
   signingPublicKeyHex: string;
   webOrigin: string;
   publicStatsOrigins: string[];
+  longShotWebOrigin: string;
+  /** Min stake in base units for RPOW Long Shot. */
+  longShotMinBaseUnits: number;
+  /** Max stake in base units for RPOW Long Shot. */
+  longShotMaxBaseUnits: number;
+  /** CSV of emails allowed to play; '*' opens to all. */
+  longShotAllowedEmails: string;
+  /** Min bet in base units for Gladiator Arena. */
+  gladiatorMinBetBaseUnits: number;
+  /** Max bet in base units for Gladiator Arena. */
+  gladiatorMaxBetBaseUnits: number;
+  /** Max bankroll in base units for Gladiator Arena. */
+  gladiatorMaxBankrollBaseUnits: number;
+  /** How many hours before an idle session is auto-closed. */
+  gladiatorSessionTtlHours: number;
+  /** How many days before chat messages are swept. */
+  gladiatorChatRetentionDays: number;
+  /** CSV of emails allowed in Gladiator Arena; '*' opens to all. */
+  gladiatorAllowedEmails: string;
+  /** CORS origin for the Gladiator Arena frontend. */
+  gladiatorWebOrigin: string;
+  /** Bearer token for the admin verify-handle route; undefined → 403. */
+  gladiatorAdminToken?: string;
+  /** Min trivia bet in base units. */
+  triviaMinBetBaseUnits: number;
+  /** Max trivia bet in base units. */
+  triviaMaxBetBaseUnits: number;
+  /** Max trivia bankroll in base units. */
+  triviaMaxBankrollBaseUnits: number;
+  /** Per-match answer window in seconds (default 10). */
+  triviaMatchDeadlineSeconds: number;
+  /** Hours of idle before auto-close sweeper acts. */
+  triviaSessionTtlHours: number;
+  /** CSV allowlist; '*' = all signed-in users. */
+  triviaAllowedEmails: string;
+  /** CORS origin for the Trivia frontend. */
+  triviaWebOrigin: string;
+  /** Freelottery campaign start (YYYY-MM-DD). When unset, all freelottery routes return 404. */
+  freelotteryStartUtcDate?: string;
+  /** Total days of the campaign (default 100). */
+  freelotteryTotalDays: number;
+  /** Daily prize in base units (default 10^12 = 1,000 RPOW). */
+  freelotteryPrizeBaseUnits: bigint;
+  /** UTC hour at which the daily entry window closes and draw runs (default 19). */
+  freelotteryDrawHourUtc: number;
+  /** CSV allowlist; '*' opens to all signed-in users. */
+  freelotteryAllowedEmails: string;
+  /** CORS origin for the Freelottery frontend. */
+  freelotteryWebOrigin: string;
+  /** CORS origin for the ChatRooms frontend (chat.rpow2.com). */
+  chatWebOrigin: string;
+  /** X (Twitter) API Bearer token. When unset, the avatar proxy returns 404 for cache misses. */
+  xBearerToken?: string;
+  /** Anthropic API key for the chat host runtime. When unset, hosts are mute. */
+  anthropicApiKey?: string;
+  /** Solana JSON-RPC endpoint for fetching draw entropy. When unset, draws cannot run and the scheduler tick logs a warning. */
+  solanaRpcUrl?: string;
+  /** AMM alpha allowlist — CSV of emails that can hit any /amm/* endpoint. */
+  ammAllowedEmails: string;
+  /** AMM admin allowlist — subset that can call admin endpoints (credit, seed). */
+  ammAdminEmails: string;
+  /** System-wide cap on total USDC (sum of users.usdc_base_units + pool reserve).
+   *  Bounds the worst-case hot-wallet loss for the alpha. */
+  ammUsdcPoolCapBaseUnits: number;
   secureCookies: boolean;
   /**
    * Cloudflare Turnstile secret. When set, /auth/request requires a valid
@@ -37,6 +112,26 @@ export interface AppConfig {
    * (dev/test environments).
    */
   turnstileSecret?: string;
+  /** Lowercased emails that bypass per-user rate limits (operator/admin). */
+  operatorEmails: Set<string>;
+  /** HMAC key for /amm/wallet/link-challenge envelope. Required. */
+  ammLinkHmacSecret: string;
+  /** AMM hot wallet pubkey (base58). Used by /amm/config. */
+  ammUsdcWalletPubkey: string;
+  /** AMM hot wallet's USDC ATA (base58). Used by /amm/config + indexer. */
+  ammUsdcWalletAta: string;
+  /** USDC mint address. Default = mainnet. */
+  usdcMintAddress: string;
+  /** Minimum SRPOW amount for an unwrap in base units (bigint stored as bigint). */
+  srpowUnwrapMinBaseUnits: bigint;
+  /** Slippage tolerance for Jupiter swap in basis points. */
+  srpowUnwrapSlippageBps: number;
+  /** Protocol fee charged on unwrap in basis points. */
+  srpowUnwrapFeeBps: number;
+  /** Bridge wallet pubkey (base58). Null when BRIDGE_KEYPAIR_BASE58 is unset. */
+  bridgeWalletPubkey: string | null;
+  /** SRPOW mint address (base58). Null when SRPOW_MINT_ADDRESS is unset. */
+  srpowMintAddress: string | null;
 }
 
 export interface BuildAppOptions {
@@ -89,6 +184,10 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   app.decorate('wrapAllowlist', parseAllowlist(opts.wrapAllowlistCsv) as any);
 
   await app.register(cookie, { secret: opts.config.sessionSecret });
+  // Allow both the main rpow2.com frontend and the longshot.rpow2.com
+  // subdomain frontend. Both share the .rpow2.com session cookie via
+  // credentials=include and need credentialed-CORS to api.rpow2.com.
+  const allowedOrigins = [opts.config.webOrigin, opts.config.longShotWebOrigin, opts.config.gladiatorWebOrigin, opts.config.triviaWebOrigin, opts.config.freelotteryWebOrigin, opts.config.chatWebOrigin];
   await app.register(cors, {
     delegator: (req: FastifyRequest, cb: (error: Error | null, options?: FastifyCorsOptions) => void) => {
       const origin = req.headers.origin;
@@ -97,7 +196,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
         return;
       }
 
-      if (origin === opts.config.webOrigin) {
+      if (allowedOrigins.includes(origin)) {
         cb(null, { origin, credentials: true });
         return;
       }
@@ -143,6 +242,17 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   await app.register(unsubscribeRoutes);
   await app.register(phantomRoutes);
   await app.register(srpowRoutes);
+  await app.register(srpowUnwrapRoutes);
+  await app.register(longshotRoutes);
+  await app.register(gladiatorRoutes);
+  await app.register(triviaRoutes);
+  await app.register(freelotteryRoutes);
+  await app.register(avatarRoutes);
+  await app.register(chatRoutes);
+  await app.register(favoritesRoutes);
+  await app.register(ammRoutes);
+  const { solanaRpcRoutes } = await import('./routes/solanaRpc.js');
+  await app.register(solanaRpcRoutes);
 
   app.get('/.well-known/rpow-pubkey.pem', async (_req, reply) => {
     const pubDer = Buffer.concat([

@@ -11,6 +11,10 @@ export interface MeResponse {
   received_base_units: string;
   wrap_allowed: boolean;
   solana_wallet: string | null;
+  /** Verified X handle, lowercased. Doubles as the RPOW username. Null if not verified. */
+  x_handle: string | null;
+  /** Avatar URL derived from x_handle (unavatar.io). Null if not verified. */
+  x_avatar_url: string | null;
   srpow_supply_owned_base_units: string;
   /** Per-account UTC-day mint quota. Scales with the current halving reward. */
   daily_mint_cap_base_units: string;
@@ -18,6 +22,12 @@ export interface MeResponse {
   daily_minted_base_units: string;
   /** Convenience: cap - minted (clamped at 0). */
   daily_remaining_base_units: string;
+  /** AMM USDC balance in base units (6 decimals, Solana-native). '0' if never credited. */
+  usdc_base_units: string;
+  /** ISO timestamp the user clicked through the AMM "experimental game" risk
+   *  warning. Null until accepted. Required before any /amm/* state-changing
+   *  endpoint will accept the user. */
+  amm_terms_accepted_at: string | null;
 }
 
 export interface ChallengeResponse {
@@ -43,6 +53,10 @@ export interface SendRequestBody {
   recipient_email: string;
   amount_base_units: string;
   idempotency_key: string;
+  /** Optional free-form context (alphanumeric + - _, max 256). Carried through
+   *  to /activity so an integration polling for transfers can match this
+   *  payment to an external event. */
+  memo?: string;
 }
 export interface SendResponse {
   ok: true;
@@ -70,14 +84,24 @@ export interface ActivityEntry {
   type: 'mint' | 'send' | 'receive';
   amount_base_units: string;
   counterparty_email?: string;
+  /** Free-form context provided at /send time. Present on `send` + `receive`
+   *  entries (the sender and recipient see identical memos for one transfer). */
+  memo?: string;
   at: string; // iso8601
 }
 export type ActivityResponse = ActivityEntry[];
+
+export interface ActivityResponseSince {
+  entries: ActivityEntry[];
+  /** Pass back as ?since=<this> on the next call. null when entries is empty. */
+  next_cursor: string | null;
+}
 
 export interface LedgerResponse {
   total_minted_base_units: string;        // stringified bigint
   total_transferred_base_units: string;
   circulating_supply_base_units: string;
+  wrapped_supply_base_units: string;      // tokens in WRAPPED state (sRPOW backing)
   minted_supply_counter_base_units: string; // mirrors app_counters.minted_supply
   max_supply_base_units: string;
   base_units_per_rpow: string;            // = "1000000000"
@@ -110,10 +134,11 @@ export interface StatsSummaryResponse {
   sampled_at: string;
   ledger: LedgerResponse;
   activity: {
-    mint_count_1h: number;
-    mint_count_24h: number;
-    minted_base_units_1h: string;
-    minted_base_units_24h: string;
+    /** Root issuance includes non-mining operations; these are not mining rewards. */
+    root_token_count_1h: number;
+    root_token_count_24h: number;
+    root_tokens_issued_base_units_1h: string;
+    root_tokens_issued_base_units_24h: string;
     transfer_count_1h: number;
     transfer_count_24h: number;
     transferred_base_units_1h: string;
@@ -135,19 +160,15 @@ export interface StatsSummaryResponse {
   };
 }
 
+/** Observed events only; existing token rows cannot reconstruct historical supply. */
 export interface StatsHistoryPoint {
   bucket_start: string;
-  total_minted_base_units: string;
-  mint_count: number;
-  minted_base_units: string;
-  total_transferred_base_units: string;
+  /** Root tokens excluding change: includes mining, claims, games, AMM and unwrap issuance. */
+  root_token_count: number;
+  root_tokens_issued_base_units: string;
   transfer_count: number;
   transferred_base_units: string;
-  circulating_supply_base_units: string;
-  user_count: number;
   new_users: number;
-  current_difficulty_bits: number;
-  current_reward_base_units: string;
   challenges: number;
   active_challengers: number;
 }
@@ -182,6 +203,10 @@ export interface WrapEvent {
   amount_base_units: string;
   status: 'PENDING' | 'CONFIRMED' | 'FAILED' | 'REFUNDED';
   solana_signature: string | null;
+  /** UNWRAP only: Jupiter swap tx signature (fee SRPOW → SOL). */
+  swap_signature?: string | null;
+  /** UNWRAP only: SPL burn tx signature (remaining SRPOW destroyed). */
+  burn_signature?: string | null;
   failure_reason: string | null;
   created_at: string;
   updated_at: string;

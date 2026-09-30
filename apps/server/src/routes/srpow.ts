@@ -5,7 +5,6 @@ import { readSession } from './auth.js';
 import { withTx } from '../db.js';
 import { isAllowed } from '../wrap-allowlist.js';
 import { signTokenPayload } from '../signing.js';
-import { creditValidBalance, debitValidBalance } from '../balances.js';
 
 const WrapBody = z.object({
   amount_base_units: z
@@ -109,9 +108,6 @@ export async function srpowRoutes(app: FastifyInstance) {
       }
       const change = total - target;
 
-      const debited = await debitValidBalance(c, s.email, total);
-      if (!debited) return { error: 'INSUFFICIENT_BALANCE' as const };
-
       const eventId = randomUUID();
       await c.query(
         `INSERT INTO srpow_wrap_events
@@ -144,7 +140,7 @@ export async function srpowRoutes(app: FastifyInstance) {
         );
       }
 
-      return { fresh: { eventId, wallet, ids, changeId, change, total } };
+      return { fresh: { eventId, wallet, ids, changeId, change } };
     });
 
     if ('error' in phase1) {
@@ -176,7 +172,7 @@ export async function srpowRoutes(app: FastifyInstance) {
     }
 
     if ('fresh' in phase1) {
-      const { eventId, wallet, ids, changeId, change, total } = phase1.fresh;
+      const { eventId, wallet, ids, changeId, change } = phase1.fresh;
 
       const result = await app.bridgeClient.mintTo(
         { recipientWallet: wallet, amountBaseUnits: target },
@@ -211,7 +207,6 @@ export async function srpowRoutes(app: FastifyInstance) {
               `UPDATE tokens SET state='VALID' WHERE id=$1`,
               [changeId],
             );
-            await creditValidBalance(c, s.email, change);
           }
         });
         return {
@@ -240,7 +235,6 @@ export async function srpowRoutes(app: FastifyInstance) {
         if (changeId) {
           await c.query(`DELETE FROM tokens WHERE id=$1`, [changeId]);
         }
-        await creditValidBalance(c, s.email, total);
       });
       return reply.code(503).send({
         error: 'BRIDGE_FAILED', event_id: eventId, status: 'REFUNDED',
@@ -253,7 +247,8 @@ export async function srpowRoutes(app: FastifyInstance) {
     const s = readSession(req as any, app.config.sessionSecret);
     if (!s) return reply.code(401).send({ error: 'UNAUTHORIZED', message: 'login required' });
     const { rows } = await app.pool.query(
-      `SELECT id, direction, amount::text AS amount, status, solana_signature, failure_reason, created_at, updated_at
+      `SELECT id, direction, amount::text AS amount, status, solana_signature,
+              swap_signature, burn_signature, failure_reason, created_at, updated_at
        FROM srpow_wrap_events WHERE user_email=$1 ORDER BY created_at DESC LIMIT 100`,
       [s.email],
     );
@@ -263,6 +258,8 @@ export async function srpowRoutes(app: FastifyInstance) {
       amount_base_units: r.amount,
       status: r.status,
       solana_signature: r.solana_signature,
+      swap_signature: r.swap_signature,
+      burn_signature: r.burn_signature,
       failure_reason: r.failure_reason,
       created_at: r.created_at,
       updated_at: r.updated_at,
@@ -273,7 +270,8 @@ export async function srpowRoutes(app: FastifyInstance) {
     const s = readSession(req as any, app.config.sessionSecret);
     if (!s) return reply.code(401).send({ error: 'UNAUTHORIZED', message: 'login required' });
     const { rows } = await app.pool.query(
-      `SELECT id, direction, amount::text AS amount, status, solana_signature, failure_reason, created_at, updated_at
+      `SELECT id, direction, amount::text AS amount, status, solana_signature,
+              swap_signature, burn_signature, failure_reason, created_at, updated_at
        FROM srpow_wrap_events WHERE id=$1 AND user_email=$2`,
       [req.params.id, s.email],
     );
@@ -281,7 +279,8 @@ export async function srpowRoutes(app: FastifyInstance) {
     const r = rows[0];
     return {
       event_id: r.id, direction: r.direction, amount_base_units: r.amount, status: r.status,
-      solana_signature: r.solana_signature, failure_reason: r.failure_reason,
+      solana_signature: r.solana_signature, swap_signature: r.swap_signature,
+      burn_signature: r.burn_signature, failure_reason: r.failure_reason,
       created_at: r.created_at, updated_at: r.updated_at,
     };
   });

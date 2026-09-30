@@ -1,15 +1,35 @@
-import type { FastifyInstance } from 'fastify';
-import { randomUUID } from 'node:crypto';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { randomUUID, createHash } from 'node:crypto';
 import { z } from 'zod';
 import { hashToken, issueMagicLink } from '../magic.js';
 import { signSession, SESSION_COOKIE, SESSION_TTL_SECONDS, verifySession } from '../session.js';
 import { makeUnsubToken } from '../unsub.js';
 import { magicLinkEmail } from '../email-template.js';
+import { isDisposableEmail, normalizeEmail } from '../disposable-domains.js';
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    /** Set to true by readAuth() when the request was authed via API key. */
+    viaApiKey?: boolean;
+    /** Hex-encoded sha256 of the API-key plaintext. Used as a rate-limit bucket key. */
+    apiKeyHash?: string;
+    /** Stashed by the /send preHandler so the route handler doesn't re-call readAuth(). */
+    resolvedAuth?: { email: string; viaApiKey: boolean };
+  }
+}
 
 const RequestBody = z.object({
   email: z.string().email(),
   turnstile_token: z.string().min(1).max(2048).optional(),
 });
+
+/**
+ * Stable sha256 of a plaintext API key. Server stores the hash; plaintext
+ * never touches the DB. 32-byte CSPRNG token entropy makes a fast hash safe.
+ */
+export function hashApiKey(plaintext: string): Buffer {
+  return createHash('sha256').update(plaintext).digest();
+}
 
 // Verify a Cloudflare Turnstile token. Returns true if the token is valid for
 // the given secret. Returns false on any failure (network, malformed JSON,
@@ -35,8 +55,18 @@ export async function authRoutes(app: FastifyInstance) {
   app.post('/auth/request', async (req, reply) => {
     const parsed = RequestBody.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: 'BAD_REQUEST', message: 'invalid email' });
-    const email = parsed.data.email.toLowerCase().trim();
+    // Normalize gmail-style +addressing — bots fan out hundreds of +tags off
+    // one real inbox to create many accounts. Treat them as one.
+    const email = normalizeEmail(parsed.data.email);
     const ip = (req.ip ?? '0.0.0.0');
+    const isOperator = app.config.operatorEmails.has(email);
+
+    // Disposable / bot-farm domain gate. Reject before turnstile/rate-limit
+    // so these don't burn DB writes; logged for visibility.
+    if (!isOperator && isDisposableEmail(email)) {
+      app.log.info({ email, ip }, 'rejected disposable email domain');
+      return reply.code(403).send({ error: 'DOMAIN_BLOCKED', message: 'this email domain is not accepted' });
+    }
 
     // Turnstile gate: only enforced when the server is configured with a
     // secret. In dev/test envs without TURNSTILE_SECRET the route stays open.
@@ -51,34 +81,36 @@ export async function authRoutes(app: FastifyInstance) {
       }
     }
 
-    const cooldown = await app.pool.query<{ created_at: Date }>(
-      `SELECT created_at FROM magic_links WHERE email=$1 ORDER BY created_at DESC LIMIT 1`,
-      [email],
-    );
-    if (cooldown.rows[0]) {
-      const elapsedMs = Date.now() - cooldown.rows[0].created_at.getTime();
-      if (elapsedMs < 30_000) {
-        return reply.code(429).send({ error: 'RATE_LIMITED', message: 'try again shortly', retry_after: Math.ceil((30_000 - elapsedMs) / 1000) });
+    if (!isOperator) {
+      const cooldown = await app.pool.query<{ created_at: Date }>(
+        `SELECT created_at FROM magic_links WHERE email=$1 ORDER BY created_at DESC LIMIT 1`,
+        [email],
+      );
+      if (cooldown.rows[0]) {
+        const elapsedMs = Date.now() - cooldown.rows[0].created_at.getTime();
+        if (elapsedMs < 30_000) {
+          return reply.code(429).send({ error: 'RATE_LIMITED', message: 'try again shortly', retry_after: Math.ceil((30_000 - elapsedMs) / 1000) });
+        }
       }
-    }
 
-    const perEmail = await app.pool.query<{ n: number }>(
-      `SELECT count(*)::int AS n FROM magic_links WHERE email=$1 AND created_at > now() - interval '1 hour'`,
-      [email],
-    );
-    if ((perEmail.rows[0]?.n ?? 0) >= 30) {
-      return reply.code(429).send({ error: 'RATE_LIMITED', message: 'too many attempts on this email; try again later', retry_after: 60 * 30 });
-    }
+      const perEmail = await app.pool.query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM magic_links WHERE email=$1 AND created_at > now() - interval '1 hour'`,
+        [email],
+      );
+      if ((perEmail.rows[0]?.n ?? 0) >= 30) {
+        return reply.code(429).send({ error: 'RATE_LIMITED', message: 'too many attempts on this email; try again later', retry_after: 60 * 30 });
+      }
 
-    // Per-IP cap is generous so corporate/home NATs aren't penalized when many
-    // genuine users sign up from the same egress IP. Per-email cap is the real
-    // anti-spam lever; per-IP only catches scripted attacks.
-    const perIp = await app.pool.query<{ n: number }>(
-      `SELECT count(*)::int AS n FROM magic_links WHERE ip_addr=$1 AND created_at > now() - interval '1 hour'`,
-      [ip],
-    );
-    if ((perIp.rows[0]?.n ?? 0) >= 1000) {
-      return reply.code(429).send({ error: 'RATE_LIMITED', message: 'too many attempts from this network', retry_after: 60 * 30 });
+      // Per-IP cap is generous so corporate/home NATs aren't penalized when many
+      // genuine users sign up from the same egress IP. Per-email cap is the real
+      // anti-spam lever; per-IP only catches scripted attacks.
+      const perIp = await app.pool.query<{ n: number }>(
+        `SELECT count(*)::int AS n FROM magic_links WHERE ip_addr=$1 AND created_at > now() - interval '1 hour'`,
+        [ip],
+      );
+      if ((perIp.rows[0]?.n ?? 0) >= 1000) {
+        return reply.code(429).send({ error: 'RATE_LIMITED', message: 'too many attempts from this network', retry_after: 60 * 30 });
+      }
     }
 
     const { token, hash } = issueMagicLink();
@@ -128,21 +160,86 @@ export async function authRoutes(app: FastifyInstance) {
     );
 
     const sessionToken = signSession({ email: match.email }, app.config.sessionSecret, SESSION_TTL_SECONDS);
-    reply.setCookie(SESSION_COOKIE, sessionToken, {
-      httpOnly: true, secure: app.config.secureCookies,
-      sameSite: 'lax', path: '/', maxAge: SESSION_TTL_SECONDS,
-    });
-    return reply.redirect(`${app.config.webOrigin}/#/`, 302);
+    // Redirect to frontend with session in URL fragment (not sent to server).
+    // Frontend JS reads it, sets the cookie on the same origin, and clears the fragment.
+    return reply.redirect(`${app.config.webOrigin}/#/auth-callback?s=${encodeURIComponent(sessionToken)}`, 302);
   });
 
   app.post('/auth/logout', async (req, reply) => {
     reply.clearCookie(SESSION_COOKIE, { path: '/' });
+    reply.clearCookie(SESSION_COOKIE, { path: '/', domain: '.rpow2.com' });
+    reply.clearCookie(SESSION_COOKIE, { path: '/', domain: 'api.rpow2.com' });
+    reply.clearCookie(SESSION_COOKIE, { path: '/', domain: 'rpow2.com' });
     return { ok: true };
   });
 }
 
-export function readSession(req: { cookies: Record<string, string | undefined> }, secret: string): { email: string } | null {
-  const tok = req.cookies[SESSION_COOKIE];
-  if (!tok) return null;
-  return verifySession(tok, secret);
+export function readSession(
+  req: { cookies: Record<string, string | undefined>; headers?: { cookie?: string | string[] } },
+  secret: string,
+): { email: string } | null {
+  // Browsers may send TWO rpow_session cookies in the Cookie header during the
+  // post-deploy migration window: a legacy host-only HttpOnly one, and the new
+  // Domain=.rpow2.com one. The cookie-parser only surfaces the last entry it
+  // sees, which can be either depending on browser ordering. Try every value
+  // we can find and return the first that validates.
+  const candidates: string[] = [];
+  const fromParsed = req.cookies?.[SESSION_COOKIE];
+  if (fromParsed) candidates.push(fromParsed);
+  const rawHeader = req.headers?.cookie;
+  const rawHeaderStr = Array.isArray(rawHeader) ? rawHeader.join('; ') : (rawHeader || '');
+  if (rawHeaderStr) {
+    for (const part of rawHeaderStr.split(/;\s*/)) {
+      const eq = part.indexOf('=');
+      if (eq <= 0) continue;
+      const name = part.slice(0, eq);
+      if (name !== SESSION_COOKIE) continue;
+      const value = part.slice(eq + 1);
+      if (value && !candidates.includes(value)) candidates.push(value);
+    }
+  }
+  for (const tok of candidates) {
+    const session = verifySession(tok, secret);
+    if (session) return session;
+  }
+  return null;
+}
+
+/**
+ * Resolves the calling identity for a request. Two paths:
+ *   1. Authorization: Bearer rpow_sk_* — looked up in api_keys by sha256(plaintext).
+ *   2. Session cookie — existing readSession() path.
+ * Returns null when neither resolves. Side-effects: on a successful API-key
+ * match, attaches viaApiKey=true and apiKeyHash (hex) to the request, and
+ * updates last_used_at fire-and-forget.
+ */
+export async function readAuth(
+  req: FastifyRequest,
+  app: FastifyInstance,
+): Promise<{ email: string; viaApiKey: boolean } | null> {
+  const auth = req.headers?.['authorization'];
+  if (typeof auth === 'string' && auth.startsWith('Bearer rpow_sk_')) {
+    const plaintext = auth.slice('Bearer '.length);
+    const hashBuf = hashApiKey(plaintext);
+    const { rows } = await app.pool.query<{ email: string }>(
+      'SELECT email FROM api_keys WHERE token_hash = $1',
+      [hashBuf],
+    );
+    if (rows[0]) {
+      app.pool.query('UPDATE api_keys SET last_used_at = now() WHERE token_hash = $1', [hashBuf])
+        .catch((err: unknown) => app.log?.warn?.({ err }, 'api_keys last_used_at update failed'));
+      req.viaApiKey = true;
+      req.apiKeyHash = hashBuf.toString('hex');
+      return { email: rows[0].email, viaApiKey: true };
+    }
+    // Bearer present but no match → fall through to session, NOT 401.
+    // (Stale key + valid cookie should still work.)
+  }
+
+  const session = readSession(req, app.config.sessionSecret);
+  if (session) {
+    req.viaApiKey = false;
+    return { email: session.email, viaApiKey: false };
+  }
+  return null;
 }

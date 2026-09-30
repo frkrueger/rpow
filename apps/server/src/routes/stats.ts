@@ -12,6 +12,7 @@ import { BASE_UNITS_PER_RPOW, scheduleInfo } from '../schedule.js';
 
 const SUMMARY_CACHE_MS = 10_000;
 const HISTORY_CACHE_MS = 30_000;
+const HISTORY_CACHE_ENTRIES = 32;
 
 const HistoryQuery = z.object({
   window: z.enum(['24h', '7d', '30d', 'all']).default('24h'),
@@ -35,6 +36,7 @@ export async function statsRoutes(app: FastifyInstance) {
   async function computeSummary(): Promise<StatsSummary> {
     const [
       counter,
+      supply,
       transferred,
       users,
       balances,
@@ -45,8 +47,9 @@ export async function statsRoutes(app: FastifyInstance) {
       wrapActivity,
       boundWallets,
     ] = await Promise.all([
-      app.pool.query<{ value: string }>(`SELECT value::text AS value FROM app_counters WHERE name='minted_supply'`),
-      app.pool.query<{ n: string }>(`SELECT coalesce(sum(amount),0)::bigint::text AS n FROM transfers`),
+      app.pool.query<{ value: string }>(`SELECT coalesce(sum(value),0)::text AS value FROM app_counters WHERE name='minted_supply'`),
+      app.pool.query<{ name: string; value: string }>(`SELECT name, coalesce(sum(value),0)::text AS value FROM app_counters WHERE name IN ('circulating_supply_base_units', 'wrapped_supply_base_units') GROUP BY name`),
+      app.pool.query<{ n: string }>(`SELECT coalesce(sum(value),0)::text AS n FROM app_counters WHERE name='total_transferred_base_units'`),
       app.pool.query<{ n: number }>(`SELECT count(*)::int AS n FROM users`),
       app.pool.query<{
         holder_count: number;
@@ -54,9 +57,9 @@ export async function statsRoutes(app: FastifyInstance) {
         average_balance_base_units: string;
       }>(
         `WITH aggregate AS (
-           SELECT count(*) FILTER (WHERE valid_balance > 0)::int AS holder_count,
-                  coalesce(sum(valid_balance) FILTER (WHERE valid_balance > 0), 0)::bigint AS circulating_supply_base_units
-           FROM user_balances
+           SELECT count(*) FILTER (WHERE cached_balance > 0)::int AS holder_count,
+                  coalesce(sum(cached_balance) FILTER (WHERE cached_balance > 0), 0)::bigint AS circulating_supply_base_units
+           FROM users
          )
          SELECT holder_count,
                 circulating_supply_base_units::text AS circulating_supply_base_units,
@@ -80,38 +83,38 @@ export async function statsRoutes(app: FastifyInstance) {
          SELECT buckets.bucket,
                 buckets.min_balance_base_units::text AS min_balance_base_units,
                 buckets.max_balance_base_units::text AS max_balance_base_units,
-                count(user_balances.owner_email)::int AS holder_count,
-                coalesce(sum(user_balances.valid_balance), 0)::bigint::text AS total_balance_base_units
+                count(users.email)::int AS holder_count,
+                coalesce(sum(users.cached_balance), 0)::bigint::text AS total_balance_base_units
          FROM buckets
-         JOIN user_balances
-           ON user_balances.valid_balance >= buckets.min_balance_base_units
-          AND (buckets.max_balance_base_units IS NULL OR user_balances.valid_balance <= buckets.max_balance_base_units)
+         JOIN users
+           ON users.cached_balance >= buckets.min_balance_base_units
+          AND (buckets.max_balance_base_units IS NULL OR users.cached_balance <= buckets.max_balance_base_units)
          GROUP BY buckets.bucket, buckets.min_balance_base_units, buckets.max_balance_base_units, buckets.sort_key
          ORDER BY buckets.sort_key`,
       ),
       app.pool.query<StatsTopBalance>(
-        `SELECT row_number() OVER (ORDER BY valid_balance DESC)::int AS rank,
-                valid_balance::text AS balance_base_units
-         FROM user_balances
-         WHERE valid_balance > 0
-         ORDER BY valid_balance DESC
+        `SELECT row_number() OVER (ORDER BY cached_balance DESC)::int AS rank,
+                cached_balance::text AS balance_base_units
+         FROM users
+         WHERE cached_balance > 0
+         ORDER BY cached_balance DESC
          LIMIT 25`,
       ),
       app.pool.query<{
-        mint_count_1h: number;
-        mint_count_24h: number;
-        minted_base_units_1h: string;
-        minted_base_units_24h: string;
+        root_token_count_1h: number;
+        root_token_count_24h: number;
+        root_tokens_issued_base_units_1h: string;
+        root_tokens_issued_base_units_24h: string;
         transfer_count_1h: number;
         transfer_count_24h: number;
         transferred_base_units_1h: string;
         transferred_base_units_24h: string;
       }>(
         `SELECT
-           (SELECT count(*)::int FROM tokens WHERE parent_token_id IS NULL AND NOT is_change AND issued_at > now() - interval '1 hour') AS mint_count_1h,
-           (SELECT count(*)::int FROM tokens WHERE parent_token_id IS NULL AND NOT is_change AND issued_at > now() - interval '24 hours') AS mint_count_24h,
-           (SELECT coalesce(sum(value),0)::bigint::text FROM tokens WHERE parent_token_id IS NULL AND NOT is_change AND issued_at > now() - interval '1 hour') AS minted_base_units_1h,
-           (SELECT coalesce(sum(value),0)::bigint::text FROM tokens WHERE parent_token_id IS NULL AND NOT is_change AND issued_at > now() - interval '24 hours') AS minted_base_units_24h,
+           (SELECT count(*)::int FROM tokens WHERE parent_token_id IS NULL AND NOT is_change AND issued_at > now() - interval '1 hour') AS root_token_count_1h,
+           (SELECT count(*)::int FROM tokens WHERE parent_token_id IS NULL AND NOT is_change AND issued_at > now() - interval '24 hours') AS root_token_count_24h,
+           (SELECT coalesce(sum(value),0)::bigint::text FROM tokens WHERE parent_token_id IS NULL AND NOT is_change AND issued_at > now() - interval '1 hour') AS root_tokens_issued_base_units_1h,
+           (SELECT coalesce(sum(value),0)::bigint::text FROM tokens WHERE parent_token_id IS NULL AND NOT is_change AND issued_at > now() - interval '24 hours') AS root_tokens_issued_base_units_24h,
            (SELECT count(*)::int FROM transfers WHERE created_at > now() - interval '1 hour') AS transfer_count_1h,
            (SELECT count(*)::int FROM transfers WHERE created_at > now() - interval '24 hours') AS transfer_count_24h,
            (SELECT coalesce(sum(amount),0)::bigint::text FROM transfers WHERE created_at > now() - interval '1 hour') AS transferred_base_units_1h,
@@ -141,10 +144,12 @@ export async function statsRoutes(app: FastifyInstance) {
       circulating_supply_base_units: '0',
       average_balance_base_units: '0',
     };
-    const circulatingBaseUnits = BigInt(balanceRow.circulating_supply_base_units);
+    const circulatingBaseUnits = BigInt(supply.rows.find(row => row.name === 'circulating_supply_base_units')?.value ?? '0');
+    const wrappedBaseUnits = BigInt(supply.rows.find(row => row.name === 'wrapped_supply_base_units')?.value ?? '0');
     const maxSupplyBaseUnits = BigInt(app.config.mintMaxSupply) * BASE_UNITS_PER_RPOW;
     const info = scheduleInfo(totalMintedBaseUnits, {
       difficultyBits: app.config.difficultyBits,
+      baseRewardBaseUnits: app.config.baseRewardBaseUnits,
       maxSupplyRpow: app.config.mintMaxSupply,
     });
     const userCount = users.rows[0]?.n ?? 0;
@@ -156,6 +161,7 @@ export async function statsRoutes(app: FastifyInstance) {
         total_minted_base_units: totalMintedBaseUnits.toString(),
         total_transferred_base_units: totalTransferredBaseUnits.toString(),
         circulating_supply_base_units: circulatingBaseUnits.toString(),
+        wrapped_supply_base_units: wrappedBaseUnits.toString(),
         minted_supply_counter_base_units: totalMintedBaseUnits.toString(),
         max_supply_base_units: maxSupplyBaseUnits.toString(),
         base_units_per_rpow: BASE_UNITS_PER_RPOW.toString(),
@@ -169,10 +175,10 @@ export async function statsRoutes(app: FastifyInstance) {
         user_count: userCount,
       },
       activity: {
-        mint_count_1h: activityRow.mint_count_1h,
-        mint_count_24h: activityRow.mint_count_24h,
-        minted_base_units_1h: activityRow.minted_base_units_1h,
-        minted_base_units_24h: activityRow.minted_base_units_24h,
+        root_token_count_1h: activityRow.root_token_count_1h,
+        root_token_count_24h: activityRow.root_token_count_24h,
+        root_tokens_issued_base_units_1h: activityRow.root_tokens_issued_base_units_1h,
+        root_tokens_issued_base_units_24h: activityRow.root_tokens_issued_base_units_24h,
         transfer_count_1h: activityRow.transfer_count_1h,
         transfer_count_24h: activityRow.transfer_count_24h,
         transferred_base_units_1h: activityRow.transferred_base_units_1h,
@@ -212,17 +218,16 @@ export async function statsRoutes(app: FastifyInstance) {
 
   async function history(window: StatsHistoryWindow, limit: number): Promise<StatsHistoryResponse> {
     const spec = HISTORY_WINDOWS[window];
+    // Tokens do not retain an authoritative supply-change journal: root
+    // issuance also includes claims, game payouts, AMM buys and unwraps.
+    // Report those observable events, never infer historical money supply.
     const { rows } = await app.pool.query<{
       bucket_start: Date;
-      mint_count: number;
-      minted_base_units: string;
-      total_minted_base_units: string;
+      root_token_count: number;
+      root_tokens_issued_base_units: string;
       transfer_count: number;
       transferred_base_units: string;
-      total_transferred_base_units: string;
-      circulating_supply_base_units: string;
       new_users: number;
-      user_count: number;
       challenges: number;
       active_challengers: number;
     }>(
@@ -238,15 +243,15 @@ export async function statsRoutes(app: FastifyInstance) {
            COALESCE((SELECT min(issued_at) FROM tokens), now()),
            COALESCE((SELECT min(created_at) FROM transfers), now()),
            COALESCE((SELECT min(created_at) FROM users), now()),
-           COALESCE((SELECT min(issued_at) FROM challenges), now()),
-           COALESCE((SELECT min(created_at) FROM srpow_wrap_events), now())
+           COALESCE((SELECT min(issued_at) FROM challenges), now())
          ) AS at
        ),
        bounds AS (
-         SELECT CASE
-                  WHEN params.all_time THEN date_bin(params.bucket_interval, first_event.at, params.origin)
-                  ELSE date_bin(params.bucket_interval, now() - params.window_interval, params.origin)
-                END AS start_bucket,
+         SELECT GREATEST(
+                  CASE WHEN params.all_time THEN date_bin(params.bucket_interval, first_event.at, params.origin)
+                       ELSE date_bin(params.bucket_interval, now() - params.window_interval, params.origin) END,
+                  params.end_bucket - ($3::int - 1) * params.bucket_interval
+                ) AS start_bucket,
                 params.end_bucket + params.bucket_interval AS end_exclusive,
                 params.bucket_interval,
                 params.origin
@@ -257,15 +262,13 @@ export async function statsRoutes(app: FastifyInstance) {
          FROM bounds,
               generate_series(bounds.start_bucket, bounds.end_exclusive - bounds.bucket_interval, bounds.bucket_interval) AS gs
        ),
-       mint_events AS (
+       issuance_events AS (
          SELECT date_bin(bounds.bucket_interval, tokens.issued_at, bounds.origin) AS bucket_start,
-                count(*)::int AS mint_count,
-                coalesce(sum(tokens.value), 0)::bigint AS minted_base_units
+                count(*)::int AS root_token_count,
+                coalesce(sum(tokens.value), 0)::bigint AS root_tokens_issued_base_units
          FROM tokens, bounds
-         WHERE tokens.parent_token_id IS NULL
-           AND NOT tokens.is_change
-           AND tokens.issued_at >= bounds.start_bucket
-           AND tokens.issued_at < bounds.end_exclusive
+         WHERE tokens.parent_token_id IS NULL AND NOT tokens.is_change
+           AND tokens.issued_at >= bounds.start_bucket AND tokens.issued_at < bounds.end_exclusive
          GROUP BY 1
        ),
        transfer_events AS (
@@ -273,16 +276,14 @@ export async function statsRoutes(app: FastifyInstance) {
                 count(*)::int AS transfer_count,
                 coalesce(sum(transfers.amount), 0)::bigint AS transferred_base_units
          FROM transfers, bounds
-         WHERE transfers.created_at >= bounds.start_bucket
-           AND transfers.created_at < bounds.end_exclusive
+         WHERE transfers.created_at >= bounds.start_bucket AND transfers.created_at < bounds.end_exclusive
          GROUP BY 1
        ),
        user_events AS (
          SELECT date_bin(bounds.bucket_interval, users.created_at, bounds.origin) AS bucket_start,
                 count(*)::int AS new_users
          FROM users, bounds
-         WHERE users.created_at >= bounds.start_bucket
-           AND users.created_at < bounds.end_exclusive
+         WHERE users.created_at >= bounds.start_bucket AND users.created_at < bounds.end_exclusive
          GROUP BY 1
        ),
        challenge_events AS (
@@ -290,146 +291,30 @@ export async function statsRoutes(app: FastifyInstance) {
                 count(*)::int AS challenges,
                 count(DISTINCT challenges.user_email)::int AS active_challengers
          FROM challenges, bounds
-         WHERE challenges.issued_at >= bounds.start_bucket
-           AND challenges.issued_at < bounds.end_exclusive
+         WHERE challenges.issued_at >= bounds.start_bucket AND challenges.issued_at < bounds.end_exclusive
          GROUP BY 1
-       ),
-       supply_events AS (
-         SELECT date_bin(bounds.bucket_interval, tokens.issued_at, bounds.origin) AS bucket_start,
-                tokens.value::bigint AS delta
-         FROM tokens, bounds
-         WHERE NOT tokens.is_change
-           AND tokens.issued_at >= bounds.start_bucket
-           AND tokens.issued_at < bounds.end_exclusive
-         UNION ALL
-         SELECT date_bin(bounds.bucket_interval, tokens.invalidated_at, bounds.origin) AS bucket_start,
-                (-tokens.value)::bigint AS delta
-         FROM tokens, bounds
-         WHERE tokens.invalidated_at IS NOT NULL
-           AND tokens.invalidated_at >= bounds.start_bucket
-           AND tokens.invalidated_at < bounds.end_exclusive
-         UNION ALL
-         SELECT date_bin(bounds.bucket_interval, srpow_wrap_events.created_at, bounds.origin) AS bucket_start,
-                (-tokens.value)::bigint AS delta
-         FROM tokens
-         JOIN srpow_wrap_events ON srpow_wrap_events.id = tokens.wrap_event_id,
-              bounds
-         WHERE NOT tokens.is_change
-           AND srpow_wrap_events.status IN ('PENDING', 'CONFIRMED')
-           AND srpow_wrap_events.created_at >= bounds.start_bucket
-           AND srpow_wrap_events.created_at < bounds.end_exclusive
-         UNION ALL
-         SELECT date_bin(bounds.bucket_interval, srpow_wrap_events.updated_at, bounds.origin) AS bucket_start,
-                tokens.value::bigint AS delta
-         FROM tokens
-         JOIN srpow_wrap_events ON srpow_wrap_events.id = tokens.wrap_event_id,
-              bounds
-         WHERE tokens.is_change
-           AND srpow_wrap_events.status = 'CONFIRMED'
-           AND srpow_wrap_events.updated_at >= bounds.start_bucket
-           AND srpow_wrap_events.updated_at < bounds.end_exclusive
-       ),
-       supply_deltas AS (
-         SELECT bucket_start, coalesce(sum(delta), 0)::bigint AS delta
-         FROM supply_events
-         GROUP BY bucket_start
-       ),
-       baseline AS (
-         SELECT
-           (SELECT coalesce(sum(tokens.value), 0)::bigint
-            FROM tokens, bounds
-            WHERE tokens.parent_token_id IS NULL
-              AND NOT tokens.is_change
-              AND tokens.issued_at < bounds.start_bucket) AS total_minted_base_units,
-           (SELECT coalesce(sum(transfers.amount), 0)::bigint
-            FROM transfers, bounds
-            WHERE transfers.created_at < bounds.start_bucket) AS total_transferred_base_units,
-           (SELECT count(*)::int
-            FROM users, bounds
-            WHERE users.created_at < bounds.start_bucket) AS user_count,
-           (SELECT coalesce(sum(tokens.value), 0)::bigint
-            FROM tokens
-            LEFT JOIN srpow_wrap_events ON srpow_wrap_events.id = tokens.wrap_event_id,
-                 bounds
-            WHERE tokens.issued_at < bounds.start_bucket
-              AND (
-                (tokens.state = 'VALID' AND (
-                  NOT tokens.is_change
-                  OR tokens.wrap_event_id IS NULL
-                  OR (srpow_wrap_events.status = 'CONFIRMED' AND srpow_wrap_events.updated_at < bounds.start_bucket)
-                ))
-                OR (tokens.state = 'INVALIDATED' AND tokens.invalidated_at >= bounds.start_bucket)
-                OR (tokens.state IN ('LOCKED_FOR_BRIDGE', 'WRAPPED') AND NOT tokens.is_change AND srpow_wrap_events.created_at >= bounds.start_bucket)
-              )) AS circulating_supply_base_units
-       ),
-       history_rows AS (
-         SELECT buckets.bucket_start,
-                coalesce(mint_events.mint_count, 0)::int AS mint_count,
-                coalesce(mint_events.minted_base_units, 0)::bigint AS minted_base_units,
-                (baseline.total_minted_base_units + sum(coalesce(mint_events.minted_base_units, 0)) OVER (ORDER BY buckets.bucket_start))::bigint AS total_minted_base_units,
-                coalesce(transfer_events.transfer_count, 0)::int AS transfer_count,
-                coalesce(transfer_events.transferred_base_units, 0)::bigint AS transferred_base_units,
-                (baseline.total_transferred_base_units + sum(coalesce(transfer_events.transferred_base_units, 0)) OVER (ORDER BY buckets.bucket_start))::bigint AS total_transferred_base_units,
-                (baseline.circulating_supply_base_units + sum(coalesce(supply_deltas.delta, 0)) OVER (ORDER BY buckets.bucket_start))::bigint AS circulating_supply_base_units,
-                coalesce(user_events.new_users, 0)::int AS new_users,
-                (baseline.user_count + sum(coalesce(user_events.new_users, 0)) OVER (ORDER BY buckets.bucket_start))::int AS user_count,
-                coalesce(challenge_events.challenges, 0)::int AS challenges,
-                coalesce(challenge_events.active_challengers, 0)::int AS active_challengers
-         FROM buckets
-         CROSS JOIN baseline
-         LEFT JOIN mint_events USING (bucket_start)
-         LEFT JOIN transfer_events USING (bucket_start)
-         LEFT JOIN user_events USING (bucket_start)
-         LEFT JOIN challenge_events USING (bucket_start)
-         LEFT JOIN supply_deltas USING (bucket_start)
        )
-       SELECT bucket_start,
-              mint_count,
-              minted_base_units::text AS minted_base_units,
-              total_minted_base_units::text AS total_minted_base_units,
-              transfer_count,
-              transferred_base_units::text AS transferred_base_units,
-              total_transferred_base_units::text AS total_transferred_base_units,
-              circulating_supply_base_units::text AS circulating_supply_base_units,
-              new_users,
-              user_count,
-              challenges,
-              active_challengers
-       FROM history_rows
-       ORDER BY bucket_start DESC
-       LIMIT $3`,
+       SELECT buckets.bucket_start,
+              coalesce(root_token_count, 0)::int AS root_token_count,
+              coalesce(root_tokens_issued_base_units, 0)::text AS root_tokens_issued_base_units,
+              coalesce(transfer_count, 0)::int AS transfer_count,
+              coalesce(transferred_base_units, 0)::text AS transferred_base_units,
+              coalesce(new_users, 0)::int AS new_users,
+              coalesce(challenges, 0)::int AS challenges,
+              coalesce(active_challengers, 0)::int AS active_challengers
+       FROM buckets
+       LEFT JOIN issuance_events USING (bucket_start)
+       LEFT JOIN transfer_events USING (bucket_start)
+       LEFT JOIN user_events USING (bucket_start)
+       LEFT JOIN challenge_events USING (bucket_start)
+       ORDER BY bucket_start`,
       [spec.interval, spec.bucketInterval, limit, !!spec.allTime],
     );
-
-    const historyRows: StatsHistoryPoint[] = rows.reverse().map(row => {
-      const totalMintedBaseUnits = BigInt(row.total_minted_base_units);
-      const info = scheduleInfo(totalMintedBaseUnits, {
-        difficultyBits: app.config.difficultyBits,
-        maxSupplyRpow: app.config.mintMaxSupply,
-      });
-      return {
-        bucket_start: row.bucket_start.toISOString(),
-        total_minted_base_units: row.total_minted_base_units,
-        mint_count: Number(row.mint_count),
-        minted_base_units: row.minted_base_units,
-        total_transferred_base_units: row.total_transferred_base_units,
-        transfer_count: Number(row.transfer_count),
-        transferred_base_units: row.transferred_base_units,
-        circulating_supply_base_units: row.circulating_supply_base_units,
-        new_users: Number(row.new_users),
-        user_count: Number(row.user_count),
-        current_difficulty_bits: Math.max(app.config.difficultyFloor, info.currentDifficultyBits),
-        current_reward_base_units: info.currentRewardBaseUnits.toString(),
-        challenges: Number(row.challenges),
-        active_challengers: Number(row.active_challengers),
-      };
-    });
-
-    return {
-      window,
-      bucket_seconds: spec.bucketSeconds,
-      rows: historyRows,
-    };
+    const historyRows: StatsHistoryPoint[] = rows.map(row => ({
+      ...row,
+      bucket_start: row.bucket_start.toISOString(),
+    }));
+    return { window, bucket_seconds: spec.bucketSeconds, rows: historyRows };
   }
 
   app.get('/stats/summary', async () => summary());
@@ -442,6 +327,7 @@ export async function statsRoutes(app: FastifyInstance) {
     if (cached && Date.now() - cached.ts < HISTORY_CACHE_MS) return cached.body;
 
     const body = await history(parsed.data.window, parsed.data.limit);
+    if (historyCache.size >= HISTORY_CACHE_ENTRIES) historyCache.delete(historyCache.keys().next().value!);
     historyCache.set(key, { ts: Date.now(), body });
     return body;
   });

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { HashRouter, Route, Routes, NavLink } from 'react-router-dom';
+import { lazy, Suspense, useEffect, useState } from 'react';
+import { HashRouter, Navigate, Route, Routes, NavLink } from 'react-router-dom';
 import { applyTheme, loadTheme, nextTheme, type Theme } from './theme.js';
 import { useMe } from './hooks/useMe.js';
 import { api } from './api.js';
@@ -11,6 +11,11 @@ import { ActivityPage } from './pages/Activity.js';
 import { LedgerPage } from './pages/Ledger.js';
 import { WrapPage } from './pages/WrapPage.js';
 import { AppsPage } from './pages/Apps.js';
+import { AuthCallbackPage } from './pages/AuthCallback.js';
+import { NewsPage } from './pages/News.js';
+import { CelebrationBanner } from './components/CelebrationBanner.js';
+
+const UsdcDeposit = lazy(() => import('./pages/UsdcDeposit'));
 
 export default function App() {
   const [theme, setTheme] = useState<Theme>(loadTheme());
@@ -25,15 +30,22 @@ export default function App() {
   return (
     <HashRouter>
       <div className="app-shell">
-        <header>
+        <CelebrationBanner />
+        <header className="app-header">
           <pre style={{ margin: 0 }}>{'+======================================================================+\n|                   RPOW2 - Reusable Proofs of Work                  '}<span onClick={() => setTheme(nextTheme(theme))} title="cycle theme" style={{ cursor: 'pointer', fontSize: 13, color: 'var(--accent)' }}>{'\u25cf'}</span>{' |\n+======================================================================+'}</pre>
           <div className="tagline">a modern tribute to a tribute to the original rpow by hal finney</div>
+          {me && (
+            <div className="identity-bar" style={{ fontSize: 12, color: 'var(--dim)', marginTop: 4 }}>
+              logged in as <strong style={{ color: 'var(--accent)' }}>{me.email}</strong>
+              {me.x_handle && <> · <strong style={{ color: 'var(--accent)' }}>@{me.x_handle}</strong></>}
+            </div>
+          )}
           <nav className="nav">
-            <NavLink to="/">wallet</NavLink>
+            <NavLink to="/ledger">ledger</NavLink>
+            <NavLink to="/wallet">wallet</NavLink>
             <NavLink to="/mine">mine</NavLink>
             <NavLink to="/send">send</NavLink>
             <NavLink to="/activity">activity</NavLink>
-            <NavLink to="/ledger">ledger</NavLink>
             {me?.wrap_allowed && <NavLink to="/wrap">wrap</NavLink>}
             <NavLink to="/apps">apps</NavLink>
             <a href="https://stats.rpow2.com/" target="_blank" rel="noreferrer" className="external">stats{'\u2197'}</a>
@@ -45,7 +57,8 @@ export default function App() {
         </header>
         <main>
           <Routes>
-            <Route path="/" element={<WalletPage />} />
+            <Route path="/" element={<Navigate to="/ledger" replace />} />
+            <Route path="/wallet" element={<WalletPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/mine" element={<MinePage />} />
             <Route path="/send" element={<SendPage />} />
@@ -53,6 +66,13 @@ export default function App() {
             <Route path="/ledger" element={<LedgerPage />} />
             <Route path="/wrap" element={<WrapPage />} />
             <Route path="/apps" element={<AppsPage />} />
+            <Route path="/news" element={<NewsPage />} />
+            <Route path="/auth-callback" element={<AuthCallbackPage />} />
+            <Route path="/usdc/deposit" element={
+              <Suspense fallback={<div style={{ padding: 24 }}>loading…</div>}>
+                <UsdcDeposit />
+              </Suspense>
+            } />
           </Routes>
         </main>
       </div>

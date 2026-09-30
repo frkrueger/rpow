@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Panel } from '../components/Panel.js';
 import { useMe } from '../hooks/useMe.js';
 import { api } from '../api.js';
@@ -124,7 +124,12 @@ export function MinePage() {
   }
 
   if (loading) return <Panel><div>loading...</div></Panel>;
-  if (!me) return <Panel title="MINE"><div>not signed in.</div></Panel>;
+  if (!me) return (
+    <Panel title="MINE">
+      <div>not signed in.</div>
+      <div style={{ marginTop: 8 }}><Link to="/login">[ go to login ]</Link></div>
+    </Panel>
+  );
 
   const running = status === 'mining' || status === 'submitting';
   const statusLabel = running

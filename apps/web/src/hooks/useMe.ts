@@ -7,7 +7,22 @@ export function useMe(): { me: MeResponse | null; loading: boolean; refresh: () 
   const [loading, setLoading] = useState(true);
   const refresh = async () => {
     setLoading(true);
-    try { setMe(await api.me()); } catch { setMe(null); } finally { setLoading(false); }
+    try {
+      setMe(await api.me());
+    } catch (err) {
+      // Surface the failure reason so when a session drops we can see in
+      // DevTools whether /me returned 401, 5xx, or a network error. The
+      // cookie clear below loses that data otherwise.
+      console.warn('rpow: /me failed, clearing session', err);
+      // Clear any stale cookies that cause 401 — old HttpOnly cookies
+      // from previous auth flows can't be cleared by JS alone.
+      await api.logout().catch(() => {});
+      document.cookie = 'rpow_session=; Path=/; Max-Age=0';
+      document.cookie = 'rpow_session=; Path=/; Max-Age=0; Domain=.rpow2.com';
+      setMe(null);
+    } finally {
+      setLoading(false);
+    }
   };
   useEffect(() => { refresh(); }, []);
   return { me, loading, refresh };

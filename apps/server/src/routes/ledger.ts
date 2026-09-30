@@ -13,20 +13,24 @@ export async function ledgerRoutes(app: FastifyInstance) {
     const [
       { rows: transferred },
       { rows: circulating },
+      { rows: wrapped },
       { rows: users },
       { rows: counter },
     ] = await Promise.all([
       app.pool.query<{ n: string }>(
-        `SELECT coalesce(sum(amount),0)::text AS n FROM transfers`,
+        `SELECT coalesce(sum(value),0)::text AS n FROM app_counters WHERE name='total_transferred_base_units'`,
       ),
       app.pool.query<{ n: string }>(
-        `SELECT coalesce(sum(value),0)::text AS n FROM tokens WHERE state='VALID'`,
+        `SELECT coalesce(sum(value),0)::text AS n FROM app_counters WHERE name='circulating_supply_base_units'`,
+      ),
+      app.pool.query<{ n: string }>(
+        `SELECT coalesce(sum(value),0)::text AS n FROM app_counters WHERE name='wrapped_supply_base_units'`,
       ),
       app.pool.query<{ n: number }>(
         `SELECT count(*)::int AS n FROM users`,
       ),
       app.pool.query<{ value: string }>(
-        `SELECT value::text FROM app_counters WHERE name='minted_supply'`,
+        `SELECT COALESCE(SUM(value), 0)::text AS value FROM app_counters WHERE name='minted_supply'`,
       ),
     ]);
 
@@ -34,10 +38,12 @@ export async function ledgerRoutes(app: FastifyInstance) {
     const totalMintedBaseUnits = counterBaseUnits;
     const totalTransferredBaseUnits = BigInt(transferred[0]!.n);
     const circulatingBaseUnits = BigInt(circulating[0]!.n);
+    const wrappedBaseUnits = BigInt(wrapped[0]!.n);
     const maxSupplyBaseUnits = BigInt(app.config.mintMaxSupply) * BASE_UNITS_PER_RPOW;
 
     const info = scheduleInfo(counterBaseUnits, {
       difficultyBits: app.config.difficultyBits,
+      baseRewardBaseUnits: app.config.baseRewardBaseUnits,
       maxSupplyRpow: app.config.mintMaxSupply,
     });
 
@@ -45,6 +51,7 @@ export async function ledgerRoutes(app: FastifyInstance) {
       total_minted_base_units: totalMintedBaseUnits.toString(),
       total_transferred_base_units: totalTransferredBaseUnits.toString(),
       circulating_supply_base_units: circulatingBaseUnits.toString(),
+      wrapped_supply_base_units: wrappedBaseUnits.toString(),
       minted_supply_counter_base_units: counterBaseUnits.toString(),
       max_supply_base_units: maxSupplyBaseUnits.toString(),
       base_units_per_rpow: BASE_UNITS_PER_RPOW.toString(),
@@ -59,7 +66,8 @@ export async function ledgerRoutes(app: FastifyInstance) {
     };
   }
 
-  app.get('/ledger', async () => {
+  app.get('/ledger', async (_req, reply) => {
+    reply.header('Cache-Control', 'no-store');
     if (cached && Date.now() - cached.ts < LEDGER_CACHE_MS) return cached.body;
     if (inflight) return inflight;
     inflight = (async () => {
@@ -73,4 +81,40 @@ export async function ledgerRoutes(app: FastifyInstance) {
     })();
     return inflight;
   });
+
+  // Background warmup: each worker refreshes its cache in the background every
+  // 30s so user requests never block on the cold-cache aggregate-sum queries
+  // (each refresh hits the tokens table, which is ~50M rows on prod). Without
+  // this, a cluster of N workers means 1/N of requests hit cold cache and
+  // wait 5–20s — visible as flaky /ledger latency.
+  //
+  // The proper long-term fix is to maintain `circulating_supply_base_units`
+  // and `wrapped_supply_base_units` counters in `app_counters` instead of
+  // re-summing the tokens table — that makes /ledger O(1). For now, this
+  // warmup is the surgical patch.
+  if (process.env.NODE_ENV !== 'test') {
+    // Background warmup. Re-entrancy guard: skip if a previous refresh is
+    // still running. Slow SUM(tokens) queries (30M+ rows) under heavy load
+    // can take 30-60s; without this guard the ticks pile up — 9 workers ×
+    // M unfinished refreshes consumed 54+ pool connections at peak and
+    // starved /send. Reuse the same `inflight` slot the user-request path
+    // uses, so user requests, the initial refresh, and warmup ticks all
+    // dedupe against each other.
+    const startRefresh = () => {
+      if (inflight) return;
+      inflight = (async () => {
+        try {
+          const body = await refresh();
+          cached = { ts: Date.now(), body };
+          return body;
+        } finally {
+          inflight = null;
+        }
+      })();
+      inflight.catch(() => { /* swallow — next user/timer will retry */ });
+    };
+    startRefresh();
+    const warmupTimer = setInterval(startRefresh, 30_000);
+    app.addHook('onClose', async () => { clearInterval(warmupTimer); });
+  }
 }

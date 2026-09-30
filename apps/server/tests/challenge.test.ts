@@ -2,10 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { makeTestApp } from './helpers.js';
 
 async function login(ctx: Awaited<ReturnType<typeof makeTestApp>>, email = 'a@b.com'): Promise<string> {
-  await ctx.app.inject({ method: 'POST', url: '/auth/request', payload: { email }, headers: { 'content-type': 'application/json' } });
-  const tok = ctx.mailer.outbox.at(-1)!.text.match(/token=([\w-]+)/)![1];
-  const r = await ctx.app.inject({ method: 'GET', url: `/auth/verify?token=${tok}` });
-  return r.headers['set-cookie'] as string;
+  return ctx.forgeSessionCookie(email);
 }
 
 // In test config, mintMaxSupply = 21 RPOW => cap in base units = 21 * 10^9.

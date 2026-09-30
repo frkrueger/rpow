@@ -4,9 +4,7 @@ import { findSolutionForTest } from '../src/pow.js';
 import { randomUUID } from 'node:crypto';
 
 async function loginAs(ctx: Awaited<ReturnType<typeof makeTestApp>>, email: string): Promise<string> {
-  await ctx.app.inject({ method: 'POST', url: '/auth/request', payload: { email }, headers: { 'content-type': 'application/json' } });
-  const tok = ctx.mailer.outbox.at(-1)!.text.match(/token=([\w-]+)/)![1];
-  return (await ctx.app.inject({ method: 'GET', url: `/auth/verify?token=${tok}` })).headers['set-cookie'] as string;
+  return ctx.forgeSessionCookie(email);
 }
 async function mineN(ctx: any, cookie: string, n: number) {
   for (let i = 0; i < n; i++) {
@@ -19,6 +17,25 @@ async function mineN(ctx: any, cookie: string, n: number) {
 describe('GET /activity', () => {
   let cleanup: (() => Promise<void>) | null = null;
   afterEach(async () => { if (cleanup) await cleanup(); cleanup = null; });
+
+  it('does not re-fire the most recent event when polling with its own at as cursor', async () => {
+    // Postgres stores microsecond precision but Date.toISOString() emits only
+    // millisecond precision. Without ms truncation in the SQL filter, the most
+    // recent row reappears on every poll using its returned at as the cursor.
+    // This caused phantom duplicate transfers in halstavern's bet watcher.
+    const ctx = await makeTestApp(); cleanup = ctx.cleanup;
+    const a = await loginAs(ctx, 'a-cursor@x.com');
+    const b = await loginAs(ctx, 'b-cursor@x.com');
+    await mineN(ctx, a, 1);
+    await ctx.app.inject({ method: 'POST', url: '/send', headers: { cookie: a, 'content-type': 'application/json' }, payload: { recipient_email: 'b-cursor@x.com', amount_base_units: '1000000', idempotency_key: randomUUID() } });
+
+    const first = (await ctx.app.inject({ method: 'GET', url: '/activity?since=2020-01-01T00:00:00Z', headers: { cookie: b } })).json();
+    expect(first.entries.length).toBeGreaterThan(0);
+    expect(first.next_cursor).toBeTruthy();
+
+    const second = (await ctx.app.inject({ method: 'GET', url: `/activity?since=${encodeURIComponent(first.next_cursor)}`, headers: { cookie: b } })).json();
+    expect(second.entries).toEqual([]);
+  });
 
   it('shows mint, send, receive entries', async () => {
     const ctx = await makeTestApp(); cleanup = ctx.cleanup;

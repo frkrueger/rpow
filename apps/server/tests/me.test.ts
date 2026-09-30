@@ -3,10 +3,7 @@ import { makeTestApp } from './helpers.js';
 import { signSession, SESSION_COOKIE } from '../src/session.js';
 
 async function login(ctx: Awaited<ReturnType<typeof makeTestApp>>, email: string): Promise<string> {
-  await ctx.app.inject({ method: 'POST', url: '/auth/request', headers: { 'content-type': 'application/json' }, payload: { email } });
-  const tok = ctx.mailer.outbox.at(-1)!.text.match(/token=([\w-]+)/)![1];
-  const res = await ctx.app.inject({ method: 'GET', url: `/auth/verify?token=${tok}` });
-  return res.headers['set-cookie'] as string;
+  return ctx.forgeSessionCookie(email);
 }
 
 describe('GET /me', () => {

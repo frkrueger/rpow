@@ -5,10 +5,11 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-export function createPool(databaseUrl: string): Pool {
-  // 10 per worker; with N cluster workers total is 10*N. Must stay under
-  // Postgres max_connections minus superuser/backup headroom.
-  return new Pool({ connectionString: databaseUrl, max: 10 });
+export function createPool(databaseUrl: string, max = 10): Pool {
+  // Per-process max; with N cluster workers the app-wide cap is N*max plus
+  // whatever rpow-auth uses. Must stay under Postgres max_connections minus
+  // superuser/backup headroom.
+  return new Pool({ connectionString: databaseUrl, max });
 }
 
 export async function withClient<T>(pool: Pool, fn: (c: PoolClient) => Promise<T>): Promise<T> {

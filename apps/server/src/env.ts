@@ -19,9 +19,13 @@ const Schema = z.object({
   RPOW_SIGNING_PUBLIC_KEY_HEX: z.string().regex(/^[0-9a-f]{64}$/),
   DIFFICULTY_BITS: z.coerce.number().int().min(4).max(40).default(28),
   DIFFICULTY_FLOOR: z.coerce.number().int().min(4).max(40).default(20),
+  // Base mint reward in BASE_UNITS_PER_RPOW units (default 10_000_000 = 0.01 RPOW).
+  // Bumping this scales every successful mint until the next code change.
+  MINT_BASE_REWARD_BASE_UNITS: z.coerce.number().int().positive().default(10_000_000),
   MINT_MAX_SUPPLY: z.coerce.number().int().positive().default(19_000_000),
   WEB_ORIGIN: z.string().url().default('http://localhost:5173'),
   PUBLIC_STATS_ORIGINS: z.string().default('').transform(v => v.split(',').map(origin => origin.trim()).filter(Boolean)),
+  LONGSHOT_WEB_ORIGIN: z.string().url().default('https://longshot.rpow2.com'),
   TURNSTILE_SECRET: z.string().optional(),
   MAIL_THROTTLE_RPS: z.coerce.number().positive().default(4),
   MAIL_THROTTLE_MAX_QUEUE: z.coerce.number().int().positive().default(200),
@@ -31,6 +35,64 @@ const Schema = z.object({
   WRAP_ALLOWED_EMAILS: z.string().default(''),                     // CSV, may be empty
   SRPOW_COMMITMENT: z.enum(['confirmed','finalized']).default('confirmed'),
   SRPOW_WRAP_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
+  LONGSHOT_MIN_BASE_UNITS: z.coerce.number().int().positive().default(10_000_000),
+  LONGSHOT_MAX_BASE_UNITS: z.coerce.number().int().positive().default(10_000_000_000),
+  LONGSHOT_ALLOWED_EMAILS: z.string().default('frkrueger@mac.com'),
+  // CSV of emails treated as trusted operators. Bypasses /auth/request
+  // cooldown+caps and /challenge per-user lock+cooldown.
+  OPERATOR_EMAILS: z.string().default(''),
+  // Per-process pg connection pool size. Total app capacity must stay under
+  // postgres max_connections (200 by default) — sum across all workers and
+  // the rpow-auth service. e.g. 10 cluster workers × 16 + 1 auth × 10 = 170.
+  PG_POOL_MAX: z.coerce.number().int().positive().default(10),
+  GLADIATOR_MIN_BET_BASE_UNITS: z.coerce.number().int().positive().default(10_000_000),
+  GLADIATOR_MAX_BET_BASE_UNITS: z.coerce.number().int().positive().default(10_000_000_000),
+  GLADIATOR_MAX_BANKROLL_BASE_UNITS: z.coerce.number().int().positive().default(100_000_000_000),
+  GLADIATOR_SESSION_TTL_HOURS: z.coerce.number().int().positive().default(48),
+  GLADIATOR_CHAT_RETENTION_DAYS: z.coerce.number().int().positive().default(30),
+  GLADIATOR_ALLOWED_EMAILS: z.string().default('*'),
+  GLADIATOR_WEB_ORIGIN: z.string().url().default('https://gladiator.rpow2.com'),
+  GLADIATOR_ADMIN_TOKEN: z.string().min(1).optional(),
+  TRIVIA_MIN_BET_BASE_UNITS: z.coerce.number().int().positive().default(10_000_000),
+  TRIVIA_MAX_BET_BASE_UNITS: z.coerce.number().int().positive().default(10_000_000_000),
+  TRIVIA_MAX_BANKROLL_BASE_UNITS: z.coerce.number().int().positive().default(100_000_000_000),
+  TRIVIA_MATCH_DEADLINE_SECONDS: z.coerce.number().int().positive().default(10),
+  TRIVIA_SESSION_TTL_HOURS: z.coerce.number().int().positive().default(48),
+  TRIVIA_ALLOWED_EMAILS: z.string().default('*'),
+  TRIVIA_WEB_ORIGIN: z.string().url().default('https://trivia.rpow2.com'),
+  // AMM alpha allowlist — CSV of emails permitted to use any /amm/* endpoint.
+  // Starts locked to a single test account; widened as the AMM is hardened.
+  AMM_ALLOWED_EMAILS: z.string().default('frk314@gmail.com'),
+  // Admin allowlist — subset that can call admin endpoints (USDC credit, pool seed).
+  AMM_ADMIN_EMAILS: z.string().default(''),
+  AMM_USDC_POOL_CAP_BASE_UNITS: z.coerce.number().int().nonnegative().default(1_000_000_000),
+  AMM_LINK_HMAC_SECRET: z.string().regex(/^[0-9a-f]{64,}$/),  // hex, ≥32 bytes
+  AMM_USDC_WALLET_PUBKEY: z.string().min(32).max(44),
+  AMM_USDC_WALLET_ATA: z.string().min(32).max(44).optional(), // derived if missing
+  USDC_MINT_ADDRESS: z.string().min(32).max(44)
+    .default('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'),
+  // Freelottery — daily free lottery. Disabled when FREELOTTERY_START_UTC_DATE is unset.
+  FREELOTTERY_START_UTC_DATE: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  FREELOTTERY_TOTAL_DAYS: z.coerce.number().int().positive().default(100),
+  FREELOTTERY_PRIZE_BASE_UNITS: z.coerce.number().int().positive().default(1_000_000_000_000),
+  FREELOTTERY_DRAW_HOUR_UTC: z.coerce.number().int().min(0).max(23).default(19),
+  FREELOTTERY_ALLOWED_EMAILS: z.string().default('*'),
+  FREELOTTERY_WEB_ORIGIN: z.string().url().default('https://freelottery.rpow2.com'),
+  CHAT_WEB_ORIGIN: z.string().url().default('https://chat.rpow2.com'),
+  // X (Twitter) API Bearer token. Used by the avatar proxy to resolve
+  // profile_image_url. Optional in dev/test; when unset the proxy returns
+  // 404 for cache misses (frontend renders a letter placeholder).
+  X_BEARER_TOKEN: z.string().min(20).optional(),
+  // Anthropic API key. When unset, AI host replies are disabled silently
+  // (rooms behave as plain chat). claude-haiku-4-5 is the default model.
+  ANTHROPIC_API_KEY: z.string().min(20).optional(),
+  INDEXER_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(15000),
+  INDEXER_BOOTSTRAP_LIMIT: z.coerce.number().int().positive().default(1000),
+  // SRPOW Unwrap params — all have defaults so dev boots without configuration.
+  SRPOW_UNWRAP_MIN_BASE_UNITS: z.string().regex(/^[0-9]+$/).default('10000000000'),
+  SRPOW_UNWRAP_SLIPPAGE_BPS: z.coerce.number().int().min(0).max(10000).default(1000),
+  SRPOW_UNWRAP_FEE_BPS: z.coerce.number().int().min(0).max(10000).default(500),
+  JUPITER_API_BASE: z.string().url().default('https://lite-api.jup.ag'),
 }).superRefine((v, ctx) => {
   if (v.MAILER === 'resend' && !v.RESEND_API_KEY) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['RESEND_API_KEY'], message: 'required when MAILER=resend' });
@@ -43,6 +105,21 @@ const Schema = z.object({
   }
   if (v.MAILER === 'smtp' || v.MAILER === 'hybrid') {
     if (!v.SMTP_HOST) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['SMTP_HOST'], message: 'required when MAILER=smtp/hybrid' });
+  }
+  if (v.LONGSHOT_MAX_BASE_UNITS < v.LONGSHOT_MIN_BASE_UNITS) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['LONGSHOT_MAX_BASE_UNITS'], message: 'LONGSHOT_MAX_BASE_UNITS must be >= LONGSHOT_MIN_BASE_UNITS' });
+  }
+  if (v.GLADIATOR_MAX_BET_BASE_UNITS < v.GLADIATOR_MIN_BET_BASE_UNITS) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['GLADIATOR_MAX_BET_BASE_UNITS'], message: 'GLADIATOR_MAX_BET_BASE_UNITS must be >= GLADIATOR_MIN_BET_BASE_UNITS' });
+  }
+  if (v.GLADIATOR_MAX_BANKROLL_BASE_UNITS < v.GLADIATOR_MAX_BET_BASE_UNITS) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['GLADIATOR_MAX_BANKROLL_BASE_UNITS'], message: 'GLADIATOR_MAX_BANKROLL_BASE_UNITS must be >= GLADIATOR_MAX_BET_BASE_UNITS' });
+  }
+  if (v.TRIVIA_MAX_BET_BASE_UNITS < v.TRIVIA_MIN_BET_BASE_UNITS) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['TRIVIA_MAX_BET_BASE_UNITS'], message: 'TRIVIA_MAX_BET_BASE_UNITS must be >= TRIVIA_MIN_BET_BASE_UNITS' });
+  }
+  if (v.TRIVIA_MAX_BANKROLL_BASE_UNITS < v.TRIVIA_MAX_BET_BASE_UNITS) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['TRIVIA_MAX_BANKROLL_BASE_UNITS'], message: 'TRIVIA_MAX_BANKROLL_BASE_UNITS must be >= TRIVIA_MAX_BET_BASE_UNITS' });
   }
 });
 

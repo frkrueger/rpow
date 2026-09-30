@@ -63,7 +63,7 @@ a:hover { border-bottom-color: var(--accent); }
   position: relative;
   z-index: 2;
 }
-.header-pre { margin: 0; color: var(--accent); line-height: 1.2; }
+.header-pre { margin: 0; color: var(--accent); line-height: 1.2; font-size: clamp(6px, 1.55vw, 14px); }
 .tagline { color: var(--dim); font-size: 12px; letter-spacing: 0.05em; margin: 6px 0 0 4px; }
 .nav-row {
   margin: 12px 0 16px;
@@ -95,7 +95,7 @@ a:hover { border-bottom-color: var(--accent); }
   font-size: 11px; letter-spacing: 3px; color: var(--accent);
   padding: 8px 16px; border-bottom: 1px solid var(--accent-dim);
   background: rgba(110,231,183,0.03);
-  display: flex; justify-content: space-between; align-items: center;
+  display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;
   text-transform: uppercase;
 }
 .panel-title .status { font-size: 10px; color: var(--dim); letter-spacing: 1px; }
@@ -103,10 +103,10 @@ a:hover { border-bottom-color: var(--accent); }
 
 /* Stat grid */
 .stat-grid {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--accent-dim);
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1px; background: var(--accent-dim);
 }
 .stat-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
-.stat-cell { background: var(--bg-2); padding: 10px 14px; }
+.stat-cell { min-width: 0; overflow-wrap: anywhere; background: var(--bg-2); padding: 10px 14px; }
 .stat-cell.full { grid-column: 1 / -1; }
 .stat-label { font-size: 10px; letter-spacing: 2px; color: var(--dim); text-transform: uppercase; }
 .stat-value { font-size: 18px; font-weight: 600; color: var(--fg); margin-top: 2px; transition: color 0.3s; }
@@ -137,6 +137,19 @@ a:hover { border-bottom-color: var(--accent); }
 .d2 { animation-delay: 80ms; }
 .d3 { animation-delay: 160ms; }
 .d4 { animation-delay: 240ms; }
+.stats-note { padding: 14px 16px; color: var(--dim); font-size: 12px; }
+#stats-message { border-bottom: 1px solid var(--accent-dim); }
+#stats-retry { margin-left: 8px; padding: 3px 8px; color: var(--accent); border: 1px solid var(--accent-dim); background: transparent; font: inherit; cursor: pointer; }
+#stats-retry:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+#stats-retry:disabled { opacity: .5; cursor: wait; }
+@media (max-width: 480px) {
+  .stat-grid.cols-3 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .panel-title { padding: 8px 12px; }
+  .stat-cell { padding: 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
 </style>
 </head>
 <body>
@@ -156,16 +169,17 @@ a:hover { border-bottom-color: var(--accent); }
   <div class="panel d1" style="animation: panel-in 400ms ease-out">
     <div class="panel-title">
       <span>NETWORK</span>
-      <span class="status"><span class="pulse"></span> LIVE <span id="ts"></span></span>
+      <span class="status" role="status"><span id="network-status">Loading</span> <span id="ts"></span></span>
     </div>
     <div class="panel-body" style="padding:0">
-      <div id="dashboard"></div>
+      <div id="stats-message" class="stats-note" role="status" hidden><span id="stats-message-text"></span><button id="stats-retry" type="button">Retry</button></div>
+      <div id="dashboard"><p class="stats-note">Loading network statistics…</p></div>
     </div>
   </div>
 
   <div class="panel d2" style="animation: panel-in 400ms ease-out" id="activity-panel" hidden>
     <div class="panel-title"><span>ACTIVITY</span><span class="status">LAST 24h</span></div>
-    <div class="panel-body" style="padding:0"><div id="activity"></div></div>
+    <div class="panel-body" style="padding:0"><div id="activity"></div><p style="padding:0 16px 12px;color:var(--dim);font-size:11px;">Root issues include mining, claims, game payouts, AMM buys and unwraps; they are not net supply growth.</p></div>
   </div>
 
   <div class="panel d3" style="animation: panel-in 400ms ease-out" id="holders-panel" hidden>
@@ -176,6 +190,16 @@ a:hover { border-bottom-color: var(--accent); }
   <div class="panel d4" style="animation: panel-in 400ms ease-out" id="histogram-panel" hidden>
     <div class="panel-title"><span>BALANCE DISTRIBUTION</span><span class="status">RPOW</span></div>
     <div class="panel-body"><div id="histogram"></div></div>
+  </div>
+
+  <div class="panel d2" id="longshot-panel" style="display:none">
+    <div class="panel-title">
+      <span>LONG SHOT</span>
+      <span class="status"><a href="https://longshot.rpow2.com" style="border:none;color:var(--dim);font-size:10px;letter-spacing:1px">PLAY &#x2197;</a></span>
+    </div>
+    <div class="panel-body" style="padding:0">
+      <div id="longshot-dashboard"></div>
+    </div>
   </div>
 
   <div class="footer">
@@ -192,37 +216,11 @@ const API = (window.location.hostname === 'localhost' && window.location.port ==
 // Halving interval is fixed at 1M RPOW (constant in the schedule); difficulty is constant too.
 const HALVING_INTERVAL_RPOW = 1_000_000;
 
-// Pre-baked first-paint values; replaced on first /stats/summary fetch.
-const BAKED = {
-  total_minted: 9915521,
-  total_transferred: 2429448,
-  circulating_supply: 4175787,
-  current_difficulty_bits: 25,
-  user_count: 39965,
-  max_supply: 19000000,
-  epoch: 0,
-  next_milestone_at: 10000000,
-  coins_until_next_milestone: 84479,
-  is_capped: false,
-  current_reward: 0.01,
-  next_reward: 0.005,
-  mint_count_24h: 0,
-  transfer_count_24h: 0,
-  active_challengers_15m: 0,
-  wrap_count_24h: 0,
-  wrapped_supply: 0,
-  bound_wallet_count: 0,
-  holder_count: 0,
-  zero_balance_user_count: 0,
-  average_balance: 0,
-  top_balances: [],
-  histogram: [],
-};
-const BAKED_AT = "2026-05-10T03:10:00Z";
-
 const $ = (id) => document.getElementById(id);
 let prev = {};
 let lastUpdated = null;
+let hasStats = false;
+let fetchInFlight = false;
 
 function fmt(n) { return Number(n).toLocaleString('en-US'); }
 function fmtRpow(n) {
@@ -233,10 +231,9 @@ function pct(n, d) { return d > 0 ? ((n / d) * 100).toFixed(1) : '0'; }
 
 function render(d) {
   const mintedPct = pct(d.total_minted, d.max_supply);
-  const epochStartedAt = d.epoch * HALVING_INTERVAL_RPOW;
-  const epochProgress = pct(d.total_minted - epochStartedAt, HALVING_INTERVAL_RPOW);
+  const epochProgress = Math.max(0, Math.min(100, 100 - Number(d.coins_until_next_milestone) / HALVING_INTERVAL_RPOW * 100));
   const remaining = d.max_supply - d.total_minted;
-  const wrapped = d.wrapped_supply || (d.total_minted - d.circulating_supply);
+  const wrapped = d.wrapped_supply || 0;
   const wrapPct = d.total_minted > 0 ? pct(wrapped, d.total_minted) : '0';
   const xferPct = d.total_minted > 0 ? pct(d.total_transferred, d.total_minted) : '0';
   const reward = d.current_reward;
@@ -245,7 +242,7 @@ function render(d) {
   const html = `
     <div class="stat-grid">
       <div class="stat-cell">
-        <div class="stat-label">MINERS</div>
+        <div class="stat-label">ACCOUNTS</div>
         <div class="stat-value amber" id="v-users">${fmt(d.user_count)}</div>
       </div>
       <div class="stat-cell">
@@ -319,7 +316,7 @@ function render(d) {
         <div class="stat-value">${xferPct}%</div>
       </div>
       <div class="stat-cell">
-        <div class="stat-label">AVG / MINER</div>
+        <div class="stat-label">AVG / ACCOUNT</div>
         <div class="stat-value">${d.user_count > 0 ? fmtRpow(d.total_minted / d.user_count) : '0'}</div>
       </div>
     </div>
@@ -329,14 +326,14 @@ function render(d) {
   $('dashboard').innerHTML = html;
 
   // Activity panel: recent counts and volumes from /stats/summary.
-  if (d.mint_count_24h != null || d.transfer_count_24h != null) {
+  if (d.root_token_count_24h != null || d.transfer_count_24h != null) {
     $('activity-panel').hidden = false;
     $('activity').innerHTML = `
       <div class="stat-grid cols-3">
         <div class="stat-cell">
-          <div class="stat-label">MINTS / 24h</div>
-          <div class="stat-value accent">${fmt(d.mint_count_24h)}</div>
-          <div style="font-size:11px;color:var(--dim);margin-top:2px;">${fmtRpow(d.minted_24h || 0)} RPOW</div>
+          <div class="stat-label">ROOT TOKEN ISSUES / 24h</div>
+          <div class="stat-value accent">${fmt(d.root_token_count_24h)}</div>
+          <div style="font-size:11px;color:var(--dim);margin-top:2px;">${fmtRpow(d.root_issued_24h || 0)} RPOW</div>
         </div>
         <div class="stat-cell">
           <div class="stat-label">TRANSFERS / 24h</div>
@@ -344,7 +341,7 @@ function render(d) {
           <div style="font-size:11px;color:var(--dim);margin-top:2px;">${fmtRpow(d.transferred_24h || 0)} RPOW</div>
         </div>
         <div class="stat-cell">
-          <div class="stat-label">MINERS / 15m</div>
+          <div class="stat-label">CHALLENGERS / 15m</div>
           <div class="stat-value amber">${fmt(d.active_challengers_15m)}</div>
         </div>
       </div>
@@ -359,9 +356,9 @@ function render(d) {
           <div class="stat-value">${fmt(d.bound_wallet_count)}</div>
         </div>
         <div class="stat-cell">
-          <div class="stat-label">MINTS / 1h</div>
-          <div class="stat-value">${fmt(d.mint_count_1h || 0)}</div>
-          <div style="font-size:11px;color:var(--dim);margin-top:2px;">${fmtRpow(d.minted_1h || 0)} RPOW</div>
+          <div class="stat-label">ROOT TOKEN ISSUES / 1h</div>
+          <div class="stat-value">${fmt(d.root_token_count_1h || 0)}</div>
+          <div style="font-size:11px;color:var(--dim);margin-top:2px;">${fmtRpow(d.root_issued_1h || 0)} RPOW</div>
         </div>
       </div>
     `;
@@ -418,13 +415,11 @@ function render(d) {
         </div>
       `;
     }).join('');
+  } else {
+    $('histogram-panel').hidden = false;
+    $('histogram').innerHTML = '<p class="stats-note">No balances to display.</p>';
   }
 
-  if (lastUpdated) {
-    const ago = Math.round((Date.now() - lastUpdated) / 1000);
-    const label = ago < 60 ? 'just now' : ago < 3600 ? Math.round(ago/60) + 'm ago' : Math.round(ago/3600) + 'h ago';
-    $('ts').textContent = '· ' + label;
-  }
 }
 
 function flashChanged(d) {
@@ -443,35 +438,40 @@ function flashChanged(d) {
   }
 }
 
-const CACHE_KEY = 'rpow2_stats';
+const CACHE_KEY = 'rpow2_stats_v2';
 const CACHE_TTL = 120000;
 
 function loadCache() {
   try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (Date.now() - parsed.ts < CACHE_TTL) return parsed;
-  } catch {}
-  return null;
+    const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null');
+    if (cached?.version !== 2) return null;
+    normalizeSummary(cached.data);
+    return cached.data;
+  } catch { return null; }
 }
 
 function saveCache(data) {
-  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ data, ts: Date.now() })); } catch {}
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ version: 2, data })); } catch {}
+}
+
+function setNetworkStatus(status, message = '') {
+  $('network-status').textContent = status;
+  $('ts').textContent = lastUpdated ? '· ' + new Date(lastUpdated).toLocaleString() : '';
+  $('stats-message').hidden = !message;
+  $('stats-message-text').textContent = message;
+  $('stats-retry').hidden = !message;
+  $('stats-retry').disabled = fetchInFlight;
 }
 
 function renderWithTimestamp(d, ts) {
+  const changed = !hasStats || Object.keys(d).some(k => JSON.stringify(d[k]) !== JSON.stringify(prev[k]));
   lastUpdated = ts;
-  if (!prev.user_count) {
+  if (changed) {
     render(d);
-  } else {
-    const changed = Object.keys(d).some(k => JSON.stringify(d[k]) !== JSON.stringify(prev[k]));
-    if (changed) {
-      render(d);
-      requestAnimationFrame(() => flashChanged(d));
-    }
+    if (hasStats) requestAnimationFrame(() => flashChanged(d));
   }
   prev = d;
+  hasStats = true;
 }
 
 // Convert a base-unit string to a Number-of-RPOW with 9-decimal precision.
@@ -480,17 +480,45 @@ function buToRpow(s, denom) {
   const n = BigInt(s);
   const whole = Number(n / denom);
   const frac = Number(n % denom) / Number(denom);
-  return whole + frac;
+  const result = whole + frac;
+  if (!Number.isFinite(result)) throw new Error('Invalid statistics');
+  return result;
 }
 
 function normalizeSummary(raw) {
-  const BU = BigInt(raw.ledger.base_units_per_rpow || '1000000000');
+  if (!raw || typeof raw.sampled_at !== 'string' || !Number.isFinite(Date.parse(raw.sampled_at)) || !raw.ledger || !raw.activity || !raw.holders) throw new Error('Invalid statistics');
+  const baseUnits = ['total_minted_base_units', 'minted_supply_counter_base_units', 'total_transferred_base_units', 'circulating_supply_base_units', 'wrapped_supply_base_units', 'max_supply_base_units', 'base_units_per_rpow', 'current_reward_base_units', 'next_reward_base_units', 'next_halving_at_base_units', 'base_units_to_next_halving'];
+  for (const key of baseUnits) {
+    if (typeof raw.ledger[key] !== 'string' || !/^\d+$/.test(raw.ledger[key])) throw new Error('Invalid statistics');
+  }
+  for (const key of ['user_count', 'current_difficulty_bits', 'halving_index']) {
+    if (!Number.isSafeInteger(raw.ledger[key]) || raw.ledger[key] < 0) throw new Error('Invalid statistics');
+  }
+  if (typeof raw.ledger.is_capped !== 'boolean') throw new Error('Invalid statistics');
+  for (const key of ['root_token_count_1h', 'root_token_count_24h', 'transfer_count_1h', 'transfer_count_24h', 'active_challengers_15m', 'wrap_count_24h', 'bound_wallet_count']) {
+    if (!Number.isSafeInteger(raw.activity[key]) || raw.activity[key] < 0) throw new Error('Invalid statistics');
+  }
+  for (const key of ['root_tokens_issued_base_units_1h', 'root_tokens_issued_base_units_24h', 'transferred_base_units_1h', 'transferred_base_units_24h', 'wrapped_base_units_24h']) {
+    if (typeof raw.activity[key] !== 'string' || !/^\d+$/.test(raw.activity[key])) throw new Error('Invalid statistics');
+  }
+  for (const key of ['holder_count', 'zero_balance_user_count']) {
+    if (!Number.isSafeInteger(raw.holders[key]) || raw.holders[key] < 0) throw new Error('Invalid statistics');
+  }
+  if (typeof raw.holders.average_balance_base_units !== 'string' || !/^\d+$/.test(raw.holders.average_balance_base_units) || !Array.isArray(raw.holders.top_balances) || !Array.isArray(raw.holders.balance_histogram)) throw new Error('Invalid statistics');
+  for (const row of raw.holders.top_balances) {
+    if (!row || !Number.isSafeInteger(row.rank) || row.rank < 1 || typeof row.balance_base_units !== 'string' || !/^\d+$/.test(row.balance_base_units)) throw new Error('Invalid statistics');
+  }
+  for (const row of raw.holders.balance_histogram) {
+    if (!row || !['0-0.001', '0.001-0.01', '0.01-0.1', '0.1-1', '1-10', '10-100', '100+'].includes(row.bucket) || !Number.isSafeInteger(row.holder_count) || row.holder_count < 0 || typeof row.total_balance_base_units !== 'string' || !/^\d+$/.test(row.total_balance_base_units)) throw new Error('Invalid statistics');
+  }
+  const BU = BigInt(raw.ledger.base_units_per_rpow);
+  if (BU <= 0n) throw new Error('Invalid statistics');
   const toRpow = (s) => buToRpow(s, BU);
   const ledger = raw.ledger;
   const activity = raw.activity || {};
   const holders = raw.holders || {};
   return {
-    total_minted: toRpow(ledger.minted_supply_counter_base_units || ledger.total_minted_base_units),
+    total_minted: toRpow(ledger.minted_supply_counter_base_units),
     total_transferred: toRpow(ledger.total_transferred_base_units),
     circulating_supply: toRpow(ledger.circulating_supply_base_units),
     current_difficulty_bits: ledger.current_difficulty_bits,
@@ -502,10 +530,10 @@ function normalizeSummary(raw) {
     is_capped: ledger.is_capped,
     current_reward: toRpow(ledger.current_reward_base_units),
     next_reward: toRpow(ledger.next_reward_base_units),
-    mint_count_1h: activity.mint_count_1h || 0,
-    mint_count_24h: activity.mint_count_24h || 0,
-    minted_1h: toRpow(activity.minted_base_units_1h),
-    minted_24h: toRpow(activity.minted_base_units_24h),
+    root_token_count_1h: activity.root_token_count_1h || 0,
+    root_token_count_24h: activity.root_token_count_24h || 0,
+    root_issued_1h: toRpow(activity.root_tokens_issued_base_units_1h),
+    root_issued_24h: toRpow(activity.root_tokens_issued_base_units_24h),
     transfer_count_1h: activity.transfer_count_1h || 0,
     transfer_count_24h: activity.transfer_count_24h || 0,
     transferred_1h: toRpow(activity.transferred_base_units_1h),
@@ -526,39 +554,124 @@ function normalizeSummary(raw) {
       holder_count: h.holder_count,
       total: toRpow(h.total_balance_base_units),
     })),
-    wrapped_supply: undefined,  // derived from total_minted - circulating in render()
+    wrapped_supply: toRpow(ledger.wrapped_supply_base_units),
   };
 }
 
-async function fetchStats(force) {
-  if (!force) {
-    const cached = loadCache();
-    if (cached) {
-      renderWithTimestamp(cached.data || cached, cached.ts || Date.now());
-      return;
-    }
-  }
+async function fetchStats() {
+  if (fetchInFlight) return;
+  fetchInFlight = true;
+  setNetworkStatus(hasStats ? 'Updating' : 'Loading');
   try {
     const res = await fetch(API + '/stats/summary');
-    if (!res.ok) throw new Error(res.statusText);
+    if (!res.ok) throw new Error('Statistics unavailable');
     const raw = await res.json();
     const d = normalizeSummary(raw);
-    const now = Date.now();
-    saveCache(d);
-    renderWithTimestamp(d, now);
-  } catch (e) {
-    if (!prev.user_count) {
-      const cached = loadCache();
-      if (cached) { renderWithTimestamp(cached.data || cached, cached.ts || Date.now()); return; }
-    }
+    renderWithTimestamp(d, Date.parse(raw.sampled_at));
+    saveCache(raw);
+    setNetworkStatus('Updated');
+  } catch {
+    if (!hasStats) $('dashboard').innerHTML = '<p class="stats-note">No network data available.</p>';
+    setNetworkStatus(hasStats ? 'Stale' : 'Unavailable', hasStats ? 'Could not refresh. Showing the last successful update.' : 'Could not load network statistics.');
+  } finally {
+    fetchInFlight = false;
+    $('stats-retry').disabled = false;
   }
 }
 
-lastUpdated = new Date(BAKED_AT).getTime();
-render(BAKED);
-prev = BAKED;
-fetchStats(true);
-setInterval(() => fetchStats(true), CACHE_TTL);
+const cached = loadCache();
+if (cached) renderWithTimestamp(normalizeSummary(cached), Date.parse(cached.sampled_at));
+$('stats-retry').addEventListener('click', fetchStats);
+fetchStats();
+setInterval(fetchStats, CACHE_TTL);
+
+// LONGSHOT panel
+const BU = 1_000_000_000n;
+const toRpow = (s) => Number(BigInt(s || '0') / BU);
+
+function renderLongshot(d) {
+  const win24h = d.window_24h, win1h = d.window_1h;
+  const netMint24h = toRpow(win24h.net_mint_delta_base_units);
+  const netMintAll = -toRpow(d.house_pnl_base_units); // house_pnl positive => supply down
+  const oddsRows = (d.odds_breakdown || [])
+    .sort((a,b) => a.odds_choice.localeCompare(b.odds_choice))
+    .map(r => {
+      const pct = r.spins > 0 ? ((r.wins / r.spins) * 100).toFixed(1) : '0.0';
+      return `<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0">
+        <span style="color:var(--dim)">${r.odds_choice}</span>
+        <span>${fmt(r.wins)}/${fmt(r.spins)} <span style="color:var(--accent)">${pct}%</span></span>
+      </div>`;
+    }).join('');
+
+  const html = `
+    <div class="stat-grid cols-3">
+      <div class="stat-cell">
+        <div class="stat-label">PLAYERS</div>
+        <div class="stat-value amber">${fmt(d.unique_users)}</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-label">TOTAL SPINS</div>
+        <div class="stat-value accent">${fmt(d.total_spins)}</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-label">VOLUME (RPOW)</div>
+        <div class="stat-value">${fmt(toRpow(d.total_volume_base_units))}</div>
+      </div>
+    </div>
+    <div class="stat-grid" style="border-top:1px solid rgba(110,231,183,0.18)">
+      <div class="stat-cell">
+        <div class="stat-label">SPINS / 24H</div>
+        <div class="stat-value">${fmt(win24h.spins)}</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-label">PLAYERS / 24H</div>
+        <div class="stat-value">${fmt(win24h.users)}</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-label">SPINS / 1H</div>
+        <div class="stat-value">${fmt(win1h.spins)}</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-label">PLAYERS / 1H</div>
+        <div class="stat-value">${fmt(win1h.users)}</div>
+      </div>
+    </div>
+    <div class="stat-grid" style="border-top:1px solid rgba(110,231,183,0.18)">
+      <div class="stat-cell">
+        <div class="stat-label">NET MINT &#x394; / 24H</div>
+        <div class="stat-value ${netMint24h < 0 ? 'accent' : 'amber'}">${netMint24h >= 0 ? '+' : ''}${fmt(netMint24h)}</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-label">NET MINT &#x394; / ALL</div>
+        <div class="stat-value ${netMintAll < 0 ? 'accent' : 'amber'}">${netMintAll >= 0 ? '+' : ''}${fmt(netMintAll)}</div>
+      </div>
+    </div>
+    <div style="padding:12px 16px; border-top:1px solid rgba(110,231,183,0.18)">
+      <div class="stat-label" style="margin-bottom:6px">WIN RATE BY ODDS</div>
+      ${oddsRows || '<div style="color:var(--dim);font-size:12px">no plays yet</div>'}
+    </div>
+  `;
+  $('longshot-dashboard').innerHTML = html;
+  $('longshot-panel').style.display = '';
+}
+
+// Netlify proxy strips the /api prefix, so /api/longshot/stats can't go through
+// it. Hit api.rpow2.com directly — CORS already permits this origin.
+const LONGSHOT_API = (window.location.hostname === 'localhost' && window.location.port === '5173')
+  ? 'http://localhost:8080/api/longshot/stats'
+  : 'https://api.rpow2.com/api/longshot/stats';
+
+async function fetchLongshot() {
+  try {
+    const res = await fetch(LONGSHOT_API);
+    if (!res.ok) return;
+    const d = await res.json();
+    renderLongshot(d);
+  } catch {}
+}
+
+fetchLongshot();
+setInterval(fetchLongshot, CACHE_TTL);
 </script>
 
 </body>

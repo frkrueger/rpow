@@ -54,8 +54,13 @@ describe('GET /ledger', () => {
     }
     // Keep the maintained counter in sync with the seeded supply (server's
     // /mint path increments this; tests inject directly so we mirror it).
+    // Bare UPDATE hits all 16 shards (composite PK from migration 022), so
+    // zero them all first then set shard=0 to the desired value → SUM = value.
     await ctx.pool.query(
-      `UPDATE app_counters SET value = $1 WHERE name = 'minted_supply'`,
+      `UPDATE app_counters SET value = 0 WHERE name = 'minted_supply'`,
+    );
+    await ctx.pool.query(
+      `UPDATE app_counters SET value = $1 WHERE name = 'minted_supply' AND shard = 0`,
       [(12n * RPOW).toString()],
     );
 
@@ -83,8 +88,12 @@ describe('GET /ledger', () => {
         [randomUUID(), `seed-${i}@x.com`, RPOW.toString()],
       );
     }
+    // Bare UPDATE hits all 16 shards; zero all then set shard=0.
     await ctx.pool.query(
-      `UPDATE app_counters SET value = $1 WHERE name = 'minted_supply'`,
+      `UPDATE app_counters SET value = 0 WHERE name = 'minted_supply'`,
+    );
+    await ctx.pool.query(
+      `UPDATE app_counters SET value = $1 WHERE name = 'minted_supply' AND shard = 0`,
       [MAX_SUPPLY_BU.toString()],
     );
 

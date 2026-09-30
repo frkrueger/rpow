@@ -1,20 +1,70 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Panel } from '../components/Panel.js';
 import { api } from '../api.js';
 import { useMe } from '../hooks/useMe.js';
 import { formatRpow, parseRpowToBaseUnits } from '../lib/format.js';
+import { ALLOWED_RETURN_ORIGINS, resolveReturnTarget } from '../lib/returnUrl.js';
 
 export function SendPage() {
   const { me, refresh } = useMe();
+  const [searchParams] = useSearchParams();
   const [recipient, setRecipient] = useState('');
   // Decimal RPOW string typed by the user; converted to base units on submit.
   const [amount, setAmount] = useState('1');
+  const [memo, setMemo] = useState('');
   const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [error, setError] = useState('');
   const [transferId, setTransferId] = useState('');
   const [pending, setPending] = useState(false);
   const [sentTo, setSentTo] = useState('');
   const [sentAmt, setSentAmt] = useState('');
+  const [returnTarget, setReturnTarget] = useState<URL | null>(null);
+
+  // URL prefill — supports `https://rpow2.com/#/send?to=email&amount=N&memo=abc&return_url=…`
+  // (and the equivalent /wallet link, which redirects here). Read once on mount.
+  useEffect(() => {
+    const to = searchParams.get('to');
+    const amt = searchParams.get('amount');
+    const m = searchParams.get('memo');
+    if (to) setRecipient(to);
+    if (amt) setAmount(amt);
+    if (m) setMemo(m);
+    setReturnTarget(resolveReturnTarget(searchParams.get('return_url'), ALLOWED_RETURN_ORIGINS));
+    // intentionally not depending on searchParams — prefill only on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Post-success bounce: if a validated return_url is set and the send
+  // succeeded (completed or pending), signal the opener and navigate back.
+  useEffect(() => {
+    if (status !== 'sent' || !returnTarget) return;
+
+    const payload = {
+      type: 'rpow:send_complete',
+      transfer_id: transferId,
+      pending,
+      at: new Date().toISOString(),
+    };
+
+    let openerNav = false;
+    try {
+      if (window.opener && !window.opener.closed) {
+        window.opener.postMessage(payload, returnTarget.origin);
+        window.opener.location.href = returnTarget.toString();
+        openerNav = true;
+        try { window.opener.focus?.(); } catch { /* cosmetic — ignore */ }
+      }
+    } catch {
+      // sealed/exotic opener — fall through to current-tab navigation
+    }
+
+    const timer = setTimeout(() => {
+      if (openerNav) window.close();
+      else window.location.href = returnTarget.toString();
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [status, returnTarget, transferId, pending]);
 
   const balanceDisplay = me ? formatRpow(me.balance_base_units) : '0';
 
@@ -31,7 +81,12 @@ export function SendPage() {
       return;
     }
     try {
-      const r = await api.send({ recipient_email: recipient, amount_base_units, idempotency_key: crypto.randomUUID() });
+      const r = await api.send({
+        recipient_email: recipient,
+        amount_base_units,
+        idempotency_key: crypto.randomUUID(),
+        memo: memo.trim() || undefined,
+      });
       setStatus('sent');
       setTransferId(r.transfer_id);
       setPending(r.pending === true);
@@ -51,24 +106,35 @@ export function SendPage() {
     }
   }
 
-  if (!me) return <Panel title="SEND"><div>not signed in.</div></Panel>;
+  if (!me) return (
+    <Panel title="SEND">
+      <div>not signed in.</div>
+      <div style={{ marginTop: 8 }}><Link to="/login">[ go to login ]</Link></div>
+    </Panel>
+  );
 
   return (
     <Panel title="SEND">
       <form onSubmit={submit}>
         <div>TO     : <input type="email" required value={recipient} onChange={e => setRecipient(e.target.value)} style={{ width: '40ch' }} /></div>
         <div style={{ marginTop: 4 }}>AMOUNT : <input type="text" inputMode="decimal" required value={amount} onChange={e => setAmount(e.target.value)} style={{ width: '14ch' }} /> RPOW <span style={{ color: '#888' }}>(balance: {balanceDisplay})</span></div>
+        <div style={{ marginTop: 4 }}>MEMO   : <input type="text" value={memo} onChange={e => setMemo(e.target.value.slice(0, 256))} placeholder="optional context, alphanumeric + - _" maxLength={256} pattern="[A-Za-z0-9_\-]*" style={{ width: '40ch' }} /> <span style={{ color: '#888', fontSize: 11 }}>(optional, ≤256)</span></div>
         <div style={{ marginTop: 8 }}>
           <button type="submit" disabled={status === 'sending'}>[ {status === 'sending' ? '...' : 'SEND'} ]</button>
         </div>
       </form>
-      {status === 'sent' && !pending && (
+      {status === 'sent' && returnTarget && (
         <pre style={{ margin: '12px 0 0' }}>
-{`  + SENT  ${sentAmt} RPOW → ${sentTo}
+{`  ↩ returning to ${returnTarget.hostname}…`}
+        </pre>
+      )}
+      {status === 'sent' && !returnTarget && !pending && (
+        <pre style={{ margin: '12px 0 0' }}>
+{`  + SENT  ${sentAmt} RPOW → ${sentTo}${memo ? `\n  memo: ${memo}` : ''}
   transfer id: ${transferId}`}
         </pre>
       )}
-      {status === 'sent' && pending && (
+      {status === 'sent' && !returnTarget && pending && (
         <pre style={{ margin: '12px 0 0' }}>
 {`  + PENDING CLAIM
   ${sentTo} does not have an rpow2 account yet.

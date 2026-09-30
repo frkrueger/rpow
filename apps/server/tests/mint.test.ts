@@ -11,10 +11,7 @@ const ONE_RPOW = 1_000_000_000n;
 const CAP_BASE_UNITS = 21n * ONE_RPOW;            // = 21,000,000,000
 
 async function loginAndChallenge(ctx: Awaited<ReturnType<typeof makeTestApp>>) {
-  await ctx.app.inject({ method: 'POST', url: '/auth/request', payload: { email: 'a@b.com' }, headers: { 'content-type': 'application/json' } });
-  const tok = ctx.mailer.outbox.at(-1)!.text.match(/token=([\w-]+)/)![1];
-  const r = await ctx.app.inject({ method: 'GET', url: `/auth/verify?token=${tok}` });
-  const cookie = r.headers['set-cookie'] as string;
+  const cookie = await ctx.forgeSessionCookie('a@b.com');
   const ch = (await ctx.app.inject({ method: 'POST', url: '/challenge', headers: { cookie } })).json();
   return { cookie, ch };
 }
