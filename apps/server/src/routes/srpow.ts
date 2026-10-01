@@ -116,8 +116,11 @@ export async function srpowRoutes(app: FastifyInstance) {
         [eventId, s.email, wallet, target.toString(), idempotency_key],
       );
       const ids = picked.map(r => r.id);
+      // is_change=FALSE: a source may itself be the change token of an earlier
+      // wrap. The reconcile worker tells source from change by is_change
+      // alone, so a stale TRUE would get the source DELETEd on refund.
       await c.query(
-        `UPDATE tokens SET state='LOCKED_FOR_BRIDGE', wrap_event_id=$1
+        `UPDATE tokens SET state='LOCKED_FOR_BRIDGE', wrap_event_id=$1, is_change=FALSE
          WHERE id = ANY($2::uuid[])`,
         [eventId, ids],
       );

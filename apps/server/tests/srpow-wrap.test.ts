@@ -99,6 +99,39 @@ describe('POST /srpow/wrap — Phase 1', () => {
     expect(change?.value).toBe((ONE_RPOW / 2n).toString());
   });
 
+  it('clears is_change on a previous change token reused as a wrap source', async () => {
+    const t = await makeTestApp({ wrapAllowlistCsv: 'alice@x.io' });
+    cleanup = t.cleanup;
+    // Alice's only token is the change from an earlier wrap (is_change=true).
+    // Wrapping from it must re-tag it as a source: the reconcile worker
+    // tells source from change by is_change alone, and would otherwise
+    // DELETE it on refund (or re-validate it on confirm).
+    await t.pool.query(`INSERT INTO users(email, solana_wallet) VALUES('alice@x.io','WALLET1')`);
+    const oldChangeId = randomUUID();
+    await t.pool.query(
+      `INSERT INTO tokens(id, owner_email, value, state, server_sig, is_change) VALUES($1,'alice@x.io',$2,'VALID','\\x00',TRUE)`,
+      [oldChangeId, ONE_RPOW.toString()],
+    );
+    t.bridgeClient.queueResult({ signature: 'sig_reuse' });
+    const session = signSession({ email: 'alice@x.io' }, 'x'.repeat(32), 60);
+
+    const r = await t.app.inject({
+      method: 'POST', url: '/srpow/wrap', cookies: { [SESSION_COOKIE]: session },
+      payload: { amount_base_units: (ONE_RPOW / 2n).toString(), idempotency_key: 'k_reuse_1' },
+    });
+    expect(r.statusCode).toBe(200);
+
+    const src = await t.pool.query<{ state: string; is_change: boolean }>(
+      `SELECT state, is_change FROM tokens WHERE id=$1`, [oldChangeId],
+    );
+    expect(src.rows[0].state).toBe('WRAPPED');
+    expect(src.rows[0].is_change).toBe(false);
+    const change = await t.pool.query<{ value: string }>(
+      `SELECT value::text AS value FROM tokens WHERE owner_email='alice@x.io' AND is_change`,
+    );
+    expect(change.rows.map((x) => x.value)).toEqual([(ONE_RPOW / 2n).toString()]);
+  });
+
   it('uses an exact-sum subset when one exists (no change token issued)', async () => {
     const t = await makeTestApp({ wrapAllowlistCsv: 'alice@x.io' });
     cleanup = t.cleanup;
