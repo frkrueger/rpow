@@ -24,6 +24,7 @@ const Schema = z.object({
   MINT_BASE_REWARD_BASE_UNITS: z.coerce.number().int().positive().default(10_000_000),
   MINT_MAX_SUPPLY: z.coerce.number().int().positive().default(19_000_000),
   WEB_ORIGIN: z.string().url().default('http://localhost:5173'),
+  PUBLIC_STATS_ORIGINS: z.string().default('').transform(v => v.split(',').map(origin => origin.trim()).filter(Boolean)),
   LONGSHOT_WEB_ORIGIN: z.string().url().default('https://longshot.rpow2.com'),
   TURNSTILE_SECRET: z.string().optional(),
   MAIL_THROTTLE_RPS: z.coerce.number().positive().default(4),

@@ -53,6 +53,7 @@ export async function makeTestApp(opts: {
     signingPrivateKeyHex: '11'.repeat(32),
     signingPublicKeyHex: 'd04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737',
     webOrigin: 'http://web.test',
+    publicStatsOrigins: ['https://stats.example'],
     longShotWebOrigin: 'http://longshot.test',
     longShotMinBaseUnits: 10,
     longShotMaxBaseUnits: 1_000_000_000,

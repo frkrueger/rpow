@@ -1,7 +1,8 @@
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
+import type { FastifyCorsOptions } from '@fastify/cors';
 import type { Pool } from 'pg';
 import type { Mailer } from './mailer.js';
 import type { BridgeClient } from '@rpow/solana-bridge';
@@ -14,6 +15,7 @@ import { sendRoutes } from './routes/send.js';
 import { claimRoutes } from './routes/claim.js';
 import { activityRoutes } from './routes/activity.js';
 import { ledgerRoutes } from './routes/ledger.js';
+import { statsRoutes } from './routes/stats.js';
 import { unsubscribeRoutes } from './routes/unsubscribe.js';
 import { phantomRoutes } from './routes/phantom.js';
 import { srpowRoutes } from './routes/srpow.js';
@@ -38,6 +40,7 @@ export interface AppConfig {
   signingPrivateKeyHex: string;
   signingPublicKeyHex: string;
   webOrigin: string;
+  publicStatsOrigins: string[];
   longShotWebOrigin: string;
   /** Min stake in base units for RPOW Long Shot. */
   longShotMinBaseUnits: number;
@@ -150,6 +153,18 @@ declare module 'fastify' {
   }
 }
 
+const PUBLIC_STATS_CORS_PATHS = new Set(['/ledger', '/stats/summary', '/stats/history']);
+
+function isPublicStatsCorsRequest(req: FastifyRequest): boolean {
+  const path = req.url.split('?')[0];
+  if (!PUBLIC_STATS_CORS_PATHS.has(path)) return false;
+
+  const method = req.method.toUpperCase();
+  const requestedMethod = String(req.headers['access-control-request-method'] ?? '').toUpperCase();
+  const effectiveMethod = method === 'OPTIONS' && requestedMethod ? requestedMethod : method;
+  return effectiveMethod === 'GET' || effectiveMethod === 'HEAD';
+}
+
 export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> {
   const app = Fastify({
     logger: opts.test ? false : { level: 'info' },
@@ -174,11 +189,30 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   // credentials=include and need credentialed-CORS to api.rpow2.com.
   const allowedOrigins = [opts.config.webOrigin, opts.config.longShotWebOrigin, opts.config.gladiatorWebOrigin, opts.config.triviaWebOrigin, opts.config.freelotteryWebOrigin, opts.config.chatWebOrigin];
   await app.register(cors, {
-    origin: (origin, cb) => {
-      if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
-      cb(null, false);
+    delegator: (req: FastifyRequest, cb: (error: Error | null, options?: FastifyCorsOptions) => void) => {
+      const origin = req.headers.origin;
+      if (!origin) {
+        cb(null, { origin: false });
+        return;
+      }
+
+      if (allowedOrigins.includes(origin)) {
+        cb(null, { origin, credentials: true });
+        return;
+      }
+
+      if (opts.config.publicStatsOrigins.includes(origin) && isPublicStatsCorsRequest(req)) {
+        cb(null, {
+          origin,
+          credentials: false,
+          methods: ['GET', 'HEAD', 'OPTIONS'],
+          maxAge: 600,
+        });
+        return;
+      }
+
+      cb(null, { origin: false });
     },
-    credentials: true,
   });
 
   // Per-route opt-in rate limiter. Globally generous (effectively off) so
@@ -204,6 +238,7 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   await app.register(claimRoutes);
   await app.register(activityRoutes);
   await app.register(ledgerRoutes);
+  await app.register(statsRoutes);
   await app.register(unsubscribeRoutes);
   await app.register(phantomRoutes);
   await app.register(srpowRoutes);

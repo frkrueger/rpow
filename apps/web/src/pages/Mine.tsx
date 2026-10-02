@@ -75,7 +75,7 @@ export function MinePage() {
           const r = await api.mint({ challenge_id: ch.challenge_id, solution_nonce: m.solution_nonce });
           setLastTokenId(r.token.id);
           setSessionMinted(n => n + 1);
-          window.gtag?.('event', 'mint_token', { value: r.token.value });
+          window.gtag?.('event', 'mint_token', { value: Number(r.token.value_base_units) });
           await refresh();
           refreshLedger();
           // Loop: kick off the next challenge unless the user asked to stop.
