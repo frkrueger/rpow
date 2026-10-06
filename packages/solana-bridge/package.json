@@ -5,17 +5,24 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "exports": { ".": "./dist/index.js" },
+  "exports": {
+    ".": "./dist/index.js"
+  },
   "scripts": {
     "build": "tsc -b",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@meteora-ag/cp-amm-sdk": "^1.5.1",
+    "@meteora-ag/cp-amm-sdk": "^1.5.1",
     "@solana/spl-token": "^0.4.6",
     "@solana/web3.js": "^1.91.0",
+    "bn.js": "^5.2.1",
     "bs58": "^6.0.0",
     "tweetnacl": "^1.0.3"
   },
-  "devDependencies": { "vitest": "^1.6.0" }
+  "devDependencies": {
+    "vitest": "^1.6.0"
+  }
 }

@@ -9,7 +9,8 @@ import {
   createTransferCheckedInstruction,
 } from '@solana/spl-token';
 import bs58 from 'bs58';
-import { JupiterClient } from './jupiter-swap.js';
+import { JupiterClient, SOL_MINT_ADDRESS } from './jupiter-swap.js';
+import { MeteoraClient } from './meteora-swap.js';
 
 export interface MintToArgs { recipientWallet: string; amountBaseUnits: bigint }
 export type MintToResult =
@@ -243,12 +244,22 @@ export interface SolanaBridgeClientOptions {
   baseUnitsPerToken: bigint;       // 10n ** 9n for SRPOW
   timeoutMs: number;
   jupiterApiBase: string;
+  /** Meteora DAMM v2 SRPOW/USDC pool. When set, used as the fee-swap fallback
+   *  if Jupiter cannot route SRPOW directly. */
+  meteoraPool?: PublicKey;
+  /** Test seams. */
+  jupiterClient?: Pick<JupiterClient, 'swap'>;
+  meteoraClient?: Pick<MeteoraClient, 'swap'>;
 }
 
 export class SolanaBridgeClient implements BridgeClient {
-  private jupiter: JupiterClient | null = null;
+  private jupiter: Pick<JupiterClient, 'swap'> | null = null;
+  private meteora: Pick<MeteoraClient, 'swap'> | null = null;
 
-  constructor(private opts: SolanaBridgeClientOptions) {}
+  constructor(private opts: SolanaBridgeClientOptions) {
+    this.jupiter = opts.jupiterClient ?? null;
+    this.meteora = opts.meteoraClient ?? null;
+  }
 
   async mintTo(
     { recipientWallet, amountBaseUnits }: MintToArgs,
@@ -434,6 +445,45 @@ export class SolanaBridgeClient implements BridgeClient {
     maxSlippageBps: number,
     onSignaturePrepared: OnSignaturePrepared,
   ): Promise<SwapSrpowForSolResult> {
+    const jupiter = this.getJupiter();
+    const direct = await jupiter.swap({
+      inputMint: this.opts.mint.toBase58(),
+      outputMint: SOL_MINT_ADDRESS,
+      amountBaseUnits,
+      maxSlippageBps,
+      onSignaturePrepared,
+    });
+    if (direct.status !== 'quote_failed') return direct;
+
+    // Jupiter won't route SRPOW (TOKEN_NOT_TRADABLE for low-liquidity mints).
+    // Nothing was signed. Fall back to the Meteora pool: SRPOW -> USDC there,
+    // then USDC -> SOL via Jupiter, which routes USDC fine.
+    const meteora = this.getMeteora();
+    if (!meteora) {
+      return { status: 'failed', signature: null, failureReason: direct.failureReason };
+    }
+    const leg1 = await meteora.swap({
+      inputMint: this.opts.mint.toBase58(), amountBaseUnits, maxSlippageBps, onSignaturePrepared,
+    });
+    if (leg1.status !== 'confirmed') return leg1;
+
+    // Leg 2 is best-effort: the fee's value is already captured as USDC in the
+    // bridge wallet. The persisted swap_signature stays leg 1 (the one that
+    // spent the SRPOW), so reconcile keeps working unchanged.
+    const leg2 = await jupiter.swap({
+      inputMint: leg1.outputMint, outputMint: SOL_MINT_ADDRESS,
+      amountBaseUnits: leg1.out_amount, maxSlippageBps,
+      onSignaturePrepared: async () => {},
+    });
+    if (leg2.status !== 'confirmed') {
+      const why = 'failureReason' in leg2 ? leg2.failureReason : leg2.status;
+      console.error(`srpow unwrap: USDC->SOL leg failed after Meteora leg ${leg1.signature}: ${why}`);
+      return { status: 'confirmed', signature: leg1.signature, sol_received_lamports: 0n };
+    }
+    return { status: 'confirmed', signature: leg1.signature, sol_received_lamports: leg2.sol_received_lamports };
+  }
+
+  private getJupiter(): Pick<JupiterClient, 'swap'> {
     if (!this.jupiter) {
       this.jupiter = new JupiterClient({
         apiBase: this.opts.jupiterApiBase,
@@ -443,13 +493,20 @@ export class SolanaBridgeClient implements BridgeClient {
         timeoutMs: this.opts.timeoutMs,
       });
     }
-    return this.jupiter.swap({
-      inputMint: this.opts.mint.toBase58(),
-      outputMint: 'So11111111111111111111111111111111111111112',
-      amountBaseUnits,
-      maxSlippageBps,
-      onSignaturePrepared,
-    });
+    return this.jupiter;
+  }
+
+  private getMeteora(): Pick<MeteoraClient, 'swap'> | null {
+    if (!this.meteora && this.opts.meteoraPool) {
+      this.meteora = new MeteoraClient({
+        connection: this.opts.connection,
+        bridge: this.opts.bridge,
+        pool: this.opts.meteoraPool,
+        commitment: this.opts.commitment,
+        timeoutMs: this.opts.timeoutMs,
+      });
+    }
+    return this.meteora;
   }
 
   async burnSrpow(

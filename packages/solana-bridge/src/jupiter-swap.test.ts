@@ -117,3 +117,25 @@ describe('JupiterClient.swap (integration with stubbed fetch + connection)', () 
     expect(ghOrder).toBeLessThan(srOrder);
   });
 });
+
+describe('JupiterClient.swap quote failure', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+  beforeEach(() => { fetchMock = vi.fn(); globalThis.fetch = fetchMock as any; });
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it('returns quote_failed (nothing signed) when the quote endpoint rejects the token', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false, status: 400,
+      text: async () => '{"error":"The token X is not tradable","errorCode":"TOKEN_NOT_TRADABLE"}',
+    });
+    const bridge: any = { publicKey: { toBase58: () => 'BRIDGE_PK' } };
+    const r = await new JupiterClient({
+      apiBase: 'https://j', connection: {} as any, bridge, commitment: 'finalized', timeoutMs: 30000,
+    }).swap({
+      inputMint: 'SRPOW', outputMint: SOL_MINT, amountBaseUnits: 50n, maxSlippageBps: 1000,
+      onSignaturePrepared: async () => { throw new Error('must not be called'); },
+    });
+    expect(r.status).toBe('quote_failed');
+    if (r.status === 'quote_failed') expect(r.failureReason).toMatch(/TOKEN_NOT_TRADABLE/);
+  });
+});

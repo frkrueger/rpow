@@ -30,6 +30,7 @@ if (env.SOLANA_RPC_URL && env.SRPOW_MINT_ADDRESS && env.BRIDGE_KEYPAIR_BASE58) {
     baseUnitsPerToken: SRPOW_BASE_UNITS_PER_RPOW,
     timeoutMs: env.SRPOW_WRAP_TIMEOUT_MS,
     jupiterApiBase: env.JUPITER_API_BASE,
+    meteoraPool: env.METEORA_SRPOW_POOL_ADDRESS ? new PublicKey(env.METEORA_SRPOW_POOL_ADDRESS) : undefined,
   });
 } else {
   // Wrap is disabled at boot if SRPOW envs aren't all set.

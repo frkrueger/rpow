@@ -38,6 +38,8 @@ export async function fetchJupiterQuote(args: QuoteArgs): Promise<JupiterQuote> 
 export type SwapStatus =
   | { status: 'confirmed'; signature: string; sol_received_lamports: bigint }
   | { status: 'slippage_exceeded'; quoted_slippage_bps: number }
+  /** Quote stage failed (e.g. TOKEN_NOT_TRADABLE). Nothing was signed or sent. */
+  | { status: 'quote_failed'; failureReason: string }
   | { status: 'failed'; signature: string | null; failureReason: string };
 
 export interface JupiterClientOpts {
@@ -70,7 +72,7 @@ export class JupiterClient {
         slippageBps: args.maxSlippageBps,
       });
     } catch (e: any) {
-      return { status: 'failed', signature: null, failureReason: e?.message ?? String(e) };
+      return { status: 'quote_failed', failureReason: e?.message ?? String(e) };
     }
 
     // priceImpactPct is a decimal string. 0.10 = 10% = 1000 bps.

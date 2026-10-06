@@ -92,6 +92,9 @@ const Schema = z.object({
   SRPOW_UNWRAP_SLIPPAGE_BPS: z.coerce.number().int().min(0).max(10000).default(1000),
   SRPOW_UNWRAP_FEE_BPS: z.coerce.number().int().min(0).max(10000).default(500),
   JUPITER_API_BASE: z.string().url().default('https://lite-api.jup.ag'),
+  // Meteora DAMM v2 SRPOW/USDC pool. Fallback for the unwrap fee swap when
+  // Jupiter refuses to route SRPOW (TOKEN_NOT_TRADABLE). Optional.
+  METEORA_SRPOW_POOL_ADDRESS: z.string().min(32).max(44).optional(),
 }).superRefine((v, ctx) => {
   if (v.MAILER === 'resend' && !v.RESEND_API_KEY) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['RESEND_API_KEY'], message: 'required when MAILER=resend' });
